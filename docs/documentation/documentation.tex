@@ -843,11 +843,59 @@ bistable). The learned $h$ behaves like a coordinate that varies smoothly throug
 transition, while the hand-made descriptors include quantities that jump there (the skewness,
 near 0 for stripes and finite for spots).
 
+\textbf{More data does not help.} Trained on 2 or 4 runs per point instead of 8 (480 or 960
+runs, the same number of training steps) and evaluated on all runs, the learned description
+gives the same result: 2 phases, relative jump hexagons/stripes 1.01--1.07, probe 0.95--0.98.
+
 \textbf{To try.} The loss separates individual runs, so it is indifferent to whether two runs
-differ within a phase or across a boundary. Options: positives from different runs of one
-parameter point (this would hide bistable points), or a combined table with hand-made and
-learned blocks.
+differ within a phase or across a boundary. Planned after the Gray-Scott example: a combined
+table with the hand-made and the learned columns as separate blocks (the walls method weights
+blocks equally), compared with each alone. Positives from different runs of one parameter
+point are another option, but they would hide bistable points.
 \end{tech}
+
+\subsection{Walls against blind grouping and a linear probe}\label{sec:methods}
+
+\begin{tech}
+\textbf{Question.} Is cutting the parameter graph better than grouping the runs by their
+description alone, as in the blind search of hfml? Each description of the demo (hand-made,
+learned seed 0 and 1, untrained) is given to the walls and to three blind methods
+(\srcref{src/phasewall/baselines.py}, adapted from hfml): each run is the mean of its snapshots
+(block-weighted as in Sec.~\ref{sec:compare}), compressed to the principal components that
+explain 95\% of the variance, then
+\begin{itemize}[leftmargin=1.2em, itemsep=1pt]
+\item \emph{Gaussian mixture}: $p(\mathbf x)=\sum_{j=1}^k\pi_j\,\mathcal N(\mathbf x;\boldsymbol\mu_j,\Sigma_j)$,
+  fitted by expectation-maximisation for $k=1\ldots10$; $k$ is the one with the smallest
+  $\mathrm{BIC}=-2\ln\hat L+p\ln n$ ($p$ parameters, $n$ runs), likelihood penalised by model size;
+\item \emph{k-means}: minimises $\sum_i|\mathbf x_i-\boldsymbol\mu_{c(i)}|^2$ for $k=2\ldots10$; $k$ is
+  the one with the largest mean silhouette $s_i=(b_i-a_i)/\max(a_i,b_i)$ ($a_i$: mean distance of
+  run $i$ to its own group, $b_i$: to the nearest other group);
+\item \emph{HDBSCAN}: groups are the regions of high density that persist over a range of density
+  levels, with at least $m$ runs ($m=5,10,20,40$); runs in sparse regions are noise.
+\end{itemize}
+None of them knows the parameter grid. The label of a point is the most common group of its
+runs. Scores: groups found; agreement (points carrying the most common reference label of
+their group, as for the walls); the adjusted Rand index
+$\mathrm{ARI}=(\mathrm{RI}-\mathbb E[\mathrm{RI}])/(\max\mathrm{RI}-\mathbb E[\mathrm{RI}])$ between groups and reference
+labels of the points (1: identical partitions, about 0: chance), on the points that are placed
+and, as ARI$_{\rm all}$, with HDBSCAN noise counted as one more group; and the number of
+connected pieces of the groups on the parameter grid (3 for the reference).
+
+\textbf{Probe.} A logistic regression $P(y=c\,|\,\mathbf x)=e^{\mathbf w_c\cdot\mathbf x+b_c}/\sum_{c'}e^{\mathbf w_{c'}\cdot\mathbf x+b_{c'}}$
+of the three reference states from the description of each snapshot ($L_2$ penalty, $C=1$),
+trained and tested in 5 folds of whole parameter points (GroupKFold: no point in the training
+and the test of the same fold); balanced accuracy. It sees the labels: it is the best a linear
+reading of the description can do, not a way to find the states.
+
+\emph{Physics parallel.} Blind grouping looks for clusters in the space of descriptions, as one
+looks for peaks in a histogram of an order parameter; the walls look for discontinuities along
+the control parameters, as one locates a transition by scanning a parameter and watching for a
+jump. The first needs the states to form separate clouds; the second needs only that the
+description changes faster across a boundary than inside a phase, and gives regions that are
+connected in parameter space by construction.
+\end{tech}
+
+%RESULTS%
 
 %======================================================================
 \section{Choices}\label{sec:choices}

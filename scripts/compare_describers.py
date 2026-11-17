@@ -16,7 +16,15 @@ different reference labels against links inside one label), the nearest-neighbou
 the labels from the description (point means, leave one point out, balanced), and the
 effective rank of the description.
 
-Outputs: summary.md, comparison.csv, training.csv, phase_maps.png, training.png.
+Methods (second table). On each description, the walls are compared with blind grouping of the
+runs (Gaussian mixture with k by BIC, k-means with k by silhouette, HDBSCAN with minimum sizes
+5, 10, 20, 40; phasewall.baselines, adapted from hfml) and with a logistic probe of the three
+reference states (supervised: a ceiling, not a method to find states). Scores at the level of
+the points: groups, agreement, adjusted Rand index with the reference, connected pieces of the
+groups on the parameter grid, share of runs called noise (HDBSCAN).
+
+Outputs: summary.md, comparison.csv, methods.csv, training.csv, phase_maps.png, methods_maps.png,
+training.png.
 """
 
 import dataclasses
@@ -31,7 +39,7 @@ import torch
 from matplotlib.figure import Figure
 from scipy.stats import mannwhitneyu
 
-from phasewall import report
+from phasewall import baselines, report
 from phasewall.cli import agreement, node_labels
 from phasewall.describe import describe_ensemble
 from phasewall.graph import parameter_nodes
@@ -116,13 +124,32 @@ def evaluate(name, setting, table, ens, runs, seconds) -> tuple[dict, object, pd
     return row, w, ref
 
 
+def compare_methods(name, setting, table, ens, runs, w) -> tuple[list[dict], pd.DataFrame]:
+    """Walls and blind grouping on one description, scored against the reference labels."""
+    labels = runs.set_index("run").reference
+    t0 = time.time()
+    groups, info = baselines.blind_groups(table, ens.parameters)
+    seconds = time.time() - t0
+    node, _ = parameter_nodes(groups[ens.parameters].to_numpy())
+    groups["walls"] = w.nodes["phase"].to_numpy()[node]
+    p = baselines.probe(table, ens.parameters, labels)
+    rows = []
+    for col in ["walls", "mixture", "kmeans", *[c for c in groups if c.startswith("hdbscan_")]]:
+        k = {"mixture": info["mixture"]["k"], "kmeans": info["kmeans"]["k"]}.get(col)
+        rows.append({"setting": setting, "describer": name, "method": col,
+                     **baselines.point_scores(groups, col, ens.parameters, labels),
+                     "k_chosen": k, "components": info["components"], "probe_3_states": p,
+                     "seconds_grouping": seconds})
+    return rows, groups
+
+
 def main(demo: str, out: str):
     demo, out = Path(demo), Path(out)
     out.mkdir(parents=True, exist_ok=True)
     base = load_ensemble(demo / "phasewall.toml")
     runs = pd.read_csv(demo / "runs.csv")
     settings = {"periodic box": base, "crop (not periodic)": dataclasses.replace(base, crop=CROP_POINTS * base.dx)}
-    rows, maps, logs = [], {}, []
+    rows, maps, logs, method_rows, groupings = [], {}, [], [], {}
     for setting, ens in settings.items():
         t0 = time.time()
         hand, errors = describe_ensemble(ens, workers=WORKERS)
@@ -145,11 +172,43 @@ def main(demo: str, out: str):
             rows.append(row)
             maps[(setting, name)] = (w, ref)
             print(row, flush=True)
+            mrows, groups = compare_methods(name, setting, table, ens, runs, w)
+            method_rows += mrows
+            groupings[(setting, name)] = groups
+            print(pd.DataFrame(mrows)[["method", "groups", "agree", "ari", "pieces", "noise_runs"]].round(3)
+                  .to_string(index=False), flush=True)
     res = pd.DataFrame(rows)
     res.to_csv(out / "comparison.csv", index=False)
+    methods = pd.DataFrame(method_rows)
+    methods.to_csv(out / "methods.csv", index=False)
+    method_figure(groupings, methods, base.parameters, out)
     pd.concat(logs).to_csv(out / "training.csv", index=False)
     figures(maps, pd.concat(logs), out)
-    write_summary(res, pd.concat(logs), out)
+    write_summary(res, pd.concat(logs), out, methods)
+
+
+def method_figure(groupings, methods, parameters, out, describers=("hand", "cnn seed 0"),
+                  columns=("walls", "mixture", "kmeans", "hdbscan_10")):
+    """Majority group of every point for each method (rows: frame and description)."""
+    keys = [(s, d) for s in dict.fromkeys(k[0] for k in groupings) for d in describers]
+    fig = Figure(figsize=(3.6 * len(columns), 3.7 * len(keys)), facecolor=report.SURFACE, layout="constrained")
+    axes = fig.subplots(len(keys), len(columns))
+    x, y = parameters
+    for i, (setting, name) in enumerate(keys):
+        g = groupings[(setting, name)]
+        node, points = parameter_nodes(g[parameters].to_numpy())
+        for j, col in enumerate(columns):
+            maj = pd.Series(g[col].to_numpy()).groupby(node).agg(lambda v: v.value_counts().idxmax()).to_numpy()
+            ranks = pd.Series(maj[maj >= 0]).value_counts().index.tolist()      # largest group first
+            classes = np.array([ranks.index(v) if v >= 0 else -1 for v in maj])
+            ax = axes[i, j]
+            report._points_by_class(ax, points[:, 0], points[:, 1], classes,
+                                    lambda c: f"group {c}" if c >= 0 else "noise")
+            m = methods[(methods.setting == setting) & (methods.describer == name) & (methods.method == col)].iloc[0]
+            report._style(ax, x, y)
+            ax.set_title(f"{setting}, {name}: {col}\n{m.groups} groups, {m.agree}/{m.points} agree, "
+                         f"ARI {m.ari:.2f}, {m.pieces} pieces", fontsize=8, loc="left", color=report.INK)
+    fig.savefig(out / "methods_maps.png", dpi=report.DPI, facecolor=report.SURFACE)
 
 
 def figures(maps, logs, out):
@@ -185,7 +244,7 @@ def figures(maps, logs, out):
     fig.savefig(out / "training.png", dpi=report.DPI, facecolor=report.SURFACE)
 
 
-def write_summary(res, logs, out):
+def write_summary(res, logs, out, methods=None):
     last = logs.groupby(["setting", "seed"], sort=False).tail(1)
     lines = ["# Hand-made against learned description (Swift-Hohenberg demo)", "",
              (f"Walls with the default settings (RATIO = {RATIO}). Agreement: points that carry the most "
@@ -199,6 +258,16 @@ def write_summary(res, logs, out):
              report._markdown(res), "", "Last epoch of each training:", "",
              report._markdown(last[["setting", "seed", "loss", "collapse_loss", "alignment", "uniformity",
                                     "effective_rank_h"]]), ""]
+    if methods is not None:
+        lines += ["## Walls against blind grouping", "",
+                  ("groups: groups found (majority group of each point); agree: points that carry the most "
+                   "common reference label of their group; ari: adjusted Rand index between groups and "
+                   "reference labels of the points; pieces: connected pieces of the groups on the "
+                   "parameter grid (3 for the three reference states); noise_runs: share of runs that "
+                   "HDBSCAN cannot place; k_chosen: k of the mixture (BIC) and of k-means (silhouette); "
+                   "probe_3_states: logistic regression of the three states on held-out points "
+                   "(supervised, balanced accuracy)."), "",
+                  report._markdown(methods.drop(columns=["seconds_grouping"]).round(3)), ""]
     (out / "summary.md").write_text("\n".join(lines))
 
 

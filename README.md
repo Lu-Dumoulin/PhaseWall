@@ -234,6 +234,11 @@ flow: all its patterns end frozen, it has one scalar field, and three states.
   (Pearson 1993) to compare with. Tests the number of phases beyond three, two fields and
   dynamic states. Fronts between two uniform states are transients in a periodic box, so
   they count as phases only when pinned or travelling steadily.
+- **Hand-made and learned description combined** (after Gray-Scott): one table with both sets
+  of columns as separate blocks, so that the jumps of the hand-made descriptors and what the
+  network learns are both used; compared with each alone on Swift-Hohenberg and Gray-Scott.
+  More training data is not expected to help on its own: on the demo, the learned description
+  already separates the states (probe 0.95-0.98), but without a jump at the boundary.
 - **Barkley or FitzHugh-Nagumo** (excitable media): travelling waves, rotating spirals, spiral
   break-up into turbulence, Turing spots and stripes when the inhibitor diffuses fast. Tests
   the dynamics block; a rotating spiral is seen as changing by the moving correlation, which
