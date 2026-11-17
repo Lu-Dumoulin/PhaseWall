@@ -10,10 +10,15 @@ read by Python's standard `tomllib`), for example:
     time_regex = '(\\d+)\\.h5$'     # the number in the file name ...
     time_unit = 1.0                # ... times time_unit is the time of the snapshot
     julia_order = true             # arrays written by Julia (column-major)
-    dx = 0.785                     # grid spacing
-    periodic = true
+    dx = 0.785                     # grid spacing (or a column `dx` in the table of runs)
+    periodic = true                # periodic boundary conditions
     last = 10                      # the last 10 snapshots of every run are described
     pair_dt = 25.0                 # time between the two snapshots of a pair (dynamics)
+    # optional, see frames.py: the frame that is described in every run
+    crop = 40.0                    # side of a centred square crop (physical units)
+    dx_target = 1.57               # coarsen to this grid spacing (a multiple of dx)
+    max_shift = 10.0               # moving correlation: shifts up to this in x and y
+    min_wavelengths = 3            # non-periodic frames: S(k) from wavelength side / 3
 
     [[fields]]                     # one block per field
     name = "rho"
@@ -25,28 +30,33 @@ Snapshot files are HDF5 files, which includes JLD2 files written by Julia. Julia
 arrays in column-major order and HDF5 readers show their dimensions reversed, so with
 `julia_order = true` every array is transposed on reading: [x, y] for a scalar,
 [x, y, component] otherwise, as in Julia.
+
+Unknown keys are errors (a misspelt `periodc = false` must not be ignored silently).
 """
 
 import re
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import fields as dataclass_fields
 from pathlib import Path
 
 import h5py
 import numpy as np
 import pandas as pd
 
-from .fields import Field
+from .fields import KINDS, Field
 
+MIN_WAVELENGTHS = 3.0      # non-periodic frames: S(k) only for wavelengths up to side / 3 (a choice)
+FIELD_KEYS = {"name", "keys", "kind", "relative"}
 
 @dataclass
 class Ensemble:
     """Everything phasewall needs to know about a set of runs."""
 
-    runs: pd.DataFrame                      # columns: run, path (absolute), one per parameter
+    runs: pd.DataFrame                      # columns: run, path (absolute), one per parameter[, dx]
     parameters: list[str]
     fields: list[Field]
-    dx: float
+    dx: float | None = None                 # grid spacing, unless the table of runs has a column dx
     snapshots: str = "Data/*.jld2"
     time_regex: str = r"(\d+)\.jld2?$"
     time_unit: float = 1.0
@@ -54,7 +64,10 @@ class Ensemble:
     periodic: bool = True
     last: int = 10
     pair_dt: float | None = None
-    extra: dict = field(default_factory=dict)
+    crop: float | None = None               # frames.py
+    dx_target: float | None = None
+    max_shift: float | None = None
+    min_wavelengths: float = MIN_WAVELENGTHS
 
 
 def load_ensemble(path: str | Path) -> Ensemble:
@@ -76,11 +89,25 @@ def load_ensemble(path: str | Path) -> Ensemble:
         runs.insert(0, "run", np.arange(len(runs)))
     if runs["run"].duplicated().any():
         raise ValueError(f"{table_path}: the column `run` must hold one value per run")
+    known = {f.name for f in dataclass_fields(Ensemble)} - {"runs", "parameters", "fields"}
+    unknown = sorted(set(e) - known)
+    if unknown:
+        raise ValueError(f"{path}: unknown keys {unknown} in [ensemble]; known keys: "
+                         f"runs, parameters, {', '.join(sorted(known))}")
+    for f in cfg.get("fields", []):
+        bad = sorted(set(f) - FIELD_KEYS)
+        if bad:
+            raise ValueError(f"{path}: unknown keys {bad} in [[fields]] {f.get('name', '?')!r}; "
+                             f"known keys: {', '.join(sorted(FIELD_KEYS))}; kinds: {', '.join(KINDS)}")
+    if not cfg.get("fields"):
+        raise ValueError(f"{path}: no [[fields]] block")
+    if "dx" not in e and "dx" not in runs.columns:
+        raise ValueError(f"{path}: give the grid spacing, as `dx` in [ensemble] or as a column dx of {table_path}")
+    if "periodic" in e and not isinstance(e["periodic"], bool):
+        raise ValueError(f"{path}: `periodic` must be true or false")
     fields = [Field(f["name"], tuple(f.get("keys", [f["name"]])), f.get("kind", "scalar"),
                     bool(f.get("relative", False))) for f in cfg["fields"]]
-    known = set(Ensemble.__dataclass_fields__) - {"runs", "parameters", "fields", "extra"}
-    extra = {k: e.pop(k) for k in list(e) if k not in known}
-    return Ensemble(runs=runs, parameters=parameters, fields=fields, extra=extra, **e)
+    return Ensemble(runs=runs, parameters=parameters, fields=fields, **e)
 
 
 def list_snapshots(run_dir: str | Path, pattern: str, time_regex: str,

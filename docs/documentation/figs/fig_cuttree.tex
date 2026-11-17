@@ -1,0 +1,11 @@
+% The recursion of cuts on the demo (numbers from docs/documentation/data/numbers.txt).
+\begin{tikzpicture}[fig, level distance=2.1cm,
+  every node/.style={blk, text width=2.6cm, font=\scriptsize},
+  level 1/.style={sibling distance=6.6cm}, level 2/.style={sibling distance=3.4cm},
+  edge from parent/.style={draw, thick, cInk2}]
+\node {all 240 points\\ cut 1: $p=5\times10^{-12}$, ratio 5.5\\ \textbf{wall}}
+  child {node {210 points\\ cut 2: $p=10^{-9}$, ratio 2.2\\ \textbf{wall}}
+    child {node[draw=cP0, thick] {145 points\\ cut 4: $p=0.33$\\ phase 0 (stripes)}}
+    child {node[draw=cP1, thick] {65 points\\ cut 5: $p=0.92$\\ phase 1 (hexagons)}}}
+  child {node[draw=cP2, thick] {30 points\\ cut 3: $p=0.85$\\ phase 2 (uniform)}};
+\end{tikzpicture}

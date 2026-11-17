@@ -1,0 +1,29 @@
+% Selection bias: the cut is put where the noisy J1 happen to be large; J2 does not know where.
+\begin{tikzpicture}[fig, yscale=0.9]
+\def\jone{{0.9,1.1,0.7,1.0,2.1,0.8,1.2,0.9,1.0}}
+\def\jtwo{{1.0,0.8,1.2,0.9,1.0,1.1,0.7,1.2,0.9}}
+\begin{scope}
+  \node[lab] at (2.5,2.75) {(a) $J_1$ places the cut: at the largest};
+  \foreach \i in {0,...,8} {
+    \pgfmathsetmacro{\h}{\jone[\i]}
+    \ifnum\i=4 \def\col{cAcc}\else\def\col{cGrid}\fi
+    \fill[\col] (0.55*\i+0.1,0) rectangle (0.55*\i+0.45,\h);
+  }
+  \draw (0,0) -- (5.0,0);
+  \draw[wall, dashed] (2.475,0) -- (2.475,2.45);
+  \node[small, text width=4.8cm, anchor=north] at (2.5,-0.1) {crossing $J_1$ large \emph{because} the cut was put there:
+    testing with $J_1$ finds a wall in noise};
+\end{scope}
+\begin{scope}[shift={(6.6,0)}]
+  \node[lab] at (2.5,2.75) {(b) $J_2$ of the same links tests it};
+  \foreach \i in {0,...,8} {
+    \pgfmathsetmacro{\h}{\jtwo[\i]}
+    \ifnum\i=4 \def\col{cAcc}\else\def\col{cGrid}\fi
+    \fill[\col] (0.55*\i+0.1,0) rectangle (0.55*\i+0.45,\h);
+  }
+  \draw (0,0) -- (5.0,0);
+  \draw[wall, dashed] (2.475,0) -- (2.475,2.45);
+  \node[small, text width=4.8cm, anchor=north] at (2.5,-0.1) {crossing $J_2$ like the others:
+    the test correctly finds no wall};
+\end{scope}
+\end{tikzpicture}

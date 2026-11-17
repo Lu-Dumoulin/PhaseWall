@@ -1,0 +1,20 @@
+% Halves of two neighbouring points: spread, jump, and the two independent jumps J1 and J2.
+\begin{tikzpicture}[fig]
+\foreach \name/\x/\c in {a/0/cP0, b/7.4/cP1} {
+  \draw[rounded corners, cGrid, thick] (\x-1.4,-1.6) rectangle (\x+1.4,1.6);
+  \node[lab] at (\x,1.9) {point $\name$};
+  \draw[rounded corners, \c, thick] (\x-1.25,0.1) rectangle (\x+1.25,1.45);
+  \draw[rounded corners, \c, thick, dashed] (\x-1.25,-1.45) rectangle (\x+1.25,-0.1);
+  \node[small, anchor=west] at (\x-1.2,1.25) {$\name_1$: odd runs};
+  \node[small, anchor=west] at (\x-1.2,-0.3) {$\name_2$: even runs};
+  \foreach \i in {0,...,3} {
+    \fill[\c] (\x-0.9+0.6*\i,0.65) circle (0.12);
+    \fill[\c!60] (\x-0.9+0.6*\i,-0.85) circle (0.12);
+  }
+}
+\draw[<->, thick] (1.45,0.75) -- node[above, small] {$J_1=D(a_1,b_1)$} node[below, small] {places the cut} (5.95,0.75);
+\draw[<->, thick, dashed] (1.45,-0.75) -- node[above, small] {$J_2=D(a_2,b_2)$} node[below, small] {tests the cut} (5.95,-0.75);
+\draw[<->, cInk2] (-1.6,0.7) to[bend right=40] node[left, small] {$s(a)$} (-1.6,-0.7);
+\node[note, text width=12cm] at (3.7,-2.35) {$J$ (reported) $=\frac14\left[D(a_1,b_1)+D(a_1,b_2)+D(a_2,b_1)+D(a_2,b_2)\right]$,
+  \quad spread $s(a)=D(a_1,a_2)$ (same sample sizes as $J$).};
+\end{tikzpicture}

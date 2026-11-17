@@ -26,3 +26,12 @@ data/
 
 # Local notes, kept on this machine only
 CLAUDE.md
+
+# LaTeX build files of the documentation (the PDF is copied to docs/)
+docs/documentation/*.aux
+docs/documentation/*.log
+docs/documentation/*.out
+docs/documentation/*.toc
+docs/documentation/*.fls
+docs/documentation/*.fdb_latexmk
+docs/documentation/*.pdf

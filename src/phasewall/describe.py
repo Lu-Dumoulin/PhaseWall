@@ -1,7 +1,8 @@
 """Generic descriptors of a snapshot: numbers that say what a pattern looks like, whatever the
-system, unchanged by a rotation, a mirror or a periodic shift of the box.
+system, unchanged by a rotation or a mirror of the frame (and by a shift, when the frame is a
+whole periodic box).
 
-For every field (arrays [x, y] or [x, y, component], periodic box, grid spacing dx):
+For every field (arrays [x, y] or [x, y, component], grid spacing dx):
 
 - amp:   log10 of the variance of the field (summed over components): how strong the pattern is.
 - shape: the structure factor S(k) on shells of |k|, divided by its sum: which length scales
@@ -9,19 +10,37 @@ For every field (arrays [x, y] or [x, y, component], periodic box, grid spacing 
 - mom:   mean (scalars that are not relative), standard deviation, skewness and excess kurtosis
          of the values (scalar), of |a| (vector) or of the scalar order 2|Q| (nematic).
 - order: vectors and nematics: |<a>| / <|a|>, 1 when everything points the same way.
-- topo:  the number of connected domains (per unit area, periodic box) where the values
-         (as for mom) lie above, and below, the mean plus z standard deviations, for z in
-         LEVELS: spots give many small domains, stripes a few long ones; the domains of low
-         |p| are the defect cores. Minkowski functionals of the same kind are used for
-         patterns and in cosmology.
+- topo:  the number of connected domains (per unit area) where the values (as for mom) lie
+         above, and below, the mean plus z standard deviations, for z in LEVELS: spots give
+         many small domains, stripes a few long ones; the domains of low |p| are the defect
+         cores. Minkowski functionals of the same kind are used for patterns and in cosmology.
 - flow:  vectors: log10 of the mean square divergence and curl, and the share of the curl:
          splay against bend, asters against vortices.
 - dyn:   for a pair of snapshots a time pair_dt apart: the correlation C of the fluctuations
-         at the same place (still) and after the best periodic shift (moving), given as the
+         at the same place (still) and after the best shift (moving), given as the
          decorrelation log10(1 - C + DECOR_FLOOR). A frozen pattern has both at the floor; a
          pattern that travels without changing has still above the floor and moving at it; a
          pattern that changes has both above it. The floor keeps numerical noise in a frozen
          pattern (C = 0.99999) from looking like dynamics.
+
+Periodic and non-periodic frames (see frames.py). A whole periodic box is described with
+FFTs (S(k), spectral derivatives), domains joined across the edges, and every circular shift
+for the moving correlation. A frame that is not periodic (a crop, or a non-periodic box):
+- shape: the field is multiplied by a Tukey window (flat in the middle, falling smoothly to
+  zero over TUKEY_ALPHA / 2 of the side at each edge), which makes it periodic in effect
+  and stops the edges from leaking power to high k; the power is divided by <w^2> so the
+  amplitude is kept. Shells with wavelengths longer than side / min_wavelengths are dropped:
+  a crop cannot measure them. Measured on 480 crops of broadband random fields (2026-11-17):
+  15-30% off for wavelengths side and side / 2, within 5% from side / 3 to side / 11; at
+  shorter wavelengths, where the spectrum has fallen below about a tenth of its peak, the
+  remaining leakage of the edges grows (10-15% at side / 13).
+- flow: second-order centred finite differences, on the interior points.
+- topo: domains are not joined across the edges.
+- dyn: the frame at t is compared with the frame at t - pair_dt extended by max_shift on
+  every side; the correlation is computed for every shift in [-max_shift, max_shift]^2, each
+  over the full frame (Pearson correlation of the frame with the window under it), and the
+  largest is `moving`; `still` is the one at zero shift. A pattern that moves by more than
+  max_shift during pair_dt looks as if it changed.
 
 Column names are field.block.name, for example rho.shape.k07; walls.py weights the blocks.
 """
@@ -31,23 +50,30 @@ from concurrent.futures import ProcessPoolExecutor
 import numpy as np
 import pandas as pd
 from scipy import ndimage
+from scipy.signal import fftconvolve
+from scipy.signal.windows import tukey
 
 from .fields import Field
+from .frames import Frame, frame_for, prepare
 from .io import Ensemble, read_snapshot, run_snapshots
 
 FLAT = 1e-6           # fields whose fluctuations are below this are flat (a choice)
 SHELL_RATIO = 1.2     # each shell of |k| is 1.2 times wider than the previous one (a choice)
 DECOR_FLOOR = 1e-3    # correlations above 1 - DECOR_FLOOR count as frozen (a choice)
 LEVELS = (-1.0, 0.0, 1.0)   # topo: levels in standard deviations from the mean (a choice)
+TUKEY_ALPHA = 0.5     # non-periodic S(k): tapered share of the window (a choice: 4x less leakage
+                      # than no window on Swift-Hohenberg crops, 2026-11-17)
 
 
 # ---------------------------------------------------------------- spectra
-def k_shells(n: int, dx: float, ratio: float = SHELL_RATIO) -> np.ndarray:
-    """Edges of the shells of |k| for a box of n points: from half the lowest wavenumber
-    2 pi / L to pi / dx, each shell `ratio` times wider than the previous one but never
+def k_shells(n: int, dx: float, ratio: float = SHELL_RATIO, min_wavelengths: float | None = None
+             ) -> np.ndarray:
+    """Edges of the shells of |k| for a frame of n points: from half the lowest wavenumber
+    2 pi / L (or, with min_wavelengths, from the shell of the wavenumber min_wavelengths
+    2 pi / L) to pi / dx, each shell `ratio` times wider than the previous one but never
     narrower than 2 pi / L, so that no shell is empty."""
     dk = 2 * np.pi / (n * dx)
-    edges = [0.5 * dk]
+    edges = [0.5 * dk if min_wavelengths is None else (min_wavelengths - 0.5) * dk]
     while edges[-1] * ratio < np.pi / dx and edges[-1] + dk < np.pi / dx:
         edges.append(max(edges[-1] * ratio, edges[-1] + dk))
     edges.append(np.pi / dx)
@@ -58,12 +84,20 @@ def _components(a: np.ndarray) -> np.ndarray:
     return a[..., None] if a.ndim == 2 else a
 
 
-def structure_factor(a: np.ndarray, dx: float, edges: np.ndarray) -> np.ndarray:
+def window(nx: int, ny: int) -> np.ndarray:
+    """Tukey window of a non-periodic frame, scaled so that <w^2> = 1 (the power is kept)."""
+    w = np.outer(tukey(nx, TUKEY_ALPHA), tukey(ny, TUKEY_ALPHA))
+    return w / np.sqrt(np.mean(w**2))
+
+
+def structure_factor(a: np.ndarray, dx: float, edges: np.ndarray, periodic: bool = True) -> np.ndarray:
     """S(k) = dx^2 / (nx ny) <|a_k|^2> averaged over each shell, components summed (so a
-    global rotation of the vectors leaves it unchanged); the mean is removed first."""
+    global rotation of the vectors leaves it unchanged); the mean is removed first, and a
+    non-periodic frame is multiplied by window()."""
     f = _components(a)
     nx, ny = f.shape[:2]
-    power = sum(np.abs(np.fft.fft2(f[..., c] - f[..., c].mean())) ** 2 for c in range(f.shape[2]))
+    w = 1.0 if periodic else window(nx, ny)
+    power = sum(np.abs(np.fft.fft2(w * (f[..., c] - f[..., c].mean()))) ** 2 for c in range(f.shape[2]))
     k = np.hypot(*np.meshgrid(2 * np.pi * np.fft.fftfreq(nx, dx), 2 * np.pi * np.fft.fftfreq(ny, dx),
                               indexing="ij"))
     shell = np.digitize(k.ravel(), edges) - 1
@@ -74,8 +108,16 @@ def structure_factor(a: np.ndarray, dx: float, edges: np.ndarray) -> np.ndarray:
     return dx**2 / (nx * ny) * total / np.maximum(count, 1)
 
 
-def div_curl(a: np.ndarray, dx: float) -> tuple[np.ndarray, np.ndarray]:
-    """Divergence and curl of a periodic vector field (spectral derivatives)."""
+def div_curl(a: np.ndarray, dx: float, periodic: bool = True) -> tuple[np.ndarray, np.ndarray]:
+    """Divergence and curl of a vector field: spectral derivatives in a periodic frame,
+    second-order centred differences on the interior points otherwise."""
+    if not periodic:
+        ax, ay = a[..., 0], a[..., 1]
+        dxax = (ax[2:, 1:-1] - ax[:-2, 1:-1]) / (2 * dx)
+        dyay = (ay[1:-1, 2:] - ay[1:-1, :-2]) / (2 * dx)
+        dxay = (ay[2:, 1:-1] - ay[:-2, 1:-1]) / (2 * dx)
+        dyax = (ax[1:-1, 2:] - ax[1:-1, :-2]) / (2 * dx)
+        return dxax + dyay, dxay - dyax
     nx, ny = a.shape[:2]
     kx = 2j * np.pi * np.fft.fftfreq(nx, dx)[:, None]
     ky = 2j * np.pi * np.fft.fftfreq(ny, dx)[None, :]
@@ -145,14 +187,15 @@ def prepared(a: np.ndarray, f: Field) -> np.ndarray:
     return a
 
 
-def field_descriptors(a: np.ndarray, f: Field, dx: float, edges: np.ndarray) -> dict[str, float]:
+def field_descriptors(a: np.ndarray, f: Field, dx: float, edges: np.ndarray,
+                      periodic: bool = True) -> dict[str, float]:
     """Descriptors of one field of one snapshot (see the module docstring)."""
     a = prepared(a, f)
     c = _components(a)
     variance = float(np.sum(c.var(axis=(0, 1))))
     flat = np.sqrt(variance) < FLAT
     out = {f"{f.name}.amp.log10var": _log10(variance)}
-    S = np.zeros(len(edges) - 1) if flat else structure_factor(a, dx, edges)
+    S = np.zeros(len(edges) - 1) if flat else structure_factor(a, dx, edges, periodic)
     shape = S / S.sum() if S.sum() > 0 else S
     out |= {f"{f.name}.shape.k{j:02d}": float(s) for j, s in enumerate(shape)}
     if f.kind == "scalar":
@@ -162,7 +205,7 @@ def field_descriptors(a: np.ndarray, f: Field, dx: float, edges: np.ndarray) -> 
         values = 2 * size if f.kind == "nematic" else size
     mean, std, skew, kurt = moments(values)
     area = values.shape[0] * values.shape[1] * dx**2
-    out |= {f"{f.name}.topo.{k}": v for k, v in domain_counts(values, area).items()}
+    out |= {f"{f.name}.topo.{k}": v for k, v in domain_counts(values, area, periodic).items()}
     if not f.relative:
         out[f"{f.name}.mom.mean"] = mean
     out |= {f"{f.name}.mom.std": std, f"{f.name}.mom.skew": skew, f"{f.name}.mom.kurt": kurt}
@@ -171,7 +214,7 @@ def field_descriptors(a: np.ndarray, f: Field, dx: float, edges: np.ndarray) -> 
         mean_vec = float(np.hypot(c[..., 0].mean(), c[..., 1].mean()))
         out[f"{f.name}.order.global"] = mean_vec / size_mean if size_mean > FLAT else 0.0
     if f.kind == "vector":
-        d, w = div_curl(a, dx)
+        d, w = div_curl(a, dx, periodic)
         d2, w2 = float(np.mean(d**2)), float(np.mean(w**2))
         out[f"{f.name}.flow.log10div2"] = _log10(d2)
         out[f"{f.name}.flow.log10curl2"] = _log10(w2)
@@ -180,66 +223,100 @@ def field_descriptors(a: np.ndarray, f: Field, dx: float, edges: np.ndarray) -> 
     return out
 
 
-def correlations(before: np.ndarray, after: np.ndarray, f: Field) -> tuple[float, float]:
+def correlations(before: np.ndarray, after: np.ndarray, f: Field, shift: int | None = None
+                 ) -> tuple[float, float]:
     """Correlation of the fluctuations of one field between two snapshots, at the same place
-    (still) and after the periodic shift that maximises it (moving). Both are 1 when either
-    snapshot is flat (a choice: nothing changes)."""
-    x = _components(prepared(before, f))
+    (still) and after the shift that maximises it (moving). Both are 1 when either snapshot
+    is flat (a choice: nothing changes).
+
+    shift None: periodic frames of the same size, every circular shift is tried.
+    shift s: `before` is the frame extended by s points on every side; every shift in
+    [-s, s]^2 is tried, and each correlation is the Pearson correlation of `after` with the
+    window of `before` under it (normalised over the frame, not over the whole box)."""
     y = _components(prepared(after, f))
-    x = x - x.mean(axis=(0, 1))
+    x = _components(prepared(before, f))
     y = y - y.mean(axis=(0, 1))
-    npts = x[..., 0].size
-    if min(np.sum(x**2), np.sum(y**2)) / npts < FLAT**2:
+    npts = y[..., 0].size
+    if shift is None:
+        x = x - x.mean(axis=(0, 1))
+        if min(np.sum(x**2), np.sum(y**2)) / npts < FLAT**2:
+            return 1.0, 1.0
+        norm = np.sqrt(np.sum(x**2) * np.sum(y**2))
+        cross = sum(np.fft.ifft2(np.conj(np.fft.fft2(x[..., i])) * np.fft.fft2(y[..., i])).real
+                    for i in range(x.shape[2]))
+        return float(np.sum(x * y) / norm), float(cross.max() / norm)
+    # windowed (Lewis 1995, fast normalised cross-correlation): sums over every window of the
+    # size of the frame by FFT convolution; result shape (2s + 1, 2s + 1), zero shift at [s, s]
+    ones = np.ones(y.shape[:2])
+    num = sum(fftconvolve(x[..., i], y[::-1, ::-1, i], mode="valid") for i in range(x.shape[2]))
+    s1 = [fftconvolve(x[..., i], ones, mode="valid") for i in range(x.shape[2])]
+    s2 = [fftconvolve(x[..., i] ** 2, ones, mode="valid") for i in range(x.shape[2])]
+    var_x = sum(b - a**2 / npts for a, b in zip(s1, s2))          # sum of squared fluctuations per window
+    var_y = float(np.sum(y**2))
+    if var_y / npts < FLAT**2 or var_x[shift, shift] / npts < FLAT**2:
         return 1.0, 1.0
-    norm = np.sqrt(np.sum(x**2) * np.sum(y**2))
-    cross = sum(np.fft.ifft2(np.conj(np.fft.fft2(x[..., i])) * np.fft.fft2(y[..., i])).real
-                for i in range(x.shape[2]))
-    return float(np.sum(x * y) / norm), float(cross.max() / norm)
+    corr = num / np.sqrt(np.maximum(var_x, FLAT**2 * npts) * var_y)
+    return float(corr[shift, shift]), float(corr.max())
 
 
-def pair_descriptors(before: np.ndarray, after: np.ndarray, f: Field) -> dict[str, float]:
+def pair_descriptors(before: np.ndarray, after: np.ndarray, f: Field, shift: int | None = None
+                     ) -> dict[str, float]:
     """Decorrelation log10(1 - C + DECOR_FLOOR) at the same place and after the best shift."""
-    still, moving = correlations(before, after, f)
+    still, moving = correlations(before, after, f, shift)
     return {f"{f.name}.dyn.still": float(np.log10(max(1 - still, 0) + DECOR_FLOOR)),
             f"{f.name}.dyn.moving": float(np.log10(max(1 - moving, 0) + DECOR_FLOOR))}
 
 
-# ---------------------------------------------------------------- runs and ensembles
+# ---------------------------------------------------------------- frames, runs and ensembles
 def describe_snapshot(snapshot: dict[str, np.ndarray], fields: list[Field], dx: float,
-                      before: dict[str, np.ndarray] | None = None) -> dict[str, float]:
-    """All descriptors of one snapshot; with `before` (the snapshot pair_dt earlier), also
-    the dynamics."""
+                      before: dict[str, np.ndarray] | None = None, periodic: bool = True,
+                      shift: int = 0, min_wavelengths: float | None = None) -> dict[str, float]:
+    """All descriptors of one frame; with `before` (the frame pair_dt earlier), also the
+    dynamics. A non-periodic frame (periodic False) uses the rules of the module docstring;
+    then `before` must be extended by `shift` points on every side, and min_wavelengths sets
+    the first shell of S(k)."""
     n = snapshot[fields[0].name].shape[0]
-    edges = k_shells(n, dx)
+    edges = k_shells(n, dx, min_wavelengths=None if periodic else min_wavelengths)
     out = {}
     for f in fields:
-        out |= field_descriptors(snapshot[f.name], f, dx, edges)
+        out |= field_descriptors(snapshot[f.name], f, dx, edges, periodic)
         if before is not None:
-            out |= pair_descriptors(before[f.name], snapshot[f.name], f)
+            out |= pair_descriptors(before[f.name], snapshot[f.name], f, None if periodic else shift)
     return out
 
 
-def describe_run(ens: Ensemble, run: int, path: str) -> list[dict]:
-    """One row per described snapshot of a run: the last `ens.last` snapshots."""
+def run_frame(ens: Ensemble, shape: tuple[int, ...], dx: float) -> Frame:
+    """The frame of one run (see frames.py)."""
+    return frame_for(shape, dx, ens.periodic, ens.crop, ens.dx_target, ens.max_shift)
+
+
+def describe_run(ens: Ensemble, run: int, path: str, dx: float | None = None) -> list[dict]:
+    """One row per described snapshot of a run: the last `ens.last` snapshots. dx: grid
+    spacing of this run (default ens.dx)."""
+    dx = ens.dx if dx is None else dx
     snaps = run_snapshots(ens, path)
     times = np.array([t for t, _ in snaps])
-    rows = []
+    rows, frame = [], None
     for t, p in snaps[-ens.last:]:
-        snap = read_snapshot(p, ens.fields, ens.julia_order)
+        raw = read_snapshot(p, ens.fields, ens.julia_order)
+        frame = frame or run_frame(ens, raw[ens.fields[0].name].shape, dx)
         before = None
         if ens.pair_dt is not None:
             j = np.flatnonzero(np.isclose(times, t - ens.pair_dt, rtol=0, atol=1e-6 * ens.pair_dt))
             if len(j):
-                before = read_snapshot(snaps[j[0]][1], ens.fields, ens.julia_order)
-        row = {"run": run, "time": t} | describe_snapshot(snap, ens.fields, ens.dx, before)
+                old = read_snapshot(snaps[j[0]][1], ens.fields, ens.julia_order)
+                before = prepare(old, ens.fields, frame, margin=not frame.periodic)
+        row = {"run": run, "time": t} | describe_snapshot(
+            prepare(raw, ens.fields, frame), ens.fields, frame.dx, before, frame.periodic, frame.shift,
+            ens.min_wavelengths)
         rows.append(row)
     return rows
 
 
 def _describe_one(args):
-    ens, run, path = args
+    ens, run, path, dx = args
     try:
-        return describe_run(ens, run, path), None
+        return describe_run(ens, run, path, dx), None
     except Exception as err:   # noqa: BLE001 (one broken run must not stop the ensemble)
         return [], f"run {run}: {type(err).__name__}: {err}"
 
@@ -249,13 +326,23 @@ def describe_ensemble(ens: Ensemble, workers: int = 1) -> tuple[pd.DataFrame, li
     parameters, then the descriptors) and the list of runs that could not be read.
 
     workers: number of processes reading runs in parallel. Keep it small (2 or 3) when the
-    data are read over a network share."""
-    jobs = [(ens, int(r.run), r.path) for r in ens.runs.itertuples()]
+    data are read over a network share.
+
+    ValueError if the runs give different S(k) shells (frames of different sizes or grid
+    spacings): their columns would not mean the same wavenumbers. Set crop and dx_target."""
+    dxs = ens.runs["dx"] if "dx" in ens.runs else [ens.dx] * len(ens.runs)
+    jobs = [(ens, int(r.run), r.path, float(d)) for r, d in zip(ens.runs.itertuples(), dxs)]
     if workers > 1:
         with ProcessPoolExecutor(workers) as pool:
             results = list(pool.map(_describe_one, jobs))
     else:
         results = [_describe_one(j) for j in jobs]
+    shells = {tuple(c for c in rows[0] if ".shape." in c) for rows, _ in results if rows}
+    if len(shells) > 1:
+        raise ValueError("the runs give different S(k) shells (frames of different sizes or grid "
+                         "spacings), so their columns would not mean the same wavenumbers: set "
+                         "`crop` and `dx_target` in the configuration so that every run is described "
+                         "on the same frame")
     rows = [row for res, _ in results for row in res]
     errors = [e for _, e in results if e]
     table = pd.DataFrame(rows)

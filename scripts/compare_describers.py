@@ -1,0 +1,167 @@
+"""Hand-made against learned description on the Swift-Hohenberg demo, for the whole periodic
+box and for a centred crop (not periodic).
+
+Usage: python scripts/compare_describers.py data/demo docs/comparison
+(data/demo is written by `phasewall demo data/demo`; needs the extra [nn].)
+
+Describers, on the same rows (the snapshots that have a partner pair_dt earlier):
+- hand: describe.py;
+- cnn seed 0, cnn seed 1: the encoder trained by phasewall.nn (two training seeds);
+- cnn untrained: the same encoder with its random initial weights (baseline: what the
+  architecture gives without training).
+For each: walls.find_walls with the default settings, compared with the reference labels of the
+demo (never seen by the describers): phases, agreement, walls, mixed points, the range of RATIO
+that keeps the count, the AUC of the jump J at true boundaries (links between points of
+different reference labels against links inside one label), the nearest-neighbour accuracy of
+the labels from the description (point means, leave one point out, balanced), and the
+effective rank of the description.
+
+Outputs: summary.md, comparison.csv, training.csv, phase_maps.png, training.png.
+"""
+
+import dataclasses
+import sys
+import time
+import warnings
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+import torch
+from matplotlib.figure import Figure
+from scipy.stats import mannwhitneyu
+
+from phasewall import report
+from phasewall.cli import agreement, node_labels
+from phasewall.describe import describe_ensemble
+from phasewall.graph import parameter_nodes
+from phasewall.io import load_ensemble
+from phasewall.nn.data import load_frames
+from phasewall.nn.loss import effective_rank
+from phasewall.nn.train import Settings, embed, h_table, new_encoder, train
+from phasewall.walls import RATIO, feature_matrix, find_walls, phases_against_ratio
+
+warnings.simplefilter("ignore", RuntimeWarning)
+CROP_POINTS = 40          # crop of 40 x 40 points = 5 wavelengths (a choice)
+SEEDS = (0, 1)            # training seeds
+EPOCHS = 40
+WORKERS = 8
+
+
+def nn_accuracy(table: pd.DataFrame, parameters, ref: pd.Series) -> float:
+    """Balanced accuracy of the label of the nearest other point (point means of the
+    standardised, block-weighted description)."""
+    X, _ = feature_matrix(table)
+    node, _ = parameter_nodes(table[parameters].to_numpy())
+    means = np.stack([X[node == k].mean(axis=0) for k in range(node.max() + 1)])
+    d = np.linalg.norm(means[:, None] - means[None], axis=2)
+    np.fill_diagonal(d, np.inf)
+    pred = ref.to_numpy()[d.argmin(axis=1)]
+    truth = ref.to_numpy()
+    return float(np.mean([np.mean(pred[truth == c] == c) for c in np.unique(truth)]))
+
+
+def evaluate(name, setting, table, ens, runs, seconds) -> tuple[dict, object, pd.Series]:
+    w = find_walls(table, ens.parameters)
+    ref = node_labels(w, runs)
+    _, agree = agreement(w, ref)
+    curve = phases_against_ratio(table, ens.parameters)
+    same = curve[curve.phases == w.n_phases].ratio
+    a, b = w.edges.a.to_numpy(), w.edges.b.to_numpy()
+    boundary = ref.to_numpy()[a] != ref.to_numpy()[b]
+    J = w.edges.jump.to_numpy()
+    auc = mannwhitneyu(J[boundary], J[~boundary]).statistic / (boundary.sum() * (~boundary).sum())
+    X, names = feature_matrix(table)
+    row = {"setting": setting, "describer": name, "columns": len(names), "phases": w.n_phases,
+           "agree": agree, "points": len(w.nodes), "walls": int(w.edges.wall.sum()),
+           "mixed": int(w.nodes.mixed.sum()),
+           "ratio_range": f"{same.min():g}-{same.max():g}" if len(same) else "-",
+           "auc_boundary": float(auc), "nn_accuracy": nn_accuracy(table, ens.parameters, ref),
+           "effective_rank": effective_rank(torch.from_numpy(X)), "seconds": seconds}
+    return row, w, ref
+
+
+def main(demo: str, out: str):
+    demo, out = Path(demo), Path(out)
+    out.mkdir(parents=True, exist_ok=True)
+    base = load_ensemble(demo / "phasewall.toml")
+    runs = pd.read_csv(demo / "runs.csv")
+    settings = {"periodic box": base, "crop (not periodic)": dataclasses.replace(base, crop=CROP_POINTS * base.dx)}
+    rows, maps, logs = [], {}, []
+    for setting, ens in settings.items():
+        t0 = time.time()
+        hand, errors = describe_ensemble(ens, workers=WORKERS)
+        assert not errors, errors
+        t_hand = time.time() - t0
+        frames = load_frames(ens, workers=WORKERS)
+        keep = set(zip(frames.run, frames.time))
+        hand = hand[[k in keep for k in zip(hand.run, hand.time)]].reset_index(drop=True)
+        tables = {"hand": (hand, t_hand)}
+        enc = new_encoder(frames, Settings(seed=0)).eval()
+        tables["cnn untrained"] = (h_table(frames, embed(enc, frames), ens), 0.0)
+        for seed in SEEDS:
+            t0 = time.time()
+            print(f"--- {setting}: training seed {seed}", flush=True)
+            enc, log = train(frames, Settings(epochs=EPOCHS, seed=seed))
+            tables[f"cnn seed {seed}"] = (h_table(frames, embed(enc, frames), ens), time.time() - t0)
+            logs.append(log.assign(setting=setting, seed=seed))
+        for name, (table, sec) in tables.items():
+            row, w, ref = evaluate(name, setting, table, ens, runs, sec)
+            rows.append(row)
+            maps[(setting, name)] = (w, ref)
+            print(row, flush=True)
+    res = pd.DataFrame(rows)
+    res.to_csv(out / "comparison.csv", index=False)
+    pd.concat(logs).to_csv(out / "training.csv", index=False)
+    figures(maps, pd.concat(logs), out)
+    write_summary(res, pd.concat(logs), out)
+
+
+def figures(maps, logs, out):
+    names = ["hand", "cnn seed 0", "cnn untrained"]
+    settings = list(dict.fromkeys(s for s, _ in maps))
+    fig = Figure(figsize=(4.0 * (len(names) + 1), 4.3 * len(settings)), facecolor=report.SURFACE,
+                 layout="constrained")
+    axes = fig.subplots(len(settings), len(names) + 1)
+    for i, setting in enumerate(settings):
+        w0, ref = maps[(setting, "hand")]
+        report.plot_reference(axes[i, 0], w0, ref)
+        axes[i, 0].set_title(f"{setting}: reference labels", fontsize=9, loc="left", color=report.INK)
+        for j, name in enumerate(names):
+            w, ref = maps[(setting, name)]
+            report.plot_phases(axes[i, j + 1], w)
+            _, agree = agreement(w, ref)
+            axes[i, j + 1].set_title(f"{setting}: {name}\n{w.n_phases} phases, {agree}/{len(w.nodes)} agree",
+                                     fontsize=9, loc="left", color=report.INK)
+    fig.savefig(out / "phase_maps.png", dpi=report.DPI, facecolor=report.SURFACE)
+
+    fig = Figure(figsize=(9.0, 3.2), facecolor=report.SURFACE, layout="constrained")
+    ax1, ax2 = fig.subplots(1, 2)
+    for k, ((setting, seed), g) in enumerate(logs.groupby(["setting", "seed"], sort=False)):
+        colour = report.PHASE_COLOURS[0 if setting.startswith("periodic") else 1]
+        ls = "-" if seed == 0 else "--"
+        ax1.plot(g.epoch, g.loss, color=colour, ls=ls, lw=1.6, label=f"{setting}, seed {seed}")
+        ax2.plot(g.epoch, g.effective_rank_h, color=colour, ls=ls, lw=1.6)
+    ax1.axhline(logs.collapse_loss.iloc[0], color=report.INK_2, lw=0.8, ls=":")
+    ax1.text(1, logs.collapse_loss.iloc[0], " collapse ln(2N - 1)", fontsize=7, va="bottom", color=report.INK_2)
+    ax1.legend(fontsize=7, frameon=False)
+    report._style(ax1, "epoch", "InfoNCE loss")
+    report._style(ax2, "epoch", "effective rank of h")
+    fig.savefig(out / "training.png", dpi=report.DPI, facecolor=report.SURFACE)
+
+
+def write_summary(res, logs, out):
+    last = logs.groupby(["setting", "seed"], sort=False).tail(1)
+    lines = ["# Hand-made against learned description (Swift-Hohenberg demo)", "",
+             (f"Walls with the default settings (RATIO = {RATIO}). Agreement: points that carry the most "
+              "common reference label of their region. AUC: probability that a link between two "
+              "reference states jumps more than a link inside one state. NN accuracy: label of the "
+              "nearest other point in the description (balanced over the three states)."), "",
+             report._markdown(res), "", "Last epoch of each training:", "",
+             report._markdown(last[["setting", "seed", "loss", "collapse_loss", "alignment", "uniformity",
+                                    "effective_rank_h"]]), ""]
+    (out / "summary.md").write_text("\n".join(lines))
+
+
+if __name__ == "__main__":
+    main(*sys.argv[1:3])

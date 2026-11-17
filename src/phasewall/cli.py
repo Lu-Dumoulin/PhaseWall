@@ -2,6 +2,7 @@
 
     phasewall toy FOLDER               write the Swift-Hohenberg demo ensemble
     phasewall describe CONFIG.toml     descriptors of every snapshot -> descriptors.csv
+    phasewall learn CONFIG.toml        train the learned description (CNN, extra [nn]) -> its table
     phasewall walls TABLE.csv          walls and phases -> a report folder
     phasewall demo FOLDER              the three steps on the demo, checked against its reference labels
 
@@ -55,17 +56,52 @@ def cmd_toy(args) -> pd.DataFrame:
     return runs
 
 
+def learned_table(ens, encoder_dir, workers: int) -> pd.DataFrame:
+    """h of every pair of an ensemble with a saved encoder (fields, frame kind and scales of
+    its training)."""
+    from .nn.data import load_frames
+    from .nn.train import embed, h_table, load
+    enc, meta = load(encoder_dir)
+    if [(f.name, f.kind) for f in meta["fields"]] != [(f.name, f.kind) for f in ens.fields]:
+        sys.exit(f"phasewall: the encoder in {encoder_dir} was trained on other fields")
+    frames = load_frames(ens, workers, scale=np.array(meta["scale"]))
+    if frames.periodic != meta["periodic"] or frames.in_channels != meta["in_channels"]:
+        sys.exit(f"phasewall: the frames do not match the training of {encoder_dir} (periodic, channels)")
+    return h_table(frames, embed(enc, frames), ens)
+
+
 def cmd_describe(args) -> Path:
     ens = load_ensemble(args.config)
-    out = Path(args.out) if args.out else Path(args.config).parent / "descriptors.csv"
+    default = "descriptors_cnn.csv" if args.encoder else "descriptors.csv"
+    out = Path(args.out) if args.out else Path(args.config).parent / default
     t0 = time.time()
-    table, errors = describe_ensemble(ens, workers=args.workers)
+    if args.encoder:
+        table, errors = learned_table(ens, args.encoder, args.workers), []
+    else:
+        table, errors = describe_ensemble(ens, workers=args.workers)
     table.to_csv(out, index=False)
     print(f"{len(table)} snapshots of {table.run.nunique() if len(table) else 0} runs described "
           f"in {time.time() - t0:.0f} s -> {out}")
     if errors:
         (out.parent / "describe_errors.txt").write_text("\n".join(errors) + "\n")
         print(f"{len(errors)} runs could not be read: see {out.parent / 'describe_errors.txt'}")
+    return out
+
+
+def cmd_learn(args) -> Path:
+    from .nn.data import load_frames
+    from .nn.train import Settings, embed, h_table, save, train
+    ens = load_ensemble(args.config)
+    out = Path(args.out) if args.out else Path(args.config).parent / "encoder"
+    frames = load_frames(ens, workers=args.workers)
+    print(f"{len(frames.x)} pairs of {len(set(frames.run))} runs, {frames.in_channels} channels, "
+          f"frame {frames.x.shape[2]} x {frames.x.shape[3]}, {'periodic' if frames.periodic else 'not periodic'}")
+    settings = Settings(epochs=args.epochs, seed=args.seed)
+    t0 = time.time()
+    encoder, log = train(frames, settings)
+    save(out, encoder, frames, settings, log)
+    h_table(frames, embed(encoder, frames), ens).to_csv(out / "descriptors_cnn.csv", index=False)
+    print(f"trained in {time.time() - t0:.0f} s -> {out / 'encoder.pt'}, {out / 'descriptors_cnn.csv'}")
     return out
 
 
@@ -88,7 +124,7 @@ def cmd_demo(args) -> Path:
     folder = Path(args.folder)
     runs = cmd_toy(args)
     descriptors = cmd_describe(argparse.Namespace(config=folder / "phasewall.toml", out=None,
-                                                  workers=args.workers))
+                                                  workers=args.workers, encoder=None))
     ens = load_ensemble(folder / "phasewall.toml")
     table = pd.read_csv(descriptors)
     w = find_walls(table, ens.parameters)
@@ -133,7 +169,16 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--out", help="CSV file to write (default: descriptors.csv next to the configuration)")
     s.add_argument("--workers", type=int, default=2,
                    help="processes reading runs in parallel (default 2; keep it small over a network share)")
+    s.add_argument("--encoder", help="folder of an encoder trained by `phasewall learn`: write its h instead")
     s.set_defaults(func=cmd_describe)
+
+    s = sub.add_parser("learn", help="train the learned description (CNN, needs the extra [nn])")
+    s.add_argument("config", help="TOML configuration of the ensemble (pair_dt is needed)")
+    s.add_argument("--out", help="folder for the encoder and its table (default: encoder/ next to the configuration)")
+    s.add_argument("--epochs", type=int, default=40, help="training epochs (default 40)")
+    s.add_argument("--seed", type=int, default=0)
+    s.add_argument("--workers", type=int, default=2, help="processes reading runs (default 2)")
+    s.set_defaults(func=cmd_learn)
 
     s = sub.add_parser("walls", help="walls and phases from a table of descriptors")
     s.add_argument("table", help="CSV with one row per snapshot: run, time, the parameters, the descriptors")

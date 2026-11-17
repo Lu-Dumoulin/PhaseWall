@@ -1,0 +1,21 @@
+% Shared colours and styles of the schematics (input once in the preamble).
+% The phase colours are those of phasewall.report, so schematics and data figures agree.
+\definecolor{cP0}{HTML}{2A78D6}    % phase 0 (stripes in the demo)
+\definecolor{cP1}{HTML}{EB6834}    % phase 1 (hexagons)
+\definecolor{cP2}{HTML}{1BAF7A}    % phase 2 (uniform)
+\definecolor{cInk}{HTML}{0B0B0B}
+\definecolor{cInk2}{HTML}{52514E}
+\definecolor{cGrid}{HTML}{C9C8C3}
+\definecolor{cNeg}{HTML}{184F95}   % negative values (field maps)
+\definecolor{cPos}{HTML}{B23A39}   % positive values
+\definecolor{cAcc}{HTML}{D55E00}   % accent: thresholds, the wall
+
+\tikzset{
+  fig/.style={font=\small, >={Stealth}},
+  lab/.style={font=\footnotesize\bfseries, align=center},
+  note/.style={font=\footnotesize, align=center},
+  small/.style={font=\scriptsize, align=center},
+  blk/.style={draw, rounded corners, align=center, font=\footnotesize, inner sep=4pt, fill=black!3},
+  dot/.style={circle, fill=#1, inner sep=0pt, minimum size=4pt},
+  wall/.style={cAcc, line width=1.4pt},
+}

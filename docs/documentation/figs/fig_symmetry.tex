@@ -1,0 +1,39 @@
+% How fields of each kind change under a rotation by 90 degrees and the mirror x -> -x.
+\begin{tikzpicture}[fig]
+\tikzset{fcap/.style={small, text width=3.3cm, anchor=north}}
+% scalar
+\begin{scope}
+  \node[lab] at (1.1,2.5) {scalar $f$};
+  \draw[cGrid] (0,0) rectangle (2.2,2.2);
+  \fill[cPos!70] (0.5,1.6) circle (0.25);  \fill[cNeg!60] (1.6,0.6) ellipse (0.35 and 0.15);
+  \node[fcap] at (1.1,-0.15) {$f'(\mathbf r)=f(R^{-1}\mathbf r)$};
+\end{scope}
+% vector
+\begin{scope}[shift={(4.0,0)}]
+  \node[lab] at (1.1,2.5) {vector $\mathbf a$};
+  \draw[cGrid] (0,0) rectangle (2.2,2.2);
+  \draw[->, very thick, cP0] (0.5,0.8) -- (1.6,0.8) node[midway, below, small] {$\mathbf a$};
+  \draw[->, very thick, cP1] (0.5,0.8) -- (0.5,1.9) node[midway, left, small] {$R\mathbf a$};
+  \draw[->, cInk2] (1.2,0.8) arc (0:90:0.7) node[pos=0.6, above right, small] {$+90^\circ$};
+  \node[fcap] at (1.1,-0.15) {$(a_x,a_y)\to(-a_y,a_x)$\\ mirror: $a_x\to-a_x$};
+\end{scope}
+% nematic
+\begin{scope}[shift={(8.0,0)}]
+  \node[lab] at (1.1,2.5) {nematic $\mathsf Q$};
+  \draw[cGrid] (0,0) rectangle (2.2,2.2);
+  \draw[very thick, cP0] ({1.1-0.7*cos(30)},{1.1-0.7*sin(30)}) -- ({1.1+0.7*cos(30)},{1.1+0.7*sin(30)});
+  \draw[very thick, cP1] ({1.1-0.7*cos(120)},{1.1-0.7*sin(120)}) -- ({1.1+0.7*cos(120)},{1.1+0.7*sin(120)});
+  \node[small, cP0] at (1.95,1.25) {$\theta$}; \node[small, cP1] at (1.55,2.0) {$\theta+90^\circ$};
+  \node[fcap] at (1.1,-0.15) {director $\pm\mathbf n$ turns by $90^\circ$:\\ $2\theta$ turns by $180^\circ$};
+\end{scope}
+% the 2-theta plane
+\begin{scope}[shift={(13.3,1.1)}]
+  \node[lab] at (0,1.4) {$(Q_{xx},Q_{xy})$ plane};
+  \draw[cGrid] (0,0) circle (0.8);
+  \draw[->] (-1,0) -- (1.0,0) node[right, small] {$Q_{xx}$};
+  \draw[->] (0,-1) -- (0,1.0) node[right, small] {$Q_{xy}$};
+  \draw[->, very thick, cP0] (0,0) -- ({0.8*cos(60)},{0.8*sin(60)}) node[right, small] {$\mathsf Q$};
+  \draw[->, very thick, cP1] (0,0) -- ({0.8*cos(240)},{0.8*sin(240)}) node[left, small] {$-\mathsf Q$};
+  \node[fcap] at (0,-1.25) {rotation: $\mathsf Q\to-\mathsf Q$\\ mirror: $Q_{xy}\to-Q_{xy}$};
+\end{scope}
+\end{tikzpicture}

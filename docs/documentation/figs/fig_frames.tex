@@ -1,0 +1,36 @@
+% (a) crop of side Lc in a non-periodic box, margin s; (b) the frame at t slid over the frame
+% at t - dt extended by s; (c) Tukey window along one side.
+\begin{tikzpicture}[fig]
+\begin{scope}
+  \node[lab] at (1.6,3.6) {(a) crop and margin};
+  \draw[thick, cInk2] (0,0) rectangle (3.2,3.2);
+  \node[small, anchor=north] at (1.6,-0.05) {box of side $L$ (walls)};
+  \draw[cAcc, dashed] (0.5,0.5) rectangle (2.7,2.7);
+  \draw[thick, cP0, fill=cP0!10] (0.9,0.9) rectangle (2.3,2.3);
+  \node[small, cP0] at (1.6,1.6) {crop $L_c$};
+  \draw[<->, cAcc] (0.5,2.9) -- (0.9,2.9) node[midway, above, small] {$s$};
+  \node[small, text width=3.4cm, anchor=north] at (1.6,-0.45) {$L_c+2s\le L$; default\\ $s=L/5$, $L_c=L-2s$};
+\end{scope}
+\begin{scope}[shift={(4.8,0)}]
+  \node[lab] at (1.6,3.6) {(b) moving correlation};
+  \draw[cAcc, dashed, fill=cAcc!6] (0.5,0.5) rectangle (2.7,2.7);
+  \node[small, cAcc, anchor=south west] at (0.5,2.7) {frame at $t-\Delta t$, extended by $s$};
+  \draw[thick, cP0] (0.9,0.9) rectangle (2.3,2.3);
+  \draw[thick, cP1, dashed] (1.15,0.75) rectangle (2.55,2.15);
+  \draw[->, thick] (1.6,1.6) -- (1.85,1.45) node[right, small] {$\mathbf T$};
+  \node[small, text width=3.6cm, anchor=north] at (1.6,-0.45) {frame at $t$ slid by every
+    $\mathbf T\in[-s,s]^2$: $C_{\rm still}=C(\mathbf 0)$, $C_{\rm moving}=\max C(\mathbf T)$};
+\end{scope}
+\begin{scope}[shift={(9.8,0.6)}]
+  \node[lab] at (2.0,3.0) {(c) Tukey window, $\alpha=0.5$};
+  \draw[->] (0,0) -- (4.3,0) node[right, small] {$x$};
+  \draw[->] (0,0) -- (0,2.4) node[above, small] {$w$};
+  \draw[thick, cP0, domain=0:1, samples=40, smooth] plot (\x, {1.0*(1-cos(180*\x))});
+  \draw[thick, cP0] (1,2) -- (3,2);
+  \draw[thick, cP0, domain=3:4, samples=40, smooth] plot (\x, {1.0*(1-cos(180*(4-\x)))});
+  \draw[densely dotted, cInk2] (1,0) -- (1,2); \draw[densely dotted, cInk2] (3,0) -- (3,2);
+  \node[small] at (0.5,-0.3) {$\alpha L_c/2$}; \node[small] at (3.5,-0.3) {$\alpha L_c/2$};
+  \node[small, text width=3.6cm, anchor=north] at (2.0,-0.65) {smooth fall to 0 at the edges:
+    the frame becomes periodic in effect};
+\end{scope}
+\end{tikzpicture}

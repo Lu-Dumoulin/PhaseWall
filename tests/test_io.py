@@ -90,7 +90,7 @@ def test_load_ensemble(tmp_path):
     (tmp_path / "sub").mkdir()
     runs = pd.DataFrame({"path": ["run0", "run1"], "a": [0.1, 0.2], "b": [1, 1]})
     runs.to_csv(tmp_path / "sub" / "runs.csv", index=False)
-    write_config(tmp_path, runs, extra="note = 'any other key is kept'")
+    write_config(tmp_path, runs, extra="crop = 2.0\nmax_shift = 0.5")
     # the table is read from the folder of the TOML file, the run paths from that of the table
     cfg = (tmp_path / "ens.toml").read_text().replace('runs = "runs.csv"', 'runs = "sub/runs.csv"')
     (tmp_path / "ens.toml").write_text(cfg)
@@ -101,7 +101,7 @@ def test_load_ensemble(tmp_path):
     assert [(f.name, f.keys, f.kind, f.relative) for f in ens.fields] == [
         ("rho", ("C", "rho"), "scalar", True), ("p", ("P",), "vector", False)]
     assert (ens.dx, ens.last, ens.pair_dt, ens.julia_order) == (0.5, 3, 2.0, True)
-    assert ens.extra == {"note": "any other key is kept"}
+    assert (ens.crop, ens.max_shift, ens.dx_target, ens.min_wavelengths) == (2.0, 0.5, None, 3.0)
 
 
 def test_load_ensemble_rejects_bad_tables(tmp_path):
@@ -111,3 +111,29 @@ def test_load_ensemble_rejects_bad_tables(tmp_path):
     write_config(tmp_path, pd.DataFrame({"run": [3, 3], "path": ["r0", "r1"], "a": [0, 1], "b": [0, 0]}))
     with pytest.raises(ValueError, match="one value per run"):
         load_ensemble(tmp_path / "ens.toml")
+
+
+def test_unknown_keys_and_missing_settings_raise(tmp_path):
+    runs = pd.DataFrame({"path": ["r0"], "a": [0.1], "b": [1]})
+    write_config(tmp_path, runs, extra="periodc = false")
+    with pytest.raises(ValueError, match="unknown keys \\['periodc'\\]"):
+        load_ensemble(tmp_path / "ens.toml")
+    write_config(tmp_path, runs, extra="periodic = 0")
+    with pytest.raises(ValueError, match="true or false"):
+        load_ensemble(tmp_path / "ens.toml")
+    write_config(tmp_path, runs)
+    cfg = (tmp_path / "ens.toml").read_text()
+    (tmp_path / "ens.toml").write_text(cfg.replace('kind = "vector"', 'kind = "vector"\nrelatve = true'))
+    with pytest.raises(ValueError, match="relatve"):
+        load_ensemble(tmp_path / "ens.toml")
+    (tmp_path / "ens.toml").write_text(cfg.replace("dx = 0.5\n", ""))
+    with pytest.raises(ValueError, match="grid spacing"):
+        load_ensemble(tmp_path / "ens.toml")
+
+
+def test_grid_spacing_per_run(tmp_path):
+    runs = pd.DataFrame({"path": ["r0", "r1"], "a": [0.1, 0.2], "b": [1, 1], "dx": [0.5, 0.25]})
+    write_config(tmp_path, runs)
+    (tmp_path / "ens.toml").write_text((tmp_path / "ens.toml").read_text().replace("dx = 0.5\n", ""))
+    ens = load_ensemble(tmp_path / "ens.toml")
+    assert ens.dx is None and ens.runs.dx.tolist() == [0.5, 0.25]

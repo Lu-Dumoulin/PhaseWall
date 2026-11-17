@@ -1,0 +1,41 @@
+% Swift-Hohenberg: (a) linear growth rate; (b) weakly nonlinear branches for g = 0.25.
+% Coordinates in cm: (a) x = 2.5 k, y = 5 sigma; (b) x = 12 eps, y = 5 std(u).
+\begin{tikzpicture}[fig]
+\begin{scope}
+  \node[lab] at (2.5,2.0) {(a) growth rate $\sigma(k)=\varepsilon-(1-k^2)^2$};
+  \begin{scope}
+    \clip (0,-1.6) rectangle (4.2,1.4);
+    \foreach \e/\c in {0.15/cP0, 0/cInk2, -0.15/cP2}
+      \draw[\c, thick, domain=0.3:1.6, samples=80, smooth] plot ({2.5*\x}, {5*(\e-(1-\x*\x)^2)});
+  \end{scope}
+  \draw[->] (0,0) -- (4.4,0) node[right, small] {$k$};
+  \draw[->] (0,-1.6) -- (0,1.4) node[above, small] {$\sigma$};
+  \draw[dashed, cGrid] (2.5,-1.5) -- (2.5,1.1);
+  \node[small, anchor=north west] at (2.5,-1.5) {$k=1$};
+  \node[small, cP0, anchor=west] at (3.1,0.95) {$\varepsilon>0$: a band grows};
+  \node[small, cInk2, anchor=west] at (3.3,0.25) {$\varepsilon=0$};
+  \node[small, cP2, anchor=west] at (3.3,-0.55) {$\varepsilon<0$: all decay};
+\end{scope}
+\begin{scope}[shift={(8.6,-1.2)}]
+  % g = 0.25: eps_A = -0.0042, eps_R = 0.0833, eps_H = 0.333
+  \node[lab] at (2.9,3.7) {(b) branches for $g=0.25$};
+  \draw[->] (-0.6,0) -- (5.8,0) node[right, small] {$\varepsilon$};
+  \draw[->] (0,0) -- (0,3.0) node[above, small] {$\std u$};
+  \draw[cP2, line width=1.6pt] (-0.6,0) -- (0,0);
+  \draw[cP2, thick, dashed] (0,0) -- (5.4,0);
+  \draw[cP0, thick, dashed, domain=0:0.0833, samples=40] plot ({12*\x}, {5*sqrt(2*\x/3)});
+  \draw[cP0, line width=1.6pt, domain=0.0833:0.45, samples=40] plot ({12*\x}, {5*sqrt(2*\x/3)})
+    node[right, small] {stripes};
+  \draw[cP1, line width=1.6pt, domain=-0.00416:0.333, samples=80] plot ({12*\x}, {5*sqrt(6)*(0.25+sqrt(0.0625+15*\x))/15});
+  \draw[cP1, thick, dashed, domain=0.333:0.45, samples=20] plot ({12*\x}, {5*sqrt(6)*(0.25+sqrt(0.0625+15*\x))/15})
+    node[right, small] {hexagons};
+  \draw[cP1, thick, dashed, domain=-0.00416:0, samples=30] plot ({12*\x}, {5*sqrt(6)*(0.25-sqrt(0.0625+15*\x))/15});
+  \draw[cInk2, densely dotted] (12*0.0833,0) -- (12*0.0833,2.6) node[above, small] {$\varepsilon_R$};
+  \draw[cInk2, densely dotted] (12*0.333,0) -- (12*0.333,2.6) node[above, small] {$\varepsilon_H$};
+  \draw[cInk2, densely dotted] (-0.05,0) -- (-0.05,-0.3) node[below left, small, inner sep=1pt] {$\varepsilon_A$};
+  \node[small, anchor=east] at (-0.65,0) {uniform};
+  \node[small, text width=5.6cm, anchor=north] at (2.6,-0.45) {solid: stable, dashed: unstable.
+    Between $\varepsilon_R$ and $\varepsilon_H$ stripes and hexagons are both stable;
+    between $\varepsilon_A$ and 0, hexagons and the uniform state.};
+\end{scope}
+\end{tikzpicture}
