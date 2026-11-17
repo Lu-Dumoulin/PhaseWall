@@ -61,6 +61,32 @@ def nn_accuracy(table: pd.DataFrame, parameters, ref: pd.Series) -> float:
     return float(np.mean([np.mean(pred[truth == c] == c) for c in np.unique(truth)]))
 
 
+def probe(table: pd.DataFrame, parameters, runs: pd.DataFrame, folds: int = 5, lam: float = 1.0) -> float:
+    """Ridge probe hexagons against stripes per snapshot (reference label of its run), folds
+    made of whole parameter points; balanced accuracy on the held-out points."""
+    X, _ = feature_matrix(table)
+    lab = runs.set_index("run").reference.loc[table.run].to_numpy()
+    m = np.isin(lab, ["hexagons", "stripes"])
+    X, y = X[m], np.where(lab[m] == "hexagons", 1.0, -1.0)
+    node, _ = parameter_nodes(table[parameters].to_numpy()[m])
+    fold = np.random.default_rng(0).integers(folds, size=node.max() + 1)[node]
+    pred = np.zeros_like(y)
+    for f in range(folds):
+        tr, te = fold != f, fold == f
+        A = np.c_[X[tr], np.ones(tr.sum())]
+        w = np.linalg.solve(A.T @ A + lam * np.eye(A.shape[1]), A.T @ y[tr])
+        pred[te] = np.c_[X[te], np.ones(te.sum())] @ w
+    return float(np.mean([np.mean(np.sign(pred[y == c]) == c) for c in (-1.0, 1.0)]))
+
+
+def within_points(table: pd.DataFrame, parameters) -> float:
+    """Share of the variance of the description that lies within parameter points."""
+    X, _ = feature_matrix(table)
+    node, _ = parameter_nodes(table[parameters].to_numpy())
+    within = sum(((X[node == k] - X[node == k].mean(axis=0)) ** 2).sum() for k in np.unique(node))
+    return float(within / ((X - X.mean(axis=0)) ** 2).sum())
+
+
 def evaluate(name, setting, table, ens, runs, seconds) -> tuple[dict, object, pd.Series]:
     w = find_walls(table, ens.parameters)
     ref = node_labels(w, runs)
@@ -72,12 +98,21 @@ def evaluate(name, setting, table, ens, runs, seconds) -> tuple[dict, object, pd
     J = w.edges.jump.to_numpy()
     auc = mannwhitneyu(J[boundary], J[~boundary]).statistic / (boundary.sum() * (~boundary).sum())
     X, names = feature_matrix(table)
+    r = ref.to_numpy()
+    pattern = {"hexagons", "stripes"}
+    hs = np.array([{r[i], r[j]} == pattern for i, j in zip(a, b)])
+    up = np.array([("uniform" in {r[i], r[j]}) and r[i] != r[j] for i, j in zip(a, b)])
+    med = np.median(J)
     row = {"setting": setting, "describer": name, "columns": len(names), "phases": w.n_phases,
            "agree": agree, "points": len(w.nodes), "walls": int(w.edges.wall.sum()),
            "mixed": int(w.nodes.mixed.sum()),
            "ratio_range": f"{same.min():g}-{same.max():g}" if len(same) else "-",
            "auc_boundary": float(auc), "nn_accuracy": nn_accuracy(table, ens.parameters, ref),
-           "effective_rank": effective_rank(torch.from_numpy(X)), "seconds": seconds}
+           "effective_rank": effective_rank(torch.from_numpy(X)),
+           "jump_inner": float(np.median(J[~boundary]) / med), "jump_hex_stripes": float(np.median(J[hs]) / med),
+           "jump_uniform_pattern": float(np.median(J[up]) / med),
+           "within_points": within_points(table, ens.parameters),
+           "probe_hex_stripes": probe(table, ens.parameters, runs), "seconds": seconds}
     return row, w, ref
 
 
@@ -156,7 +191,11 @@ def write_summary(res, logs, out):
              (f"Walls with the default settings (RATIO = {RATIO}). Agreement: points that carry the most "
               "common reference label of their region. AUC: probability that a link between two "
               "reference states jumps more than a link inside one state. NN accuracy: label of the "
-              "nearest other point in the description (balanced over the three states)."), "",
+              "nearest other point in the description (balanced over the three states). jump_*: median "
+              "jump of the links inside one state, between hexagons and stripes, and between the uniform "
+              "state and a pattern, divided by the median of all jumps. within_points: share of the "
+              "variance of the description within parameter points. probe_hex_stripes: ridge probe "
+              "hexagons against stripes on held-out parameter points (balanced accuracy)."), "",
              report._markdown(res), "", "Last epoch of each training:", "",
              report._markdown(last[["setting", "seed", "loss", "collapse_loss", "alignment", "uniformity",
                                     "effective_rank_h"]]), ""]

@@ -80,11 +80,53 @@ against patterned) from 2.5:
 Points whose two halves differ far more than usual are flagged as mixed: next to a
 first-order transition, runs at the same parameters can end in different states.
 
+## Hand-made or learned description
+
+Step 1 needs a function $f$ from a snapshot to a vector. Two are available, and steps 2 to 4
+are the same for both:
+
+- **hand-made** (`describe.py`): the fixed descriptors above, 28 numbers per snapshot in the
+  demo; nothing is learned;
+- **learned** (`phasewall.nn`, extra `[nn]`, PyTorch): a convolutional encoder, adapted from a
+  contrastive (SimCLR) set-up. A pair of frames $(t - \Delta t, t)$ goes through four
+  convolution blocks that halve the grid, then the mean over the frame: $h$, 256 numbers.
+  It is trained on the ensemble itself without labels: two views of a run (two different
+  pairs, each rotated, mirrored and, in a periodic frame, shifted) must be recognised among the
+  views of the other runs (InfoNCE loss on $z = g(h)/|g(h)|$; the head $g$ is dropped after
+  training).
+
+Comparison on the demo, for the whole periodic box and for a centred $40 \times 40$ crop
+described as a non-periodic frame (`scripts/compare_describers.py`, results in
+[docs/comparison](docs/comparison/summary.md)):
+
+| frame | description | phases | points agreeing (of 240) | jump hexagons/stripes, relative | probe hexagons/stripes |
+| --- | --- | --- | --- | --- | --- |
+| periodic | hand-made | 3 | 231 | 1.8 | 0.99 |
+| periodic | learned, 2 seeds | 2, 2 | 169, 169 | 1.0, 1.2 | 0.96, 0.98 |
+| periodic | untrained network | 2 | 169 | 1.2 | 0.95 |
+| crop | hand-made | 3 | 227 | 1.8 | 0.99 |
+| crop | learned, 2 seeds | 2, 2 | 169, 169 | 1.1, 1.1 | 0.95, 0.95 |
+| crop | untrained network | 2 | 159 | 1.1 | 0.96 |
+
+The relative jump is the median jump of the links between a hexagon point and a stripe point,
+divided by the median of all jumps (about 1 inside a state). The probe is a linear classifier
+of hexagons against stripes tested on held-out parameter points.
+
+![Phases found by each description](docs/comparison/phase_maps.png)
+
+The learned $h$ does contain the difference between hexagons and stripes (the probe finds it
+in 95-98% of held-out points), but $h$ changes as much between neighbouring points inside a
+phase as across the hexagon-stripe boundary, so no wall is found there; only the uniform
+state is split off. The hand-made descriptors change abruptly at that boundary (skewness,
+domain counts) and give the three phases, in the periodic box and in the crop. A training that
+rewards differences between phases rather than between runs is one of the open questions
+below.
+
 ## Usage
 
 ```
 python3.12 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev]"          # add ,nn for the learned description: ".[dev,nn]"
 pytest
 
 phasewall demo data/demo                 # the example above (about one minute)
@@ -136,6 +178,10 @@ then
 ```
 phasewall describe ensemble.toml --workers 4      # -> descriptors.csv, one row per snapshot
 phasewall walls descriptors.csv --config ensemble.toml
+
+phasewall learn ensemble.toml                     # learned description -> encoder/descriptors_cnn.csv
+phasewall walls encoder/descriptors_cnn.csv --config ensemble.toml
+phasewall describe other.toml --encoder encoder   # the trained encoder on another ensemble
 ```
 
 `walls` writes a folder with `summary.md`, the tables `nodes.csv` (one row per parameter point,
@@ -146,7 +192,7 @@ descriptions made by a neural network, with `--parameters` instead of `--config`
 
 ## Tests
 
-`pytest` runs 83 tests on small synthetic fields with known answers, in about 8 seconds:
+`pytest` runs 89 tests on small synthetic fields with known answers, in about 8 seconds:
 the symmetry rules of vector and nematic fields against the gradient of a scalar and the
 tensor of a director field; file round trips in Julia layout; the structure factor of a single
 wave, domain counts of spots against stripes, curl-free and divergence-free flows, frozen,
@@ -157,8 +203,10 @@ bistable point flagged as mixed; the Swift-Hohenberg runs (state, and the stripe
 $\mathrm{std}(u) = \sqrt{2\varepsilon/3}$ of weakly nonlinear theory); crops and non-periodic frames ($S(k)$ of
 crops against the exact one, finite against spectral derivatives, the windowed moving
 correlation, rotation and mirror invariance, the same descriptors at $\Delta x$ and
-$\Delta x/2$ after coarsening, mixed grids refused without a common frame); and every command
-of the command-line tool.
+$\Delta x/2$ after coarsening, mixed grids refused without a common frame); the learned description (augmentations
+against the field rules, shift invariance of the periodic encoder, the loss at collapse, a short
+training that separates stripes from spots, saving and loading); and every command of the
+command-line tool.
 
 ## Development plan
 
@@ -167,16 +215,39 @@ This section is for development and will be revised before any public release.
 | Step | Content | Status |
 | --- | --- | --- |
 | 1 | Package: fields and their symmetries, descriptors, parameter graph, walls method, Swift-Hohenberg demo | done |
-| 2 | Tests on synthetic data with known answers (83), continuous integration (ruff, pytest) | done |
+| 2 | Tests on synthetic data with known answers (89), continuous integration (ruff, pytest) | done |
 | 2b | Frames: crops, coarsening, per-run grid spacing, non-periodic boxes; errors for unknown settings | done |
 | 3 | Command-line tool `phasewall toy \| describe \| walls \| demo`, report (summary, tables, figures) | done |
 | 4 | Documentation: method, mathematics, physics parallels, tests ([PDF](docs/documentation.pdf)) | done |
 | 5 | Check on real simulations of an active fluid, from their descriptors and from a learned description; compare the phases found with published phase diagrams. The data stay outside this repository. | next |
-| 6 | Optional self-supervised encoder (extra `[nn]`, PyTorch): contrastive training on snapshot pairs, with augmentations from the field symmetries | planned |
+| 6 | Learned description (extra `[nn]`, PyTorch): contrastive encoder on snapshot pairs, with augmentations from the field symmetries; compared with the hand-made one on the demo (it finds 2 phases of 3) | done |
 | 7 | README figures of the method itself (graph, jumps, cut, test) and of the encoder | planned |
-| 8 | Licence and public release, once step 5 shows that the method works on real data | planned |
+| 8 | More examples with known answers (below) | planned |
+| 9 | Licence and public release, once step 5 shows that the method works on real data | planned |
+
+Examples to add after Swift-Hohenberg (step 8, in this order). Swift-Hohenberg is a gradient
+flow: all its patterns end frozen, it has one scalar field, and three states.
+
+- **Gray-Scott reaction-diffusion** (fields $u$, $v$; parameters $F$, $k$): uniform states,
+  hexagonal spots, stripes and labyrinths, self-replicating spots, localised spots (dissipative
+  solitons), travelling waves and spatio-temporal chaos in one plane, with published maps
+  (Pearson 1993) to compare with. Tests the number of phases beyond three, two fields and
+  dynamic states. Fronts between two uniform states are transients in a periodic box, so
+  they count as phases only when pinned or travelling steadily.
+- **Barkley or FitzHugh-Nagumo** (excitable media): travelling waves, rotating spirals, spiral
+  break-up into turbulence, Turing spots and stripes when the inhibitor diffuses fast. Tests
+  the dynamics block; a rotating spiral is seen as changing by the moving correlation, which
+  follows translations only (a case for several lags or a rotation-aware correlation).
+- **Localised Swift-Hohenberg states**: the demo started from localised initial conditions
+  gives hexagon patches in the bistable range $\varepsilon_A < \varepsilon < 0$ (homoclinic
+  snaking). Tests mixed points and the sampling of initial conditions.
 
 Open questions on the method:
+
+- Learned description: the contrastive training separates runs, and its $h$ changes smoothly
+  across the hexagon-stripe boundary. To try: positives from different runs of the same
+  parameter point (but this pulls together runs that ended in different states, and would hide
+  bistable points), or a combined table (hand-made and learned columns as separate blocks).
 
 - Power of the split-sample test: the demo needs 6 to 8 runs per point to find the weak
   hexagon-stripe wall. Cross-fitting (place with one half, test with the other, then swap)

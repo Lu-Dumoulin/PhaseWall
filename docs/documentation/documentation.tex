@@ -771,6 +771,84 @@ $\sqrt{2\varepsilon/3}$ within 2\% at $\varepsilon=0.1$ and 0.2; the ensemble wr
 \code{make_ensemble} is read back and described.
 \end{codebox}
 
+\subsection{Hand-made against learned description}\label{sec:comparison}
+
+\begin{tech}
+\textbf{Set-up} (\srcref{scripts/compare_describers.py}). The demo is described twice: as the
+whole periodic box, and as a centred crop of $40\times40$ points (5 wavelengths) described
+as a non-periodic frame (Sec.~\ref{sec:frames}). In each case four describers use the same rows
+(the 5 snapshots of each run that have a partner $\Delta t$ earlier): the hand-made $f$, the
+learned $f$ trained with seeds 0 and 1 (40 epochs, about 2 min on a laptop GPU), and the same
+network with its random initial weights (untrained), which shows what the architecture gives
+before any training. Walls use the default settings. Besides the phases and the agreement with
+the reference labels, three numbers explain the result: the AUC of $J$ at true boundaries
+(probability that a link between two reference states jumps more than a link inside one
+state), the relative jump (median $J$ of a kind of link over the median of all jumps), and a
+linear probe (ridge classifier of hexagons against stripes per snapshot, tested on held-out
+parameter points; balanced accuracy).
+\end{tech}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}llcccccc@{}}
+\toprule
+frame & description & phases & agree & AUC & jump hex/stripes & jump uniform/pattern & probe \\
+\midrule
+periodic & hand-made & 3 & 231 & 0.97 & 1.81 & 4.24 & 0.99 \\
+periodic & learned, seed 0 & 2 & 169 & 0.74 & 1.03 & 1.96 & 0.96 \\
+periodic & learned, seed 1 & 2 & 169 & 0.81 & 1.15 & 2.41 & 0.98 \\
+periodic & untrained & 2 & 169 & 0.81 & 1.21 & 2.25 & 0.95 \\
+crop & hand-made & 3 & 227 & 0.97 & 1.85 & 4.83 & 0.99 \\
+crop & learned, seed 0 & 2 & 169 & 0.83 & 1.11 & 2.65 & 0.95 \\
+crop & learned, seed 1 & 2 & 169 & 0.78 & 1.06 & 2.71 & 0.95 \\
+crop & untrained & 2 & 159 & 0.76 & 1.11 & 1.79 & 0.96 \\
+\bottomrule
+\end{tabular}
+\caption{Comparison on the demo (agree: of 240 points; relative jumps about 1 inside a state:
+0.96 to 0.99). Full table with walls, mixed points, robustness range, effective rank and
+times: \href{\repo/blob/main/docs/comparison/summary.md}{\code{docs/comparison/summary.md}}.}\label{tab:comparison}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{../comparison/phase_maps.png}
+\caption{Reference labels and phases found by the hand-made description, the learned one
+(seed 0) and the untrained network; top: periodic box, bottom: crop. Phases are coloured by
+size (phase 0 is the largest), so colours do not name the same state in every panel.}\label{fig:comparisonmaps}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{../comparison/training.png}
+\caption{Trainings: InfoNCE loss far below collapse ($\ln(2N-1)=5.54$) and effective rank of $h$
+growing to 66--90 of 256 dimensions; alignment 0.997, uniformity $-3.35$ at the end.}\label{fig:training}
+\end{figure}
+
+\begin{tech}
+\textbf{Result.} The hand-made description finds the three phases in both frames (231 and 227
+of 240 points); every learned or untrained network finds two (uniform against patterned,
+169 points). The trainings are healthy (Fig.~\ref{fig:training}), and the learned $h$ does
+contain the difference between hexagons and stripes: the linear probe finds it in 95--98\% of
+held-out points. What it lacks is a \emph{jump}: the median $J$ between a hexagon point and a
+stripe point is 1.03--1.15 times the median of all jumps, as inside a phase, against 1.8 for
+the hand-made description, whose skewness and domain counts change abruptly at that boundary.
+The walls method looks for discontinuities, so a description that separates states along a
+smooth direction is not enough. The spread within points is not the cause: it is smaller for
+the learned $h$ (7--33\% of the variance) than for the hand-made $\mathbf x$ (26--27\%).
+
+\emph{Physics parallel.} The probe asks whether some combination of $h$ tells the two states
+apart; the walls method needs a quantity that jumps between neighbouring points, as an order
+parameter does at a first-order transition (the hexagon-stripe transition is one: it is
+bistable). The learned $h$ behaves like a coordinate that varies smoothly through the
+transition, while the hand-made descriptors include quantities that jump there (the skewness,
+near 0 for stripes and finite for spots).
+
+\textbf{To try.} The loss separates individual runs, so it is indifferent to whether two runs
+differ within a phase or across a boundary. Options: positives from different runs of one
+parameter point (this would hide bistable points), or a combined table with hand-made and
+learned blocks.
+\end{tech}
+
 %======================================================================
 \section{Choices}\label{sec:choices}
 %======================================================================
@@ -857,8 +935,16 @@ File & What is checked, against which known answer \\
   \code{max_shift} only; $S(k)$ is measured for wavelengths up to $L_c/3$ only.
 \item \textbf{Grids.} Links join neighbours along one parameter at a time; scattered (non-grid)
   samples would need another graph, for example nearest neighbours.
-\item \textbf{Next.} A check on real simulation data, the optional self-supervised encoder,
-  and figures of the method in the README.
+\item \textbf{Learned description.} On the demo it carries the state but without a jump at the
+  hexagon-stripe boundary (Sec.~\ref{sec:comparison}), so the walls method finds two phases of three.
+\item \textbf{Next.} A check on real simulation data; a training objective for the learned
+  description that rewards differences between phases; more examples with known answers:
+  Gray-Scott reaction-diffusion (spots, stripes, labyrinths, self-replicating spots, localised
+  spots, travelling waves and chaos in the $(F,k)$ plane, with published maps), an excitable
+  medium (Barkley or FitzHugh-Nagumo: travelling waves, rotating spirals, spiral break-up; a test
+  of the dynamics block, since a rotation is not a translation), and localised
+  Swift-Hohenberg states from localised initial conditions (homoclinic snaking in the bistable
+  range $\varepsilon_A<\varepsilon<0$).
 \end{itemize}
 
 %======================================================================
