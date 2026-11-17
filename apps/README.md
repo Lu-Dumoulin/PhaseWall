@@ -18,8 +18,10 @@ The panel on the left sets every choice of an analysis, then **Run** starts it:
 - **Source**: a demo (Swift-Hohenberg or Gray-Scott, or a quick version of either that runs in
   seconds), an ensemble described by a TOML file (see the main README), or a CSV table of
   descriptors made elsewhere (columns `run`, the parameters, optionally `time` and a label).
-- **Simulation** (demos): the parameter grid, typed as `a, b, c` or `start:step:stop`, the runs
-  per point and the numerical settings, pre-filled with the defaults of the demo.
+- **Simulation** (demos): the parameter grid, typed as `a, b, c`, `start:step:stop` or
+  `start:*factor:stop` (geometric: start, start × factor, ...), the runs per point and the
+  numerical settings, pre-filled with the defaults of the demo. A grid field left as shown
+  gives the demo's own values exactly.
 - **Frame**: whole box or a centred crop, coarsening, the largest shift of the moving
   correlation, periodic or not. Empty fields keep the settings of the ensemble.
 - **Description**: hand-made descriptors, learned (a CNN per training seed) and combined (both

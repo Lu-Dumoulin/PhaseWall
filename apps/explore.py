@@ -39,6 +39,8 @@ with app.setup:
     APPS = mo.notebook_dir() or Path.cwd()               # the folder of this notebook
     DEFAULT_CACHE = APPS.parent / "data" / "cache_app"   # its own cache (data/ is git-ignored), apart from
                                                          # the command line and scripts, which may run at the same time
+    GEOMETRIC_TOLERANCE = 1e-3   # geometric range: last value set to stop within this relative distance (a choice)
+    GEOMETRIC_SPREAD = 2e-2      # shown as a geometric range when ratios agree within this (a choice)
     SETTING_LABELS = {                                   # labels of the numerical settings of the demos
         "n": "grid points per side N",
         "waves": "wavelengths across the box",
@@ -52,12 +54,24 @@ with app.setup:
 
 @app.function
 def parse_values(text: str) -> list[float]:
-    """Parameter values typed as "a, b, c" or as a range "start:step:stop" (stop included, as
-    in Julia and CommonUI's parse_values). ValueError with a readable message otherwise."""
+    """Parameter values typed as "a, b, c", as a range "start:step:stop" (stop included, as in
+    Julia and CommonUI's parse_values) or as a geometric range "start:*factor:stop" (start,
+    start factor, start factor^2, ...; the last value is set to stop when it is within
+    GEOMETRIC_TOLERANCE of it, so that a factor written with a few digits still ends on stop).
+    ValueError with a readable message otherwise."""
     text = text.strip()
     if not text:
         raise ValueError("no values given")
     try:
+        if ":*" in text:
+            start, factor, stop = (float(p.lstrip("*")) for p in text.split(":"))
+            if start <= 0 or factor <= 1 or stop < start:
+                raise ValueError
+            n = int(np.floor(np.log(stop / start) / np.log(factor) + GEOMETRIC_TOLERANCE)) + 1
+            values = [float(f"{start * factor**i:.6g}") for i in range(n)]
+            if abs(values[-1] / stop - 1) < GEOMETRIC_TOLERANCE:
+                values[-1] = stop
+            return values
         if ":" in text:
             start, step, stop = (float(p) for p in text.split(":"))
             if step <= 0 or stop < start:
@@ -66,19 +80,35 @@ def parse_values(text: str) -> list[float]:
             return [round(start + i * step, 10) for i in range(n)]
         return [float(p) for p in text.split(",") if p.strip()]
     except ValueError:
-        raise ValueError(f"{text!r}: write values as 'a, b, c' or 'start:step:stop' (step > 0)") from None
+        raise ValueError(f"{text!r}: write values as 'a, b, c', 'start:step:stop' (step > 0) "
+                         "or 'start:*factor:stop' (start > 0, factor > 1)") from None
 
 
 @app.function
 def format_values(values) -> str:
     """The inverse of parse_values: a range "start:step:stop" when the values are evenly spaced,
-    else a list."""
+    "start:*factor:stop" when their ratios are equal within GEOMETRIC_SPREAD (values rounded in
+    the demo, as np.round(np.geomspace(...), 4), are not exactly geometric), else a list."""
     v = [float(x) for x in values]
     if len(v) >= 3:
         steps = np.diff(v)
         if steps[0] > 0 and np.allclose(steps, steps[0], rtol=1e-6, atol=1e-12):
             return f"{v[0]:.10g}:{round(steps[0], 10):.10g}:{v[-1]:.10g}"
+        if v[0] > 0 and steps[0] > 0:
+            ratios = np.array(v[1:]) / np.array(v[:-1])
+            factor = (v[-1] / v[0]) ** (1 / (len(v) - 1))
+            if np.allclose(ratios, factor, rtol=GEOMETRIC_SPREAD):
+                return f"{v[0]:.10g}:*{factor:.5g}:{v[-1]:.10g}"
     return ", ".join(f"{x:.10g}" for x in v)
+
+
+@app.function
+def grid_values(text: str, default) -> list[float]:
+    """The values of one parameter of a demo: its default values exactly when the field still
+    shows them (its text is unchanged), else the values typed."""
+    if text.strip() == format_values(default):
+        return [float(x) for x in default]
+    return parse_values(text)
 
 
 @app.function
@@ -206,8 +236,9 @@ def _(example_choice, quick):
     # version). This cell runs again when the demo or `quick` changes, so the fields are reset.
     demo = example(example_choice.value)
     _quick = dict(demo.QUICK) if quick.value else {}
+    grid_defaults = {p: _quick.get(p, v) for p, v in demo.GRID.items()}
     grid_inputs = mo.ui.dictionary(
-        {p: mo.ui.text(value=format_values(_quick.get(p, v)), full_width=True) for p, v in demo.GRID.items()}
+        {p: mo.ui.text(value=format_values(v), full_width=True) for p, v in grid_defaults.items()}
     )
     demo_defaults = demo.SETTINGS | {k: v for k, v in _quick.items() if k not in demo.GRID}
     setting_inputs = mo.ui.dictionary(
@@ -217,7 +248,7 @@ def _(example_choice, quick):
         start=1, stop=64, step=1, value=pl.QUICK_SEEDS if quick.value else len(demo.SEEDS),
         label="runs per point (different random initial conditions)",
     )
-    return demo, demo_defaults, grid_inputs, seeds_input, setting_inputs
+    return demo, demo_defaults, grid_defaults, grid_inputs, seeds_input, setting_inputs
 
 
 @app.cell
@@ -311,6 +342,7 @@ def _(
     dx_target_input,
     epochs_input,
     example_choice,
+    grid_defaults,
     grid_inputs,
     hand_input,
     hdbscan_input,
@@ -341,7 +373,7 @@ def _(
     def _source() -> pl.Source:
         kind = source_kind.value
         if kind == "example":
-            grid = {p: parse_values(t) for p, t in grid_inputs.value.items()}
+            grid = {p: grid_values(t, grid_defaults[p]) for p, t in grid_inputs.value.items()}
             changed = {k: type(demo_defaults[k])(v) for k, v in setting_inputs.value.items() if v != demo_defaults[k]}
             return pl.Source(example=example_choice.value, grid=grid, seeds=int(seeds_input.value),
                              quick=quick.value, settings=changed)
@@ -467,7 +499,7 @@ def _(
             source_kind, example_choice, mo.md(f"*{demo.__doc__.split(chr(10) * 2)[0]}*"), quick,
         ])
         _grid = mo.vstack(
-            [mo.md("Parameter values: `a, b, c` or `start:step:stop`.")]
+            [mo.md("Parameter values: `a, b, c`, `start:step:stop` or `start:*factor:stop` (geometric).")]
             + [mo.hstack([mo.md(f"`{p}`"), el], widths=[1, 5]) for p, el in grid_inputs.items()]
             + [seeds_input, mo.md("Numerical settings:"), *setting_inputs.values()]
         )

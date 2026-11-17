@@ -43,7 +43,30 @@ def test_format_values_is_the_inverse(nb):
     for values in [toy.EPS, toy.G, gray_scott.F, gray_scott.K, [0.1, 0.3], [1.0, 2.0, 4.0]]:
         assert np.allclose(nb.parse_values(nb.format_values(values)), values)
     assert nb.format_values(toy.EPS) == "-0.075:0.05:0.675"
-    assert nb.format_values([1.0, 2.0, 4.0]) == "1, 2, 4"
+    assert nb.format_values([1.0, 2.0, 5.0]) == "1, 2, 5"
+
+
+def test_geometric_ranges(nb):
+    import numpy as np
+
+    from phasewall import fitzhugh_nagumo
+    assert nb.parse_values("1:*2:16") == [1.0, 2.0, 4.0, 8.0, 16.0]
+    assert nb.format_values([1.0, 2.0, 4.0, 8.0]) == "1:*2:8"
+    # a factor written with 5 digits still ends exactly on stop
+    values = nb.parse_values("0.005:*1.5849:0.5")
+    assert len(values) == 11 and values[-1] == 0.5
+    assert np.allclose(values, np.geomspace(0.005, 0.5, 11), rtol=1e-4)
+    for bad in ["0:*2:8", "1:*1:8", "-1:*2:8", "8:*2:1"]:
+        with pytest.raises(ValueError):
+            nb.parse_values(bad)
+    # the demo's grids, rounded to 4 decimals, are shown as geometric ranges; read back they are
+    # within the rounding, and an untouched field gives the demo's values exactly
+    for default in [fitzhugh_nagumo.EPS, fitzhugh_nagumo.DELTA]:
+        text = nb.format_values(default)
+        assert ":*" in text
+        assert np.allclose(nb.parse_values(text), default, rtol=2e-2)
+        assert nb.grid_values(text, default) == [float(x) for x in default]
+    assert nb.grid_values("0.01, 0.1", fitzhugh_nagumo.EPS) == [0.01, 0.1]
 
 
 def test_parse_ints_and_optional_float(nb):

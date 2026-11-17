@@ -520,7 +520,7 @@ vector finds the basins. The same idea splits molecular dynamics into metastable
 \caption{The first two cuts on the demo. Left and middle: the Fiedler vector on the points
 being cut (scaled to $\pm1$; circles: the side that holds the patterned states, resp. the
 stripes). Cut 1: $\lambda_1\approx10^{-9}$, the uniform region is almost disconnected and
-$\mathbf v$ is nearly a step. Cut 2 (the patterned points): $\lambda_1=2.2\times10^{-3}$, the
+$\mathbf v$ is nearly a step. Cut 2 (the patterned points): $\lambda_1=1.7\times10^{-3}$, the
 vector changes gradually and its sign follows the hexagon-stripe boundary. Right: Ncut along
 the Fiedler order, with its minimum (dot); the walls of cut 1 make it $10^{-8}$.}\label{fig:fiedler}
 \end{figure}
@@ -639,8 +639,9 @@ distribution of their descriptors is bimodal.
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.48\textwidth]{data/mixed.pdf}
-\caption{The demo: one point above the threshold, $(\varepsilon,g)=(0.125,0.2)$, next to the
-hexagon-stripe boundary, where runs end in either state.}
+\caption{The demo: no point above the threshold. With runs to $t=500$ only, one point,
+$(\varepsilon,g)=(0.125,0.2)$, was above it: its runs were still changing (a transient, not a
+bistable point).}
 \end{figure}
 
 \begin{codebox}
@@ -691,7 +692,7 @@ $\varepsilon$ and $g$ (formally $g=O(\sqrt\varepsilon)$).
 \qquad\Delta t=0.25 .
 \]
 Each run starts from noise of amplitude 0.1; snapshots are saved every 25 time units from
-$t=500$ (6 snapshots). Grid: $\varepsilon\in[-0.075,0.675]$ step 0.05 (16 values),
+$t=5000$ (6 snapshots; see the steady-state check below). Grid: $\varepsilon\in[-0.075,0.675]$ step 0.05 (16 values),
 $g\in[0,1.4]$ step 0.1 (15), 8 seeds per point: 1920 runs. A reference label per run, used only
 to check \pw{}: uniform if $\std u<10^{-3}$, hexagons if $|\text{skewness}|>0.4$, else stripes.
 \end{tech}
@@ -707,8 +708,8 @@ above).}\label{fig:sh}
 \centering
 \includegraphics[width=0.5\textwidth]{data/amplitude.pdf}
 \caption{Standard deviation of $u$ at $g=0$ in the demo against $\sqrt{2\varepsilon/3}$: within 1\%
-up to $\varepsilon=0.2$, a few per cent below it at larger $\varepsilon$, where the weakly
-nonlinear theory no longer holds exactly.}\label{fig:amplitude}
+up to $\varepsilon=0.3$, 3\% below it at $\varepsilon=0.675$, where the weakly nonlinear theory no
+longer holds exactly.}\label{fig:amplitude}
 \end{figure}
 
 \subsection{Result}
@@ -727,12 +728,24 @@ and the mixed point (ring). Right: reference labels, never seen by \pw{}.}\label
 \end{figure}
 
 \begin{tech}
-\textbf{Agreement} (Fig.~\ref{fig:phasemap}). 3 phases; 234 of 240 points carry the most common reference label of their
-region. Uniform: 30 of 30; hexagons: 65 of 65; phase 0 holds 139 stripe points and 6 hexagon
-points. These 6 lie on the hexagon-stripe boundary ($\varepsilon=0.325$ for $g=0.9$ to 1.3, and
-$(0.025,0.1)$): at each of them the 8 runs split between hexagons (5 to 7 runs) and stripes
-(1 to 3), so the boundary passes through these points and either side is a fair answer. The
-mixed flag fires only at $(0.125,0.2)$: a split of 7 to 1 is not enough to stand out.
+\textbf{Agreement} (Fig.~\ref{fig:phasemap}). 3 phases; 235 of 240 points carry the most common
+reference label of their region. Uniform: 30 of 30; hexagons: 64 of 64; phase 0 holds 141 stripe
+points and 5 hexagon points. These 5 lie on the hexagon-stripe boundary ($(0.025,0.1)$,
+$(0.275,0.7)$ and $\varepsilon=0.325$ for $g=1.0$ to 1.2): at each of them the 8 runs split
+between hexagons (5 or 6 runs) and stripes (2 or 3), so the boundary passes through these points
+and either side is a fair answer. The mixed flag fires at no point: a split of 6 to 2 between
+runs that are themselves mixed is not enough to stand out.
+
+\textbf{Steady state and pinned mixed states.} With runs to $t=500$ (the first version of the
+demo) 9 boundary points disagreed with the reference. Their 72 runs were continued to
+$t=2500$, 5000 and $20\,000$: only one point changed (3 of its runs turned from hexagons to stripes
+before $t=5000$), hence the run time of $5000$. At $t=20\,000$ every run is frozen (its pattern
+changes by less than $10^{-5}$ over 500 time units), and many still hold patches of spots and
+stripes side by side: the fronts between the two states are pinned to the pattern, a known
+effect of patterns in a gradient flow (the front would move if it did not lock to the
+underlying lattice). Such runs are steady mixed states, not transients; at $(0.125,0.3)$ four
+runs end as perfect stripes and four as perfect hexagons, a bistable point as the amplitude
+equations predict ($\varepsilon_R=0.12<0.125<\varepsilon_H=0.48$ at $g=0.3$).
 
 \textbf{Against the theory.} At small $g$ the found boundary lies between $\varepsilon_R$ and
 $\varepsilon_H$ as it should for runs from random starts (for $g=0.2$:
@@ -751,7 +764,7 @@ states the runs reach, not every stable state.
 \textbf{Robustness.} The count is 3 for \code{RATIO} from 1.2 to 2.0 and 2 from 2.5 (the
 uniform wall is the strongest). With only 2 runs per point the unbiased test misses the
 hexagon-stripe wall ($p=0.04$); it is found from 6 runs per point on, which is why the demo
-uses 8.
+uses 8 (measured with the earlier runs to $t=500$).
 \end{tech}
 
 \begin{figure}[H]
@@ -765,7 +778,7 @@ uses 8.
 \code{make_ensemble}), \srcref{src/phasewall/cli.py} (\code{phasewall demo}),
 \srcref{src/phasewall/report.py}; tests \srcref{tests/test_toy.py}, \srcref{tests/test_cli.py}.
 \code{phasewall demo data/demo --workers 8} writes the runs, \code{descriptors.csv} and
-\code{walls/} (\code{summary.md}, tables, figures) in about one minute.
+\code{walls/} (\code{summary.md}, tables, figures) in about eight minutes.
 \textbf{Tests.} Six $(\varepsilon,g)$ points end in the expected state; the stripe amplitude is
 $\sqrt{2\varepsilon/3}$ within 2\% at $\varepsilon=0.1$ and 0.2; the ensemble written by
 \code{make_ensemble} is read back and described.
@@ -794,18 +807,18 @@ parameter points; balanced accuracy).
 \toprule
 frame & description & phases & agree & AUC & jump hex/stripes & jump uniform/pattern & probe \\
 \midrule
-periodic & hand-made & 3 & 231 & 0.97 & 1.81 & 4.24 & 0.99 \\
-periodic & learned, seed 0 & 2 & 169 & 0.74 & 1.03 & 1.96 & 0.96 \\
-periodic & learned, seed 1 & 2 & 169 & 0.81 & 1.15 & 2.41 & 0.98 \\
-periodic & untrained & 2 & 169 & 0.81 & 1.21 & 2.25 & 0.95 \\
-crop & hand-made & 3 & 227 & 0.97 & 1.85 & 4.83 & 0.99 \\
-crop & learned, seed 0 & 2 & 169 & 0.83 & 1.11 & 2.65 & 0.95 \\
-crop & learned, seed 1 & 2 & 169 & 0.78 & 1.06 & 2.71 & 0.95 \\
-crop & untrained & 2 & 159 & 0.76 & 1.11 & 1.79 & 0.96 \\
+periodic & hand-made & 3 & 235 & 0.98 & 1.92 & 4.41 & 1.00 \\
+periodic & learned, seed 0 & 2 & 171 & 0.92 & 1.37 & 2.22 & 0.98 \\
+periodic & learned, seed 1 & 2 & 171 & 0.89 & 1.30 & 2.13 & 0.98 \\
+periodic & untrained & 2 & 171 & 0.80 & 1.18 & 1.91 & 0.95 \\
+crop & hand-made & 3 & 235 & 0.99 & 2.04 & 5.00 & 0.99 \\
+crop & learned, seed 0 & 2 & 171 & 0.88 & 1.17 & 2.25 & 0.96 \\
+crop & learned, seed 1 & 2 & 171 & 0.82 & 1.08 & 2.27 & 0.94 \\
+crop & untrained & 2 & 159 & 0.71 & 1.06 & 1.53 & 0.94 \\
 \bottomrule
 \end{tabular}
 \caption{Comparison on the demo (agree: of 240 points; relative jumps about 1 inside a state:
-0.96 to 0.99). Full table with walls, mixed points, robustness range, effective rank and
+0.96 to 1.00). Full table with walls, mixed points, robustness range, effective rank and
 times: \href{\repo/blob/main/docs/comparison/summary.md}{\code{docs/comparison/summary.md}}.}\label{tab:comparison}
 \end{table}
 
@@ -821,20 +834,21 @@ size (phase 0 is the largest), so colours do not name the same state in every pa
 \centering
 \includegraphics[width=0.85\textwidth]{../comparison/training.png}
 \caption{Trainings: InfoNCE loss far below collapse ($\ln(2N-1)=5.54$) and effective rank of $h$
-growing to 66--90 of 256 dimensions; alignment 0.997, uniformity $-3.35$ at the end.}\label{fig:training}
+growing to 82--90 of 256 dimensions; alignment 0.999, uniformity $-3.35$ at the end.}\label{fig:training}
 \end{figure}
 
 \begin{tech}
-\textbf{Result.} The hand-made description finds the three phases in both frames (231 and 227
-of 240 points); every learned or untrained network finds two (uniform against patterned,
-169 points). The trainings are healthy (Fig.~\ref{fig:training}), and the learned $h$ does
-contain the difference between hexagons and stripes: the linear probe finds it in 95--98\% of
+\textbf{Result.} The hand-made description finds the three phases in both frames (235 of 240
+points in each); every learned or untrained network finds two (uniform against patterned,
+171 points). The trainings are healthy (Fig.~\ref{fig:training}), and the learned $h$ does
+contain the difference between hexagons and stripes: the linear probe finds it in 94--98\% of
 held-out points. What it lacks is a \emph{jump}: the median $J$ between a hexagon point and a
-stripe point is 1.03--1.15 times the median of all jumps, as inside a phase, against 1.8 for
-the hand-made description, whose skewness and domain counts change abruptly at that boundary.
+stripe point is 1.08--1.37 times the median of all jumps, little more than inside a phase,
+against 1.9--2.0 for the hand-made description, whose skewness and domain counts change abruptly at that boundary.
 The walls method looks for discontinuities, so a description that separates states along a
-smooth direction is not enough. The spread within points is not the cause: it is smaller for
-the learned $h$ (7--33\% of the variance) than for the hand-made $\mathbf x$ (26--27\%).
+smooth direction is not enough. The spread within points is not the cause: in the periodic box
+it is the same for both (27--29\% of the variance for the learned $h$, 30\% for the hand-made
+$\mathbf x$); in the crop it is larger for the learned $h$ (48--52\% against 27\%).
 
 \emph{Physics parallel.} The probe asks whether some combination of $h$ tells the two states
 apart; the walls method needs a quantity that jumps between neighbouring points, as an order
@@ -845,12 +859,13 @@ near 0 for stripes and finite for spots).
 
 \textbf{More data does not help.} Trained on 2 or 4 runs per point instead of 8 (480 or 960
 runs, the same number of training steps) and evaluated on all runs, the learned description
-gives the same result: 2 phases, relative jump hexagons/stripes 1.01--1.07, probe 0.95--0.98.
+gives the same result: 2 phases, relative jump hexagons/stripes 1.01--1.07, probe 0.95--0.98
+(measured with the earlier runs to $t=500$).
 
 \textbf{To try.} The loss separates individual runs, so it is indifferent to whether two runs
-differ within a phase or across a boundary. Planned after the Gray-Scott example: a combined
-table with the hand-made and the learned columns as separate blocks (the walls method weights
-blocks equally), compared with each alone. Positives from different runs of one parameter
+differ within a phase or across a boundary. A combined table with the hand-made and the learned
+columns as separate blocks (the walls method weights blocks equally) is compared with each
+alone on every example (Sec.~\ref{sec:examples}). Positives from different runs of one parameter
 point are another option, but they would hide bistable points.
 \end{tech}
 
@@ -901,25 +916,25 @@ connected in parameter space by construction.
 \toprule
 frame & description & method & groups & agree & ARI & ARI$_{\rm all}$ & pieces & noise \\
 \midrule
-periodic & hand-made & walls & 3 & 231 & 0.87 & 0.87 & 3 & 0 \\
- & & mixture ($k=10$ by BIC) & 9 & 226 & 0.33 & 0.33 & 13 & 0 \\
- & & k-means ($k=2$ by silhouette) & 2 & 169 & 0.36 & 0.36 & 2 & 0 \\
- & & HDBSCAN, $m=10$ & 11 & 210 & 0.93 & 0.77 & 13 & 14\% \\
- & & HDBSCAN, $m=20$ & 5 & 211 & 0.93 & 0.75 & 5 & 17\% \\
+periodic & hand-made & walls & 3 & 235 & 0.93 & 0.93 & 3 & 0 \\
+ & & mixture ($k=10$ by BIC) & 8 & 230 & 0.38 & 0.38 & 13 & 0 \\
+ & & k-means ($k=7$ by silhouette) & 5 & 235 & 0.58 & 0.58 & 5 & 0 \\
+ & & HDBSCAN, $m=10$ & 7 & 216 & 0.77 & 0.66 & 11 & 12\% \\
+ & & HDBSCAN, $m=20$ & 6 & 205 & 0.78 & 0.59 & 10 & 20\% \\
 \addlinespace
- & learned (seed 0) & walls & 2 & 169 & 0.36 & 0.36 & 2 & 0 \\
- & & mixture ($k=10$) & 10 & 189 & 0.12 & 0.12 & 18 & 0 \\
- & & k-means ($k=10$) & 10 & 190 & 0.12 & 0.12 & 19 & 0 \\
- & & HDBSCAN, $m=10$ & 3 & 166 & 0.34 & 0.33 & 3 & 5\% \\
+ & learned (seed 0) & walls & 2 & 171 & 0.36 & 0.36 & 2 & 0 \\
+ & & mixture ($k=10$) & 10 & 191 & 0.14 & 0.14 & 18 & 0 \\
+ & & k-means ($k=10$) & 10 & 182 & 0.11 & 0.11 & 24 & 0 \\
+ & & HDBSCAN, $m=10$ & 2 & 171 & 0.36 & 0.36 & 2 & 2\% \\
 \addlinespace
-crop & hand-made & walls & 3 & 227 & 0.82 & 0.82 & 3 & 0 \\
- & & mixture ($k=10$) & 10 & 235 & 0.31 & 0.31 & 24 & 0 \\
- & & k-means ($k=2$) & 2 & 169 & 0.36 & 0.36 & 2 & 0 \\
- & & HDBSCAN, $m=20$ & 3 & 169 & 0.34 & 0.34 & 3 & 0 \\
+crop & hand-made & walls & 3 & 235 & 0.93 & 0.93 & 3 & 0 \\
+ & & mixture ($k=10$) & 9 & 238 & 0.48 & 0.48 & 15 & 0 \\
+ & & k-means ($k=2$) & 2 & 171 & 0.36 & 0.36 & 2 & 0 \\
+ & & HDBSCAN, $m=20$ & 3 & 237 & 0.97 & 0.96 & 3 & 4\% \\
 \addlinespace
- & learned (seed 0) & walls & 2 & 169 & 0.36 & 0.36 & 2 & 0 \\
- & & mixture ($k=9$) & 9 & 206 & 0.18 & 0.18 & 10 & 0 \\
- & & HDBSCAN, $m=10$ & 3 & 156 & 0.34 & 0.28 & 3 & 14\% \\
+ & learned (seed 0) & walls & 2 & 171 & 0.36 & 0.36 & 2 & 0 \\
+ & & mixture ($k=10$) & 10 & 192 & 0.13 & 0.13 & 38 & 0 \\
+ & & HDBSCAN, $m=10$ & 2 & 171 & 0.36 & 0.36 & 2 & 4\% \\
 \bottomrule
 \end{tabular}
 \caption{Walls against blind grouping on the same descriptions (agree: of 240 points; noise:
@@ -937,23 +952,24 @@ open grey circles: points that HDBSCAN calls noise.}\label{fig:methodsmaps}
 \end{figure}
 
 \begin{tech}
-\textbf{Result.} On the same hand-made description, only the walls give the three states as
-three connected regions (ARI 0.87 and 0.82). The mixture asks for the top of its range ($k=10$
-by BIC, as in hfml) and slices the phases into 13 to 24 pieces along the smooth drift of the
-description with $\varepsilon$ and $g$; its high agreement (226 and 235) only reflects many small
-pure groups, which ARI and the pieces expose. k-means chooses $k=2$ (uniform against
-patterned), the largest gap. HDBSCAN comes closest in the periodic box (ARI 0.93 on the points it
-places) but leaves 14--17\% of the runs as noise (ARI$_{\rm all}$ 0.75--0.77), most of it along the
-hexagon-stripe boundary and next to the uniform state, and breaks the uniform state into small
-groups; on the crop it merges hexagons and stripes. With the learned
+\textbf{Result.} In the periodic box only the walls give the three states as three connected
+regions (ARI 0.93). The mixture asks for the top of its range ($k=10$ by BIC, as in hfml) and
+slices the phases into 13 to 15 pieces along the smooth drift of the description with
+$\varepsilon$ and $g$; its high agreement (230 and 238) only reflects many small pure groups,
+which ARI and the pieces expose. k-means chooses $k=7$ in the periodic box (5 groups on the
+points) and $k=2$ in the crop (uniform against patterned). HDBSCAN leaves 12--20\% of the runs
+as noise in the periodic box and breaks the uniform state into small groups; in the crop, with
+sizes 10 and 20, it finds the three states (ARI 0.97 on the points it places, 0.96 with its 4\%
+of noise), slightly closer to the reference than the walls (0.93). With the learned
 description no method finds the hexagon-stripe boundary: the mixture and k-means cut the
 patterned region into bands that follow $\varepsilon$ and $g$.
 
 \textbf{Probe.} The logistic regression recognises the three states on held-out points with
-balanced accuracy 0.997 and 0.995 (hand-made, periodic and crop), 0.965--0.985 (learned) and
-0.959--0.964 (untrained). Every description contains the states; they differ in how the states
-are laid out. Blind grouping needs separate clouds, which none of the descriptions has here
-(the hexagon and stripe clouds touch, and drift with the parameters). The walls need only a
+balanced accuracy 0.999 and 0.995 (hand-made, periodic and crop), 0.960--0.981 (learned) and
+0.954--0.958 (untrained). Every description contains the states; they differ in how the states
+are laid out. Blind grouping needs separate clouds, which the descriptions have only in part
+(in the periodic box the hexagon and stripe clouds touch and drift with the parameters; in the
+crop they separate enough for HDBSCAN). The walls need only a
 jump along the parameter grid, which the hand-made description has and the learned one lacks.
 \end{tech}
 
@@ -970,6 +986,42 @@ HDBSCAN (3 groups, all points, ARI 1, 3 pieces); two separate states described a
 group in two pieces; the probe is above 0.95 for labels the description contains and near 0.5
 for random labels; no ARI when every run is noise.
 \end{codebox}
+
+%======================================================================
+\section{Further examples}\label{sec:examples}
+%======================================================================
+
+\begin{tech}
+Swift-Hohenberg is a gradient flow: all its patterns end frozen, it has one field and three
+states. Four more models test what it cannot; each was given a pilot scan to choose its window
+and run time, and is checked for steady state (a sample of runs continued to 2 and 4 times the
+run time). All are run by \srcref{scripts/run_examples.py} with the hand-made, the learned and the
+combined description and every method; results in \code{docs/examples/}.
+
+\textbf{Gray-Scott} (Pearson 1993; $u$, $v$; $F$, $k$): two uniform states, spots, isolated spots,
+holes, stripes and labyrinths, moving states. On the first grid (steps 0.005 and 0.0025) 5 phases
+are found and 113 of 143 points agree; the uniform states and the moving region are found, but the
+pattern band, one to three points wide, is merged with a uniform state. Rerun on a grid twice as
+fine to $t=40\,000$ (3 of 143 points still changed between $t=20\,000$ and $60\,000$).
+
+\textbf{FitzHugh-Nagumo} (Hagberg-Meron form $\partial_tu=u-u^3-v+\nabla^2u$,
+$\partial_tv=\varepsilon(u-a_1v-a_0)+\delta\nabla^2v$, $a_1=2$, $a_0=0$; $\varepsilon$, $\delta$):
+a symmetric bistable medium with stationary fronts, moving domains and front turbulence, uniform
+states (up or down at random, equivalent by symmetry) and Turing labyrinths, rings and spots. With
+$a_0=-0.1$ nothing moves (pilot).
+
+\textbf{Barkley} ($\partial_tu=\nabla^2u+\varepsilon^{-1}u(1-u)(u-(v+b)/a)$, $\partial_tv=u-v$,
+$\varepsilon=0.02$; $a$, $b$): rest, plane wave trains and spirals, counted by their tips (points
+around which the phase of $(u,v)$ winds by $2\pi$; on a periodic box they come in pairs).
+Barkley's semi-implicit reaction step keeps $u$ in $[0,1]$; plain forward Euler blows up.
+
+\textbf{Localised Swift-Hohenberg} (cubic-quintic equation $\partial_tu=\varepsilon u-(1+\nabla^2)^2u
++bu^3-u^5$; $a=\varepsilon/b^2$ and $b$): stripe patches that stay localised in the pinning range of
+homoclinic snaking (dissipative solitons), vanish below it or invade the box above. With the
+quadratic-cubic equation of the demo the pinning range of hexagon patches was narrower than 0.005
+in $\varepsilon$ (pilot at $g=1$), and a patch started at small amplitude decays whatever $\varepsilon$:
+the patches start on the upper branch (amplitude 1.4).
+\end{tech}
 
 %======================================================================
 \section{Choices}\label{sec:choices}

@@ -60,7 +60,7 @@ def test_run_in_the_uniform_region_decays():
 
 
 def test_registry_and_ensemble(tmp_path):
-    assert example("gray-scott") is gs and set(EXAMPLES) == {"swift-hohenberg", "gray-scott"}
+    assert example("gray-scott") is gs and {"swift-hohenberg", "gray-scott"} <= set(EXAMPLES)   # full set: test_more_examples
     with pytest.raises(ValueError):
         example("brusselator")
     runs = gs.make_ensemble(tmp_path, F=[0.01], k=[0.07], seeds=(0, 1), n=32, t_relax=1000, n_save=3)

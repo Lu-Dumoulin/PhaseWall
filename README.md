@@ -22,7 +22,8 @@ $$\partial_t u = \varepsilon u - (1 + \nabla^2)^2 u + g u^2 - u^3 .$$
 In two dimensions it has three states: uniform ($\varepsilon < 0$), hexagons of spots (small
 $\varepsilon > 0$ with $g > 0$) and stripes. `phasewall demo` simulates $16 \times 15$ parameter
 points $(\varepsilon, g)$ with 8 runs each from different random initial conditions (1920 runs,
-about one minute on 8 cores), describes the last 6 snapshots of every run and searches for walls.
+about eight minutes on 8 cores), runs them to $t = 5000$ (steady: see below), describes the last 6
+snapshots of every run and searches for walls.
 
 One snapshot from the middle of each phase found, on a common colour scale:
 
@@ -35,9 +36,13 @@ symmetry from the skewness, amplitude), which phasewall never sees.
 
 ![Phase map of the demo](docs/figures/phase_map.png)
 
-234 of the 240 points carry the most common reference label of their region. The 6 others are
-hexagon points next to the hexagon-stripe boundary, where runs at the same parameters can end
-in either state. The number of phases stays at 3 when the threshold `RATIO` (how much more the
+235 of the 240 points carry the most common reference label of their region. The 5 others lie
+on the hexagon-stripe boundary, where the 8 runs of one point end in different states (5 or 6
+hexagons against 2 or 3 stripes), often with patches of spots and stripes side by side in one
+box. These are steady states, not transients: runs at such points continued to $t = 20\,000$ do
+not change (their patterns change by less than $10^{-5}$ over 500 time units), the patches of the
+two states being pinned to each other. An earlier version ran to $t = 500$ only, where one
+boundary point was still changing; hence $t = 5000$. The number of phases stays at 3 when the threshold `RATIO` (how much more the
 crossing links must jump than the inner ones) goes from 1.2 to 2, and drops to 2 (uniform
 against patterned) from 2.5:
 
@@ -101,12 +106,12 @@ described as a non-periodic frame (`scripts/compare_describers.py`, results in
 
 | frame | description | phases | points agreeing (of 240) | jump hexagons/stripes, relative | probe hexagons/stripes |
 | --- | --- | --- | --- | --- | --- |
-| periodic | hand-made | 3 | 231 | 1.8 | 0.99 |
-| periodic | learned, 2 seeds | 2, 2 | 169, 169 | 1.0, 1.2 | 0.96, 0.98 |
-| periodic | untrained network | 2 | 169 | 1.2 | 0.95 |
-| crop | hand-made | 3 | 227 | 1.8 | 0.99 |
-| crop | learned, 2 seeds | 2, 2 | 169, 169 | 1.1, 1.1 | 0.95, 0.95 |
-| crop | untrained network | 2 | 159 | 1.1 | 0.96 |
+| periodic | hand-made | 3 | 235 | 1.9 | 1.00 |
+| periodic | learned, 2 seeds | 2, 2 | 171, 171 | 1.4, 1.3 | 0.98, 0.98 |
+| periodic | untrained network | 2 | 171 | 1.2 | 0.95 |
+| crop | hand-made | 3 | 235 | 2.0 | 0.99 |
+| crop | learned, 2 seeds | 2, 2 | 171, 171 | 1.2, 1.1 | 0.96, 0.94 |
+| crop | untrained network | 2 | 159 | 1.1 | 0.94 |
 
 The relative jump is the median jump of the links between a hexagon point and a stripe point,
 divided by the median of all jumps (about 1 inside a state). The probe is a linear classifier
@@ -115,13 +120,13 @@ of hexagons against stripes tested on held-out parameter points.
 ![Phases found by each description](docs/comparison/phase_maps.png)
 
 The learned $h$ does contain the difference between hexagons and stripes (the probe finds it
-in 95-98% of held-out points), but $h$ changes as much between neighbouring points inside a
+in 94-98% of held-out points), but $h$ changes as much between neighbouring points inside a
 phase as across the hexagon-stripe boundary, so no wall is found there; only the uniform
 state is split off. The hand-made descriptors change abruptly at that boundary (skewness,
 domain counts) and give the three phases, in the periodic box and in the crop. A training that
 rewards differences between phases rather than between runs is one of the open questions
-below. Training on 2 or 4 runs per point instead of 8 gives the same result, so more data is
-not expected to help on its own.
+below. Training on 2 or 4 runs per point instead of 8 gave the same result (checked with the
+earlier runs to $t = 500$), so more data is not expected to help on its own.
 
 ## Walls against blind grouping and a linear probe
 
@@ -137,14 +142,14 @@ to find the states.
 
 | frame | description | method | groups | points agreeing (of 240) | ARI | pieces on the grid | runs left as noise |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| periodic | hand-made | walls | 3 | 231 | 0.87 | 3 | 0 |
-| periodic | hand-made | Gaussian mixture ($k$ = 10) | 9 | 226 | 0.33 | 13 | 0 |
-| periodic | hand-made | k-means ($k$ = 2) | 2 | 169 | 0.36 | 2 | 0 |
-| periodic | hand-made | HDBSCAN (size 10) | 11 | 210 | 0.93 (0.77 with noise) | 13 | 14% |
-| crop | hand-made | walls | 3 | 227 | 0.82 | 3 | 0 |
-| crop | hand-made | HDBSCAN (size 20) | 3 | 169 | 0.34 | 3 | 0 |
-| periodic | learned | walls | 2 | 169 | 0.36 | 2 | 0 |
-| periodic | learned | Gaussian mixture ($k$ = 10) | 10 | 189 | 0.12 | 18 | 0 |
+| periodic | hand-made | walls | 3 | 235 | 0.93 | 3 | 0 |
+| periodic | hand-made | Gaussian mixture ($k$ = 10) | 8 | 230 | 0.38 | 13 | 0 |
+| periodic | hand-made | k-means ($k$ = 7) | 5 | 235 | 0.58 | 5 | 0 |
+| periodic | hand-made | HDBSCAN (size 10) | 7 | 216 | 0.77 (0.66 with noise) | 11 | 12% |
+| crop | hand-made | walls | 3 | 235 | 0.93 | 3 | 0 |
+| crop | hand-made | HDBSCAN (size 20) | 3 | 237 | 0.97 (0.96 with noise) | 3 | 4% |
+| periodic | learned | walls | 2 | 171 | 0.36 | 2 | 0 |
+| periodic | learned | Gaussian mixture ($k$ = 10) | 10 | 191 | 0.14 | 18 | 0 |
 
 ARI is the adjusted Rand index between the groups and the reference states of the points (1
 for the same partition, about 0 by chance); "pieces" counts the connected pieces of the groups
@@ -153,14 +158,15 @@ on the parameter grid (3 for the reference). All methods and settings:
 
 ![Groups found by each method](docs/comparison/methods_maps.png)
 
-On the hand-made description, only the walls give the three states as three connected
-regions. The mixture asks for the top of its range and cuts the phases into bands that follow
-the smooth drift of the description with $\varepsilon$ and $g$; k-means only separates the
-uniform state; HDBSCAN comes closest in the periodic box but leaves 14-17% of the runs as noise
-(mostly along the hexagon-stripe boundary) and breaks the uniform state into small groups, and
-merges hexagons and stripes in the crop. The
-probe recognises the three states in 99.5-99.7% of held-out snapshots with the hand-made
-description and 96-98.5% with the learned one: every description contains the states. Blind
+In the periodic box only the walls give the three states as three connected regions. The
+mixture asks for the top of its range and cuts the phases into bands that follow the smooth
+drift of the description with $\varepsilon$ and $g$; k-means splits the patterned states into
+five groups; HDBSCAN leaves 12-20% of the runs as noise and breaks the uniform state into small
+groups. In the crop, HDBSCAN (sizes 10 and 20) also finds the three states, slightly closer to
+the reference than the walls (ARI 0.97 against 0.93) but with 4% of the runs left as noise; the
+mixture and k-means do not. The probe recognises the three states in 99.5-99.9% of held-out
+snapshots with the hand-made description and 96-98% with the learned one: every description
+contains the states. Blind
 grouping needs them to form separate clouds, which they do not here (the hexagon and stripe
 clouds touch and drift with the parameters); the walls only need a jump along the grid.
 
@@ -171,7 +177,7 @@ python3.12 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"          # optional extras: nn (learned description), baselines (comparisons)
 pytest
 
-phasewall demo data/demo                 # the example above (about one minute)
+phasewall demo data/demo                 # the example above (about eight minutes)
 phasewall demo data/quick --quick        # a small version in a few seconds
 ```
 
@@ -254,7 +260,7 @@ details in [apps/README.md](apps/README.md).
 
 ## Tests
 
-`pytest` runs 94 tests on small synthetic fields with known answers, in about 8 seconds:
+`pytest` runs 122 tests on small synthetic fields with known answers, in about a minute:
 the symmetry rules of vector and nematic fields against the gradient of a scalar and the
 tensor of a director field; file round trips in Julia layout; the structure factor of a single
 wave, domain counts of spots against stripes, curl-free and divergence-free flows, frozen,
@@ -279,7 +285,7 @@ This section is for development and will be revised before any public release.
 | Step | Content | Status |
 | --- | --- | --- |
 | 1 | Package: fields and their symmetries, descriptors, parameter graph, walls method, Swift-Hohenberg demo | done |
-| 2 | Tests on synthetic data with known answers (94), continuous integration (ruff, pytest) | done |
+| 2 | Tests on synthetic data with known answers (122), continuous integration (ruff, pytest) | done |
 | 2b | Frames: crops, coarsening, per-run grid spacing, non-periodic boxes; errors for unknown settings | done |
 | 3 | Command-line tool `phasewall toy \| describe \| walls \| demo`, report (summary, tables, figures) | done |
 | 4 | Documentation: method, mathematics, physics parallels, tests ([PDF](docs/documentation.pdf)) | done |
@@ -287,32 +293,41 @@ This section is for development and will be revised before any public release.
 | 6 | Learned description (extra `[nn]`, PyTorch): contrastive encoder on snapshot pairs, with augmentations from the field symmetries; compared with the hand-made one on the demo (it finds 2 phases of 3) | done |
 | 6b | Comparison with blind grouping (Gaussian mixture, k-means, HDBSCAN) and a logistic probe, on both descriptions | done |
 | 7 | README figures of the method itself (graph, jumps, cut, test) and of the encoder | planned |
-| 8 | More examples with known answers (below) | planned |
+| 8 | More examples with known answers (below): Gray-Scott, FitzHugh-Nagumo, Barkley, localised (cubic-quintic) Swift-Hohenberg added; batch run of all examples with hand-made, learned and combined descriptions (`scripts/run_examples.py`, results in `docs/examples/`) | running |
 | 8a | Gray-Scott demo (`phasewall demo --example gray-scott`), examples registry; package side of the interface: `phasewall.pipeline` (one call, cached steps), plot functions returning figures, progress callbacks, CSV tables as input, combined description, learning curve | done |
 | 8b | Interactive interface ([apps/explore.py](apps/explore.py), marimo notebook and dashboard): demos, ensembles or tables as source; grid, frame, descriptions (hand-made, learned, combined) and methods chosen in a side panel; phase maps, comparison, snapshots, walls, training curves and export in tabs; cached steps ([docs/plan_interface.md](docs/plan_interface.md)) | done |
 | 9 | Licence and public release, once step 5 shows that the method works on real data | planned |
 
-Examples to add after Swift-Hohenberg (step 8, in this order). Swift-Hohenberg is a gradient
-flow: all its patterns end frozen, it has one scalar field, and three states.
+Examples (step 8). Swift-Hohenberg is a gradient flow: all its patterns end frozen, it has one
+scalar field, and three states. Added on 2026-11-17, each with a pilot scan to choose its window
+and run time, and a steady-state check (a sample of runs continued to 2 and 4 times the run time):
 
-- **Gray-Scott reaction-diffusion** (fields $u$, $v$; parameters $F$, $k$): uniform states,
-  hexagonal spots, stripes and labyrinths, self-replicating spots, localised spots (dissipative
-  solitons), travelling waves and spatio-temporal chaos in one plane, with published maps
-  (Pearson 1993) to compare with. Tests the number of phases beyond three, two fields and
-  dynamic states. Fronts between two uniform states are transients in a periodic box, so
-  they count as phases only when pinned or travelling steadily.
-- **Hand-made and learned description combined** (after Gray-Scott): one table with both sets
-  of columns as separate blocks, so that the jumps of the hand-made descriptors and what the
-  network learns are both used; compared with each alone on Swift-Hohenberg and Gray-Scott.
+- **Gray-Scott reaction-diffusion** (fields $u$, $v$; parameters $F$, $k$; done): two uniform
+  states, spots, isolated spots, holes, stripes and labyrinths, moving states, as in Pearson
+  (1993). On a grid of steps 0.005 and 0.0025, 5 phases are found (113 of 143 points agree): the
+  uniform states and the moving region, but the pattern band, one to three points wide, is
+  merged with a uniform state. Rerun on a grid twice as fine, to $t = 40\,000$ (3 of 143 points
+  still changed between $t = 20\,000$ and $60\,000$).
+- **Hand-made and learned description combined** (implemented; compared with each alone on
+  every example in the batch run): one table with both sets of columns as separate blocks, so
+  that the jumps of the hand-made descriptors and what the network learns are both used.
   More training data is not expected to help on its own: on the demo, the learned description
   already separates the states (probe 0.95-0.98), but without a jump at the boundary.
-- **Barkley or FitzHugh-Nagumo** (excitable media): travelling waves, rotating spirals, spiral
-  break-up into turbulence, Turing spots and stripes when the inhibitor diffuses fast. Tests
-  the dynamics block; a rotating spiral is seen as changing by the moving correlation, which
-  follows translations only (a case for several lags or a rotation-aware correlation).
-- **Localised Swift-Hohenberg states**: the demo started from localised initial conditions
-  gives hexagon patches in the bistable range $\varepsilon_A < \varepsilon < 0$ (homoclinic
-  snaking). Tests mixed points and the sampling of initial conditions.
+- **FitzHugh-Nagumo** (Hagberg-Meron form, symmetric bistable medium, parameters $\varepsilon$,
+  $\delta$): stationary fronts, moving domains and front turbulence, uniform states (up or down
+  at random, equivalent by symmetry), Turing labyrinths, rings and spots. With an asymmetric
+  medium ($a_0 = -0.1$) nothing moves, so $a_0 = 0$.
+- **Barkley** (excitable medium, parameters $a$, $b$ at $\varepsilon = 0.02$): rest, plane wave
+  trains, spirals (counted by their tips, where the phase of $(u, v)$ winds by $2\pi$). Tests the
+  dynamics block; a rotating spiral is seen as changing by the moving correlation, which follows
+  translations only.
+- **Localised Swift-Hohenberg** (cubic-quintic equation $\partial_t u = \varepsilon u - (1 +
+  \nabla^2)^2 u + b u^3 - u^5$, parameters $a = \varepsilon / b^2$ and $b$): stripe patches that stay
+  localised in the pinning range of homoclinic snaking (dissipative solitons), vanish below it or
+  invade the box above. With the quadratic-cubic equation of the demo the pinning range of
+  hexagon patches was narrower than 0.005 in $\varepsilon$ and no localised state was found, and a
+  patch started at small amplitude decays whatever $\varepsilon$: the patches start on the upper
+  branch.
 
 Open questions on the method:
 

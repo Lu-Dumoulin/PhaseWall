@@ -28,6 +28,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .describe import count_domains
 from .gray_scott import compact_share
 from .io import write_snapshot
 from .parallel import run_jobs
@@ -108,7 +109,7 @@ def reference_label(snaps: list[dict[str, np.ndarray]]) -> str:
     up = u > 0
     n_up, share_up = compact_share(up)
     n_dn, share_dn = compact_share(~up)
-    if n_up + n_dn <= 2:
+    if count_domains(up) + count_domains(~up) <= 2:      # periodic: a band and its complement
         return "fronts"
     if share_up > COMPACT_SHARE and n_up >= n_dn:
         return "spots"
