@@ -12,7 +12,7 @@ TINY = {"n": 32, "waves": 4}
 @pytest.fixture(scope="module")
 def ensemble(tmp_path_factory):
     folder = tmp_path_factory.mktemp("ens")
-    toy.make_ensemble(folder, eps=[-0.1, 0.05, 0.3, 0.6], g=[0.0, 1.0], seeds=(0, 1), n_save=3, **TINY)
+    toy.make_ensemble(folder, eps=[-0.1, 0.05, 0.3, 0.6], g=[0.0, 1.0], seeds=(0, 1), n_save=3, t_relax=500.0, **TINY)
     cli.run(["describe", str(folder / "phasewall.toml"), "--workers", "1"])
     return folder
 

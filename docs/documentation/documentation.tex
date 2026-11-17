@@ -895,7 +895,81 @@ description changes faster across a boundary than inside a phase, and gives regi
 connected in parameter space by construction.
 \end{tech}
 
-%RESULTS%
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}lllcccccc@{}}
+\toprule
+frame & description & method & groups & agree & ARI & ARI$_{\rm all}$ & pieces & noise \\
+\midrule
+periodic & hand-made & walls & 3 & 231 & 0.87 & 0.87 & 3 & 0 \\
+ & & mixture ($k=10$ by BIC) & 9 & 226 & 0.33 & 0.33 & 13 & 0 \\
+ & & k-means ($k=2$ by silhouette) & 2 & 169 & 0.36 & 0.36 & 2 & 0 \\
+ & & HDBSCAN, $m=10$ & 11 & 210 & 0.93 & 0.77 & 13 & 14\% \\
+ & & HDBSCAN, $m=20$ & 5 & 211 & 0.93 & 0.75 & 5 & 17\% \\
+\addlinespace
+ & learned (seed 0) & walls & 2 & 169 & 0.36 & 0.36 & 2 & 0 \\
+ & & mixture ($k=10$) & 10 & 189 & 0.12 & 0.12 & 18 & 0 \\
+ & & k-means ($k=10$) & 10 & 190 & 0.12 & 0.12 & 19 & 0 \\
+ & & HDBSCAN, $m=10$ & 3 & 166 & 0.34 & 0.33 & 3 & 5\% \\
+\addlinespace
+crop & hand-made & walls & 3 & 227 & 0.82 & 0.82 & 3 & 0 \\
+ & & mixture ($k=10$) & 10 & 235 & 0.31 & 0.31 & 24 & 0 \\
+ & & k-means ($k=2$) & 2 & 169 & 0.36 & 0.36 & 2 & 0 \\
+ & & HDBSCAN, $m=20$ & 3 & 169 & 0.34 & 0.34 & 3 & 0 \\
+\addlinespace
+ & learned (seed 0) & walls & 2 & 169 & 0.36 & 0.36 & 2 & 0 \\
+ & & mixture ($k=9$) & 9 & 206 & 0.18 & 0.18 & 10 & 0 \\
+ & & HDBSCAN, $m=10$ & 3 & 156 & 0.34 & 0.28 & 3 & 14\% \\
+\bottomrule
+\end{tabular}
+\caption{Walls against blind grouping on the same descriptions (agree: of 240 points; noise:
+share of runs that HDBSCAN cannot place). Every method, setting and description, with seed 1 and
+the untrained network:
+\href{\repo/blob/main/docs/comparison/summary.md}{\code{docs/comparison/summary.md}}.}\label{tab:methods}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{../comparison/methods_maps.png}
+\caption{Majority group of every point for the walls, the mixture, k-means and HDBSCAN ($m=10$),
+on the hand-made and the learned description, periodic box and crop. Groups are coloured by size;
+open grey circles: points that HDBSCAN calls noise.}\label{fig:methodsmaps}
+\end{figure}
+
+\begin{tech}
+\textbf{Result.} On the same hand-made description, only the walls give the three states as
+three connected regions (ARI 0.87 and 0.82). The mixture asks for the top of its range ($k=10$
+by BIC, as in hfml) and slices the phases into 13 to 24 pieces along the smooth drift of the
+description with $\varepsilon$ and $g$; its high agreement (226 and 235) only reflects many small
+pure groups, which ARI and the pieces expose. k-means chooses $k=2$ (uniform against
+patterned), the largest gap. HDBSCAN comes closest in the periodic box (ARI 0.93 on the points it
+places) but leaves 14--17\% of the runs as noise (ARI$_{\rm all}$ 0.75--0.77), most of it along the
+hexagon-stripe boundary and next to the uniform state, and breaks the uniform state into small
+groups; on the crop it merges hexagons and stripes. With the learned
+description no method finds the hexagon-stripe boundary: the mixture and k-means cut the
+patterned region into bands that follow $\varepsilon$ and $g$.
+
+\textbf{Probe.} The logistic regression recognises the three states on held-out points with
+balanced accuracy 0.997 and 0.995 (hand-made, periodic and crop), 0.965--0.985 (learned) and
+0.959--0.964 (untrained). Every description contains the states; they differ in how the states
+are laid out. Blind grouping needs separate clouds, which none of the descriptions has here
+(the hexagon and stripe clouds touch, and drift with the parameters). The walls need only a
+jump along the parameter grid, which the hand-made description has and the learned one lacks.
+\end{tech}
+
+\begin{codebox}
+\textbf{Files.} \srcref{src/phasewall/baselines.py} (\code{run_matrix}, \code{reduce},
+\code{fit_mixture}, \code{fit_kmeans}, \code{fit_hdbscan}, \code{blind_groups},
+\code{point_scores}, \code{probe}; scikit-learn: \code{GaussianMixture}, \code{KMeans},
+\code{HDBSCAN}, \code{LogisticRegression}, \code{GroupKFold}), extra \code{[baselines]};
+\srcref{scripts/compare_describers.py} (\code{compare_methods}, \code{method_figure});
+tests \srcref{tests/test_baselines.py}.
+
+\textbf{Tests.} Three well separated clouds on a grid are found by the mixture, k-means and
+HDBSCAN (3 groups, all points, ARI 1, 3 pieces); two separate states described alike give one
+group in two pieces; the probe is above 0.95 for labels the description contains and near 0.5
+for random labels; no ARI when every run is noise.
+\end{codebox}
 
 %======================================================================
 \section{Choices}\label{sec:choices}
@@ -929,6 +1003,8 @@ Constant (file) & Value & Role and reason \\
 \code{MAX_SHIFT_FRACTION} (frames) & 0.2 & default \code{max_shift}: a fifth of the box side \\
 \code{CHANNELS}, \code{HIDDEN}, \code{OUT} (nn) & 32--256, 256, 64 & sizes of $f$ and $g$ (as in hfml Step 7) \\
 \code{T} (nn) & 0.2 & temperature of the InfoNCE loss \\
+\code{PCA_VARIANCE}, \code{K_MIXTURE}, \code{K_KMEANS} (baselines) & 0.95, 1--10, 2--10 & blind grouping, as in hfml \\
+\code{HDBSCAN_SIZES}, \code{FOLDS}, \code{C_PROBE} (baselines) & 5--40, 5, 1 & HDBSCAN sizes; probe folds and penalty \\
 \code{Settings} (nn) & 40 epochs, batch 128 & AdamW, $10^{-3}$, warm-up 3 epochs, cosine decay, 4 draws per run and epoch \\
 \bottomrule
 \end{tabular}
@@ -940,7 +1016,7 @@ choices too (documented in their docstrings).}
 \section{Tests}\label{sec:tests}
 %======================================================================
 
-\code{pytest} runs 89 tests in about 15 seconds, all on small synthetic data with known
+\code{pytest} runs 94 tests in about 15 seconds, all on small synthetic data with known
 answers (no data from any laboratory is in the repository). On every push, the
 continuous-integration workflow \srcref{.github/workflows/tests.yml} runs \code{ruff} and
 \code{pytest}.
@@ -960,6 +1036,7 @@ File & What is checked, against which known answer \\
 \code{test_report.py} & wall segments at $a=5.5$; phase extents and summary; files written; one-parameter scans \\
 \code{test_cli.py} & \code{describe}, \code{walls}, \code{demo --quick}; labels per point; exit status 0 \\
 \code{test_nn.py} & augmentations against the field rules; shift invariance of a periodic encoder; loss at collapse and for perfect pairs; a short training separates stripes from spots; saving and loading; \code{learn} and \code{describe --encoder} (skipped without PyTorch) \\
+\code{test_baselines.py} & separated clouds found by the mixture, k-means and HDBSCAN; groups in two places counted as two pieces; probe on real and random labels; no ARI without placed points (skipped without scikit-learn) \\
 \code{test_frames.py} & crops, coarsening and their errors; $S(k)$ of crops against the exact one; finite against spectral derivatives; windowed moving correlation; rotation and mirror invariance; $\Delta x$ against $\Delta x/2$; mixed grids \\
 \bottomrule
 \end{tabular}
@@ -1010,14 +1087,15 @@ File & Content & Section \\
 \srcref{src/phasewall/describe.py} & descriptors of snapshots and ensembles & \ref{sec:describe} \\
 \srcref{src/phasewall/frames.py} & crops, coarsening, non-periodic frames & \ref{sec:frames} \\
 \srcref{src/phasewall/nn/} & learned description: data, model, loss, training & \ref{sec:learned} \\
+\srcref{src/phasewall/baselines.py} & blind grouping and logistic probe, for comparison & \ref{sec:methods} \\
 \srcref{src/phasewall/graph.py} & nodes and links of the scan, regions & \ref{sec:compare} \\
 \srcref{src/phasewall/walls.py} & features, distances, cuts, tests, mixed points & \ref{sec:compare}--\ref{sec:mixed} \\
 \srcref{src/phasewall/toy.py} & Swift-Hohenberg demo & \ref{sec:demo} \\
 \srcref{src/phasewall/report.py} & summary, tables, figures & \ref{sec:demo} \\
 \srcref{src/phasewall/cli.py} & command-line tool & \ref{sec:overview} \\
 \srcref{scripts/doc_figures.py} & data figures of this document & all \\
-\srcref{scripts/compare_describers.py} & hand-made against learned description & \ref{sec:comparison} \\
-\srcref{tests/} & 89 tests & \ref{sec:tests} \\
+\srcref{scripts/compare_describers.py} & descriptions and methods compared on the demo & \ref{sec:comparison}, \ref{sec:methods} \\
+\srcref{tests/} & 94 tests & \ref{sec:tests} \\
 \bottomrule
 \end{tabular}
 \end{table}

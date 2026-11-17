@@ -27,6 +27,7 @@ from matplotlib.colors import LinearSegmentedColormap, Normalize
 from matplotlib.figure import Figure
 
 from .fields import Field
+from .graph import parameter_nodes
 from .io import Ensemble, read_snapshot, run_snapshots
 from .walls import Walls
 
@@ -203,14 +204,31 @@ def plot_phases(ax, w: Walls) -> None:
     _legend(ax)
 
 
+def label_colours(labels: pd.Series, phase: pd.Series) -> dict:
+    """A colour index for every reference label, one-to-one: a label takes the colour of the
+    phase that holds most of its points when that phase is still free (largest overlaps first),
+    otherwise the first unused colour. Two labels never share a colour."""
+    counts = pd.crosstab(np.asarray(labels), np.asarray(phase))
+    pairs = sorted(((counts.loc[lab, ph], lab, ph) for lab in counts.index for ph in counts.columns
+                    if counts.loc[lab, ph] > 0 and ph >= 0), key=lambda t: (-t[0], str(t[1]), t[2]))
+    colour, used = {}, set()
+    for _, lab, ph in pairs:
+        if lab not in colour and ph not in used:
+            colour[lab] = int(ph)
+            used.add(ph)
+    free = (c for c in range(len(counts.index) + len(counts.columns)) if c not in used)
+    for lab in counts.index:
+        if lab not in colour:
+            colour[lab] = next(free)
+    return colour
+
+
 def plot_reference(ax, w: Walls, reference: pd.Series) -> None:
     """Reference label of each point (the most common label of its runs), for checking."""
     x, y = w.parameters
-    names = list(dict.fromkeys(reference.loc[w.nodes.index]))
-    # colour each reference label like the phase that holds most of its points
-    best = {lab: int(w.nodes.phase[reference == lab].mode().iloc[0]) for lab in names}
-    classes = np.array([best[lab] for lab in reference.loc[w.nodes.index]])
-    label_of = {best[lab]: lab for lab in names}
+    colour = label_colours(reference.loc[w.nodes.index], w.nodes["phase"])
+    classes = np.array([colour[lab] for lab in reference.loc[w.nodes.index]])
+    label_of = {c: lab for lab, c in colour.items()}
     _points_by_class(ax, w.nodes[x].to_numpy(), w.nodes[y].to_numpy(), classes, lambda c: label_of.get(c, "?"))
     ax.add_collection(LineCollection(wall_segments(w), colors=INK, linewidths=1.0, alpha=0.35, zorder=4))
     _style(ax, x, y)
@@ -220,6 +238,11 @@ def plot_reference(ax, w: Walls, reference: pd.Series) -> None:
 
 def phase_map_figure(w: Walls, path: str | Path, reference: pd.Series | None = None) -> None:
     """phase_map.png for a scan of two parameters."""
+    make_phase_map(w, reference).savefig(path, dpi=DPI, facecolor=SURFACE)
+
+
+def make_phase_map(w: Walls, reference: pd.Series | None = None) -> Figure:
+    """Jumps, phases with walls and (if given) reference labels, for a scan of two parameters."""
     if len(w.parameters) != 2:
         raise ValueError("a phase map needs a scan of exactly two parameters")
     panels = 3 if reference is not None else 2
@@ -229,11 +252,16 @@ def phase_map_figure(w: Walls, path: str | Path, reference: pd.Series | None = N
     plot_phases(axes[1], w)
     if reference is not None:
         plot_reference(axes[2], w, reference)
-    fig.savefig(path, dpi=DPI, facecolor=SURFACE)
+    return fig
 
 
 def robustness_figure(curve: pd.DataFrame, path: str | Path, ratio: float | None = None) -> None:
     """robustness.png: number of phases against RATIO."""
+    make_robustness(curve, ratio).savefig(path, dpi=DPI, facecolor=SURFACE)
+
+
+def make_robustness(curve: pd.DataFrame, ratio: float | None = None) -> Figure:
+    """Number of phases against RATIO."""
     fig = Figure(figsize=(4.4, 3.0), facecolor=SURFACE, layout="constrained")
     ax = fig.subplots()
     ax.plot(curve.ratio, curve.phases, color=PHASE_COLOURS[0], lw=2, marker="o", ms=6, zorder=3)
@@ -246,7 +274,7 @@ def robustness_figure(curve: pd.DataFrame, path: str | Path, ratio: float | None
     ax.set_axisbelow(True)
     _style(ax, "RATIO (crossing jump / inner jump needed)", "phases")
     _title(ax, "Number of phases against the threshold")
-    fig.savefig(path, dpi=DPI, facecolor=SURFACE)
+    return fig
 
 
 def _picture(a: np.ndarray, f: Field) -> np.ndarray:
@@ -270,8 +298,14 @@ def central_points(w: Walls) -> dict[int, int]:
 
 
 def snapshots_figure(w: Walls, ens: Ensemble, path: str | Path, field: Field | None = None) -> None:
-    """snapshots.png: the last snapshot of one run at the central point of each phase, all
-    on one colour scale so that amplitudes can be compared (a uniform state looks flat)."""
+    """snapshots.png: see make_snapshots."""
+    make_snapshots(w, ens, field).savefig(path, dpi=DPI, facecolor=SURFACE)
+
+
+def make_snapshots(w: Walls, ens: Ensemble, field: Field | None = None) -> Figure:
+    """The last snapshot of one run at the central point of each phase, all on one colour scale
+    so that amplitudes can be compared (a uniform state looks flat): centred on 0 for a field
+    that changes sign, from its minimum to its maximum otherwise."""
     f = field or ens.fields[0]
     picks = central_points(w)
     runs = ens.runs.set_index("run")
@@ -282,11 +316,13 @@ def snapshots_figure(w: Walls, ens: Ensemble, path: str | Path, field: Field | N
         run = params.index[(params.to_numpy() == values).all(axis=1)][0]
         _, file = run_snapshots(ens, runs.loc[run, "path"])[-1]
         images[ph] = (values, _picture(read_snapshot(file, [f], ens.julia_order)[f.name], f))
-    if f.kind == "scalar":
-        lim = max(np.abs(img).max() for _, img in images.values()) or 1.0
+    lo = min(img.min() for _, img in images.values()) if images else 0.0
+    hi = max(img.max() for _, img in images.values()) if images else 1.0
+    if f.kind == "scalar" and lo < 0 < hi:
+        lim = max(-lo, hi)
         cmap, vmin, vmax = FIELD, -lim, lim
     else:
-        cmap, vmin, vmax = JUMPS, 0.0, max(img.max() for _, img in images.values()) or 1.0
+        cmap, vmin, vmax = JUMPS, lo, hi if hi > lo else lo + 1.0
     fig = Figure(figsize=(2.6 * max(len(picks), 1) + 0.6, 3.0), facecolor=SURFACE, layout="constrained")
     axes = np.atleast_1d(fig.subplots(1, max(len(picks), 1)))
     for ax, (ph, (values, img)) in zip(axes, images.items()):
@@ -304,7 +340,100 @@ def snapshots_figure(w: Walls, ens: Ensemble, path: str | Path, field: Field | N
                      color=INK, fontsize=8)
         cb.ax.tick_params(colors=INK_2, labelsize=7)
         cb.outline.set_visible(False)
-    fig.savefig(path, dpi=DPI, facecolor=SURFACE)
+    return fig
+
+
+# ---------------------------------------------------------------- figures of comparisons
+def node_labels(w: Walls, runs: pd.DataFrame, column: str = "reference") -> pd.Series:
+    """The most common label of the runs at each parameter point, indexed like w.nodes."""
+    key = runs[w.parameters].round(9).apply(tuple, axis=1)
+    by_point = runs[column].groupby(key).agg(lambda s: s.value_counts().idxmax())
+    nodes = w.nodes[w.parameters].round(9).apply(tuple, axis=1)
+    return pd.Series(by_point.loc[nodes].to_numpy(), index=w.nodes.index, name=column)
+
+
+def agreement(w: Walls, reference: pd.Series) -> tuple[pd.DataFrame, int]:
+    """Table of reference labels against regions found, and the number of points whose
+    label is the most common label of their region."""
+    table = pd.crosstab(reference, w.nodes.region)
+    return table, int(table.max(axis=0).sum())
+
+
+def make_methods_map(groups: dict[str, pd.DataFrame], parameters: list[str], methods: list[str],
+                     scores: pd.DataFrame | None = None) -> Figure:
+    """Majority group of every point for each method (columns) and description (rows).
+    groups: description -> table of runs (run, parameters, one column of groups per method,
+    -1 for noise); scores: optional table with columns describer, method, groups, agree,
+    points, ari, pieces (shown in the titles)."""
+    names = list(groups)
+    fig = Figure(figsize=(3.6 * len(methods), 3.7 * len(names)), facecolor=SURFACE, layout="constrained")
+    axes = np.atleast_2d(fig.subplots(len(names), len(methods)))
+    x, y = parameters
+    top = len(PHASE_COLOURS)
+    for i, name in enumerate(names):
+        g = groups[name]
+        node, points = parameter_nodes(g[parameters].to_numpy())
+        for j, col in enumerate(methods):
+            ax = axes[i, j]
+            maj = pd.Series(g[col].to_numpy()).groupby(node).agg(lambda v: v.value_counts().idxmax()).to_numpy()
+            ranks = pd.Series(maj[maj >= 0]).value_counts().index.tolist()
+            classes = np.array([min(ranks.index(v), top) if v >= 0 else -1 for v in maj])
+            placed = classes >= 0
+            _points_by_class(ax, points[placed, 0], points[placed, 1], classes[placed],
+                             lambda c: f"group {c}" if c < top else f"groups {top + 1}+")
+            if (~placed).any():
+                ax.scatter(points[~placed, 0], points[~placed, 1], s=22, facecolors="none", edgecolors=OTHER,
+                           linewidths=0.8, label="noise", zorder=3)
+            _style(ax, x, y)
+            title = f"{name}: {col}"
+            if scores is not None:
+                m = scores[(scores.describer == name) & (scores.method == col)]
+                if len(m):
+                    m = m.iloc[0]
+                    title += f"\n{m.groups} groups, {m.pieces} pieces"
+                    if "agree" in m and pd.notna(m.get("agree")):
+                        title += f", {int(m.agree)}/{int(m.points)} agree, ARI {m.ari:.2f}"
+            ax.set_title(title, fontsize=8, loc="left", color=INK)
+    return fig
+
+
+def make_training(logs: pd.DataFrame) -> Figure:
+    """Loss (with the collapse value) and effective rank of h against the epoch, one line per
+    training (column `name`, or `seed`)."""
+    fig = Figure(figsize=(9.0, 3.2), facecolor=SURFACE, layout="constrained")
+    ax1, ax2 = fig.subplots(1, 2)
+    key = "name" if "name" in logs else "seed"
+    for k, (name, g) in enumerate(logs.groupby(key, sort=False)):
+        colour = PHASE_COLOURS[k % len(PHASE_COLOURS)]
+        ax1.plot(g.epoch, g.loss, color=colour, lw=1.6, label=str(name))
+        ax2.plot(g.epoch, g.effective_rank_h, color=colour, lw=1.6)
+    ax1.axhline(logs.collapse_loss.iloc[0], color=INK_2, lw=0.8, ls=":")
+    ax1.text(1, logs.collapse_loss.iloc[0], " collapse ln(2N - 1)", fontsize=7, va="bottom", color=INK_2)
+    ax1.legend(fontsize=7, frameon=False)
+    _style(ax1, "epoch", "InfoNCE loss")
+    _style(ax2, "epoch", "effective rank of h")
+    return fig
+
+
+def make_learning_curve(curve: pd.DataFrame) -> Figure:
+    """Phases (and agreement, if present) against the number of training runs per point."""
+    fig = Figure(figsize=(4.6, 3.0), facecolor=SURFACE, layout="constrained")
+    ax = fig.subplots()
+    g = curve.groupby("runs_per_point")
+    ax.plot(g.phases.mean().index, g.phases.mean().to_numpy(), color=PHASE_COLOURS[0], marker="o", lw=1.8,
+            label="phases (mean over seeds)")
+    ax.set_ylim(0, curve.phases.max() + 1)
+    _style(ax, "training runs per parameter point", "phases")
+    if "agree" in curve:
+        ax2 = ax.twinx()
+        ax2.plot(g.agree.mean().index, g.agree.mean().to_numpy(), color=PHASE_COLOURS[1], marker="s", lw=1.4,
+                 ls="--", label="points agreeing")
+        ax2.tick_params(colors=INK_2, labelsize=8)
+        ax2.set_ylabel("points agreeing", color=INK, fontsize=9)
+        for side in ("top",):
+            ax2.spines[side].set_visible(False)
+    _title(ax, "Learning curve of the learned description")
+    return fig
 
 
 # ---------------------------------------------------------------- everything

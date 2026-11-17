@@ -63,3 +63,11 @@ def test_probe():
     rng = np.random.default_rng(1)
     random = pd.Series(rng.choice(["x", "y"], size=len(labels)), index=labels.index)
     assert abs(b.probe(t, ["a", "g"], random) - 0.5) < 0.1
+
+
+def test_no_point_placed_gives_no_ari():
+    t, labels = three_states()
+    groups, _ = b.blind_groups(t, ["a", "g"], n_init=3)
+    groups["hdbscan_10"] = -1                                    # everything is noise
+    s = b.point_scores(groups, "hdbscan_10", ["a", "g"], labels)
+    assert s["groups"] == 0 and np.isnan(s["ari"]) and s["ari_all"] == pytest.approx(0)

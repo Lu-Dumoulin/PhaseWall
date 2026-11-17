@@ -88,10 +88,12 @@ def new_encoder(frames: FrameSet, settings: Settings) -> Encoder:
     return Encoder(frames.in_channels, tuple(settings.channels), frames.periodic)
 
 
-def train(frames: FrameSet, settings: Settings | None = None, dev: torch.device | None = None,
-          verbose: bool = True) -> tuple[Encoder, pd.DataFrame]:
-    """Train f and g on the pairs of an ensemble; returns f (on the CPU) and the log."""
-    dev = dev or device()
+def train(frames: FrameSet, settings: Settings | None = None, dev: torch.device | str | None = None,
+          verbose: bool = True, progress=None) -> tuple[Encoder, pd.DataFrame]:
+    """Train f and g on the pairs of an ensemble; returns f (on the CPU) and the log.
+    dev: "cpu", "mps", "cuda" or a torch.device (default: the fastest available).
+    progress: optional callback progress("train", epoch, epochs) after each epoch."""
+    dev = torch.device(dev) if isinstance(dev, str) else (dev or device())
     s = settings or Settings()
     np.random.seed(s.seed)
     encoder = new_encoder(frames, s).to(dev)
@@ -122,6 +124,8 @@ def train(frames: FrameSet, settings: Settings | None = None, dev: torch.device 
                "uniformity": float(np.mean(unifs)), "effective_rank_h": rank,
                "collapse_loss": math.log(2 * batch - 1), "seconds": time.perf_counter() - t0}
         log.append(row)
+        if progress:
+            progress("train", epoch + 1, s.epochs)
         if verbose:
             print(f"epoch {epoch + 1}/{s.epochs}: loss {row['loss']:.3f} (collapse {row['collapse_loss']:.2f}), "
                   f"alignment {row['alignment']:.3f}, uniformity {row['uniformity']:.2f}, "

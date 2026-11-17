@@ -1,6 +1,6 @@
 """The command-line tool `phasewall` (installed by pip from pyproject.toml).
 
-    phasewall toy FOLDER               write the Swift-Hohenberg demo ensemble
+    phasewall toy FOLDER               write a demo ensemble (Swift-Hohenberg, or --example gray-scott)
     phasewall describe CONFIG.toml     descriptors of every snapshot -> descriptors.csv
     phasewall learn CONFIG.toml        train the learned description (CNN, extra [nn]) -> its table
     phasewall walls TABLE.csv          walls and phases -> a report folder
@@ -21,36 +21,32 @@ import pandas as pd
 
 from . import report, toy
 from .describe import describe_ensemble
-from .graph import DECIMALS
+from .examples import EXAMPLES, example
 from .io import load_ensemble
 from .walls import ALPHA, MIN_PHASE, RATIO, Walls, find_walls, phases_against_ratio
 
-# --quick: a small demo to try the commands in seconds; too coarse to find all three phases
-QUICK = {"n": 32, "waves": 4}
-QUICK_EPS, QUICK_G, QUICK_SEEDS = toy.EPS[::3], toy.G[::3], (0, 1)
+QUICK_SEEDS = (0, 1)    # --quick: runs per point
 
 
 def node_labels(w: Walls, runs: pd.DataFrame, column: str = "reference") -> pd.Series:
-    """The most common label of the runs at each parameter point, indexed like w.nodes."""
-    key = runs[w.parameters].round(DECIMALS).apply(tuple, axis=1)
-    by_point = runs[column].groupby(key).agg(lambda s: s.value_counts().idxmax())
-    nodes = w.nodes[w.parameters].round(DECIMALS).apply(tuple, axis=1)
-    return pd.Series(by_point.loc[nodes].to_numpy(), index=w.nodes.index, name=column)
+    """See report.node_labels (kept here for existing scripts)."""
+    return report.node_labels(w, runs, column)
 
 
 def agreement(w: Walls, reference: pd.Series) -> tuple[pd.DataFrame, int]:
-    """Table of reference labels against regions found, and the number of points whose
-    label is the most common label of their region."""
-    table = pd.crosstab(reference, w.nodes.region)
-    return table, int(table.max(axis=0).sum())
+    """See report.agreement (kept here for existing scripts)."""
+    return report.agreement(w, reference)
 
 
 def cmd_toy(args) -> pd.DataFrame:
-    kw = QUICK if args.quick else {}
-    eps, g = (QUICK_EPS, QUICK_G) if args.quick else (toy.EPS, toy.G)
-    seeds = QUICK_SEEDS if args.quick else tuple(range(args.seeds))
+    module = example(args.example)
+    kw = dict(module.QUICK) if args.quick else {}
+    if args.quick:
+        seeds = QUICK_SEEDS
+    else:
+        seeds = tuple(range(args.seeds)) if args.seeds else module.SEEDS
     t0 = time.time()
-    runs = toy.make_ensemble(args.folder, eps=eps, g=g, seeds=seeds, workers=args.workers, **kw)
+    runs = module.make_ensemble(args.folder, seeds=seeds, workers=args.workers, **kw)
     print(f"{len(runs)} runs written to {args.folder} in {time.time() - t0:.0f} s; "
           f"configuration {Path(args.folder) / 'phasewall.toml'}")
     return runs
@@ -134,7 +130,7 @@ def cmd_demo(args) -> Path:
     notes = "\n".join([
         "## Check against the reference labels (demo only)",
         "",
-        ("The demo knows the state of every run from direct measurements (toy.reference_label); "
+        (f"The demo knows the state of every run from direct measurements ({args.example}: reference_label); "
          "phasewall never sees these labels. Points (rows: reference label, columns: region found):"),
         "",
         report._markdown(counts.reset_index()),
@@ -155,12 +151,15 @@ def parser() -> argparse.ArgumentParser:
     def toy_options(s):
         s.add_argument("folder", help="folder to write the runs into")
         s.add_argument("--workers", type=int, default=4, help="processes running in parallel (default 4)")
-        s.add_argument("--seeds", type=int, default=len(toy.SEEDS),
-                       help=f"runs per parameter point (default {len(toy.SEEDS)})")
+        s.add_argument("--example", choices=list(EXAMPLES), default="swift-hohenberg",
+                       help="which demo (default swift-hohenberg)")
+        s.add_argument("--seeds", type=int, default=None,
+                       help=f"runs per parameter point (default: {len(toy.SEEDS)} for Swift-Hohenberg, "
+                            "4 for Gray-Scott)")
         s.add_argument("--quick", action="store_true",
-                       help="small grid and box, seconds instead of a minute (too coarse for all three phases)")
+                       help="small grid and box, seconds instead of minutes (too coarse for all states)")
 
-    s = sub.add_parser("toy", help="write the Swift-Hohenberg demo ensemble")
+    s = sub.add_parser("toy", help="write a demo ensemble")
     toy_options(s)
     s.set_defaults(func=cmd_toy)
 

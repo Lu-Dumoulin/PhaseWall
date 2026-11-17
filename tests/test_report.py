@@ -61,3 +61,13 @@ def test_phase_map_needs_two_parameters(two_phases, tmp_path):
         report.phase_map_figure(w1, tmp_path / "x.png")
     report.write_report(w1, tmp_path / "one")          # no phase map, no error
     assert not (tmp_path / "one" / "phase_map.png").exists()
+
+
+def test_label_colours_are_one_to_one():
+    """Two labels mostly in the same phase still get different colours (and so different
+    legend entries)."""
+    labels = pd.Series(["a", "a", "b", "b", "b", "c"])
+    phase = pd.Series([0, 0, 0, 0, 0, 1])
+    colour = report.label_colours(labels, phase)
+    assert colour["b"] == 0 and colour["c"] == 1          # largest overlaps take their phase colour
+    assert len(set(colour.values())) == 3                 # "a" gets a free colour

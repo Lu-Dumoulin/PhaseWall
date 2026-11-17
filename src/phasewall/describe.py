@@ -45,8 +45,6 @@ for the moving correlation. A frame that is not periodic (a crop, or a non-perio
 Column names are field.block.name, for example rho.shape.k07; walls.py weights the blocks.
 """
 
-from concurrent.futures import ProcessPoolExecutor
-
 import numpy as np
 import pandas as pd
 from scipy import ndimage
@@ -56,6 +54,7 @@ from scipy.signal.windows import tukey
 from .fields import Field
 from .frames import Frame, frame_for, prepare
 from .io import Ensemble, read_snapshot, run_snapshots
+from .parallel import Progress, run_jobs
 
 FLAT = 1e-6           # fields whose fluctuations are below this are flat (a choice)
 SHELL_RATIO = 1.2     # each shell of |k| is 1.2 times wider than the previous one (a choice)
@@ -321,22 +320,19 @@ def _describe_one(args):
         return [], f"run {run}: {type(err).__name__}: {err}"
 
 
-def describe_ensemble(ens: Ensemble, workers: int = 1) -> tuple[pd.DataFrame, list[str]]:
+def describe_ensemble(ens: Ensemble, workers: int = 1, progress: Progress | None = None
+                      ) -> tuple[pd.DataFrame, list[str]]:
     """Descriptors of every run: a table with one row per snapshot (columns run, time, the
     parameters, then the descriptors) and the list of runs that could not be read.
 
     workers: number of processes reading runs in parallel. Keep it small (2 or 3) when the
-    data are read over a network share.
+    data are read over a network share. progress: see parallel.py.
 
     ValueError if the runs give different S(k) shells (frames of different sizes or grid
     spacings): their columns would not mean the same wavenumbers. Set crop and dx_target."""
     dxs = ens.runs["dx"] if "dx" in ens.runs else [ens.dx] * len(ens.runs)
     jobs = [(ens, int(r.run), r.path, float(d)) for r, d in zip(ens.runs.itertuples(), dxs)]
-    if workers > 1:
-        with ProcessPoolExecutor(workers) as pool:
-            results = list(pool.map(_describe_one, jobs))
-    else:
-        results = [_describe_one(j) for j in jobs]
+    results = run_jobs(_describe_one, jobs, workers, progress, "describe")
     shells = {tuple(c for c in rows[0] if ".shape." in c) for rows, _ in results if rows}
     if len(shells) > 1:
         raise ValueError("the runs give different S(k) shells (frames of different sizes or grid "
@@ -357,3 +353,12 @@ def describe_ensemble(ens: Ensemble, workers: int = 1) -> tuple[pd.DataFrame, li
 def descriptor_columns(table: pd.DataFrame) -> list[str]:
     """The descriptor columns of a table (names field.block.name)."""
     return [c for c in table.columns if c.count(".") >= 2]
+
+
+def combine_tables(hand: pd.DataFrame, learned: pd.DataFrame) -> pd.DataFrame:
+    """Hand-made and learned descriptions of the same snapshots side by side: rows matched on
+    (run, time), the columns of both kept under their own block names (field.block.name and
+    cnn.h.dNNN). walls.feature_matrix weighs every block alike, so the learned block counts as
+    one block among the hand-made ones (a choice). Snapshots in only one table are dropped."""
+    keep = [c for c in learned.columns if c in ("run", "time") or c not in hand.columns]
+    return hand.merge(learned[keep], on=["run", "time"], how="inner")

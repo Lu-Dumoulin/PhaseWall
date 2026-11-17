@@ -151,3 +151,34 @@ def write_snapshot(path: str | Path, snapshot: dict[str, np.ndarray], julia_orde
 def run_snapshots(ens: Ensemble, run_path: str | Path) -> list[tuple[float, Path]]:
     """Snapshots of one run of the ensemble."""
     return list_snapshots(run_path, ens.snapshots, ens.time_regex, ens.time_unit)
+
+
+def load_table(path: str | Path, parameters: list[str], label: str | None = None,
+               prefix: str | None = None) -> tuple[pd.DataFrame, pd.Series | None]:
+    """A table of descriptors made elsewhere (for example by hfml), as input to the walls and
+    the other methods. Columns: `run` (one value per run), the parameters, optionally `time`
+    (one row per snapshot; without it, one row per run), optionally a label column, and the
+    descriptors: the columns named field.block.name, or else every numeric column (starting
+    with `prefix` if given), renamed table.<prefix or x>.<name> as one block.
+    Returns the table (run, time, parameters, descriptors) and the labels per run (Series
+    indexed by run, the most common label of its rows) or None."""
+    t = pd.read_csv(path)
+    missing = [c for c in ["run", *parameters] if c not in t.columns]
+    if missing:
+        raise ValueError(f"{path}: missing columns {missing}")
+    if "time" not in t.columns:
+        t["time"] = 0.0
+    named = [c for c in t.columns if c.count(".") >= 2]
+    if not named:
+        skip = {"run", "time", *parameters, *([label] if label else [])}
+        cols = [c for c in t.columns if c not in skip and pd.api.types.is_numeric_dtype(t[c])
+                and (prefix is None or c.startswith(prefix))]
+        if not cols:
+            raise ValueError(f"{path}: no descriptor column found")
+        block = (prefix or "x").strip("_.") or "x"
+        t = t.rename(columns={c: f"table.{block}.{c[len(prefix):] if prefix else c}" for c in cols})
+        named = [f"table.{block}.{c[len(prefix):] if prefix else c}" for c in cols]
+    labels = None
+    if label:
+        labels = t.groupby("run")[label].agg(lambda s: s.value_counts().idxmax())
+    return t[["run", "time", *parameters, *named]], labels

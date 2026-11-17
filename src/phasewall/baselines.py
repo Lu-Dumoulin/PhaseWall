@@ -18,12 +18,7 @@ parameter points held out in GroupKFold folds (no point is in the training and t
 same fold); balanced accuracy. It sees the labels, so it is not a way to find the states: it
 measures how well a description separates them at best.
 
-Comparison with a labelling of the points (point_scores): the label of a point is the most
-common label of its runs; agreement = points whose label is the most common label of their
-group (or region), as for the walls; ARI = adjusted Rand index between the two partitions of
-the points (on the points that are placed: HDBSCAN noise is left out); ari_all = the same with
-noise counted as one more group, so that leaving points out is not rewarded; pieces = connected
-pieces of the groups on the parameter graph.
+Comparison with a labelling of the points: scores.point_scores (no scikit-learn needed).
 """
 
 import numpy as np
@@ -31,11 +26,12 @@ import pandas as pd
 from sklearn.cluster import HDBSCAN, KMeans
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import adjusted_rand_score, silhouette_score
+from sklearn.metrics import silhouette_score
 from sklearn.mixture import GaussianMixture
 from sklearn.model_selection import GroupKFold
 
-from .graph import grid_edges, parameter_nodes, regions
+from .graph import parameter_nodes
+from .scores import n_groups, point_scores  # noqa: F401  (point_scores: kept importable from here)
 from .walls import feature_matrix
 
 # Choices (as in hfml protocol version 2, except that rows are runs of an ensemble)
@@ -87,44 +83,18 @@ def fit_hdbscan(Z: np.ndarray, sizes=HDBSCAN_SIZES) -> dict[int, np.ndarray]:
     return {m: HDBSCAN(min_cluster_size=m, copy=True).fit_predict(Z) for m in sizes}
 
 
-def n_groups(labels: np.ndarray) -> int:
-    return len(set(np.asarray(labels).tolist()) - {-1})
-
-
 def blind_groups(table: pd.DataFrame, parameters: list[str], columns: list[str] | None = None,
-                 n_init: int = N_INIT) -> tuple[pd.DataFrame, dict]:
+                 n_init: int = N_INIT, sizes=HDBSCAN_SIZES) -> tuple[pd.DataFrame, dict]:
     """Groups of every run by every method: a table (run, parameters, mixture, kmeans,
-    hdbscan_5, ...) and the details (k chosen, BIC, silhouette, number of components)."""
+    hdbscan_5, ... for the HDBSCAN `sizes`) and the details (k chosen, BIC, silhouette, number
+    of components)."""
     M, runs = run_matrix(table, parameters, columns)
     Z = reduce(M)
-    mix, km, hdb = fit_mixture(Z, n_init=n_init), fit_kmeans(Z, n_init=n_init), fit_hdbscan(Z)
+    mix, km, hdb = fit_mixture(Z, n_init=n_init), fit_kmeans(Z, n_init=n_init), fit_hdbscan(Z, sizes)
     out = runs.assign(mixture=mix["labels"], kmeans=km["labels"])
     for m, lab in hdb.items():
         out[f"hdbscan_{m}"] = lab
     return out, {"components": Z.shape[1], "mixture": mix, "kmeans": km}
-
-
-def point_scores(groups: pd.DataFrame, column: str, parameters: list[str], labels: pd.Series) -> dict:
-    """Compare a grouping of the runs with labels of the runs (Series indexed by run): at the
-    level of the points (majority group and majority label of each point)."""
-    g = groups.set_index("run")[column]
-    node, points = parameter_nodes(groups[parameters].to_numpy())
-    runs = groups["run"].to_numpy()
-
-    def majority(values):
-        return pd.Series(values).groupby(node).agg(lambda s: s.value_counts().idxmax()).to_numpy()
-
-    pg = majority(g.loc[runs].to_numpy())
-    pl = majority(labels.loc[runs].to_numpy())
-    kept = pg != -1
-    table = pd.crosstab(pl[kept], pg[kept])
-    edges = grid_edges(points)
-    same = pg[edges["a"].to_numpy()] == pg[edges["b"].to_numpy()]
-    pieces = len(np.unique(regions(len(points), edges, same)[kept]))
-    return {"groups": n_groups(pg), "noise_points": int((~kept).sum()), "agree": int(table.max(axis=0).sum()),
-            "points": len(points), "ari": float(adjusted_rand_score(pl[kept], pg[kept])),
-            "ari_all": float(adjusted_rand_score(pl, pg)),
-            "pieces": pieces, "noise_runs": float(np.mean(g.to_numpy() == -1))}
 
 
 def probe(table: pd.DataFrame, parameters: list[str], labels: pd.Series, columns: list[str] | None = None,

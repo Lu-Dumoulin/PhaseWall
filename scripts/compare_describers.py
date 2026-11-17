@@ -54,6 +54,7 @@ CROP_POINTS = 40          # crop of 40 x 40 points = 5 wavelengths (a choice)
 SEEDS = (0, 1)            # training seeds
 EPOCHS = 40
 WORKERS = 8
+MAX_COLOURS = len(report.PHASE_COLOURS)   # groups beyond this share one marker in the figures
 
 
 def nn_accuracy(table: pd.DataFrame, parameters, ref: pd.Series) -> float:
@@ -175,6 +176,9 @@ def main(demo: str, out: str):
             mrows, groups = compare_methods(name, setting, table, ens, runs, w)
             method_rows += mrows
             groupings[(setting, name)] = groups
+            save = Path("data/comparison")       # git-ignored: to redraw the figures without retraining
+            save.mkdir(parents=True, exist_ok=True)
+            groups.to_csv(save / f"groups_{setting.split()[0]}_{name.replace(' ', '_')}.csv", index=False)
             print(pd.DataFrame(mrows)[["method", "groups", "agree", "ari", "pieces", "noise_runs"]].round(3)
                   .to_string(index=False), flush=True)
     res = pd.DataFrame(rows)
@@ -200,10 +204,15 @@ def method_figure(groupings, methods, parameters, out, describers=("hand", "cnn 
         for j, col in enumerate(columns):
             maj = pd.Series(g[col].to_numpy()).groupby(node).agg(lambda v: v.value_counts().idxmax()).to_numpy()
             ranks = pd.Series(maj[maj >= 0]).value_counts().index.tolist()      # largest group first
-            classes = np.array([ranks.index(v) if v >= 0 else -1 for v in maj])
+            # groups beyond the eighth colour share one marker; noise is drawn apart (open circles)
+            classes = np.array([min(ranks.index(v), MAX_COLOURS) if v >= 0 else -1 for v in maj])
             ax = axes[i, j]
-            report._points_by_class(ax, points[:, 0], points[:, 1], classes,
-                                    lambda c: f"group {c}" if c >= 0 else "noise")
+            placed = classes >= 0
+            report._points_by_class(ax, points[placed, 0], points[placed, 1], classes[placed],
+                                    lambda c: f"group {c}" if c < MAX_COLOURS else f"groups {MAX_COLOURS + 1}+")
+            if (~placed).any():
+                ax.scatter(points[~placed, 0], points[~placed, 1], s=22, facecolors="none",
+                           edgecolors=report.OTHER, linewidths=0.8, label="noise", zorder=3)
             m = methods[(methods.setting == setting) & (methods.describer == name) & (methods.method == col)].iloc[0]
             report._style(ax, x, y)
             ax.set_title(f"{setting}, {name}: {col}\n{m.groups} groups, {m.agree}/{m.points} agree, "

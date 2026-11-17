@@ -18,26 +18,31 @@ and skewness); it is only used to check phasewall, never by it.
 """
 
 import itertools
-from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 from .io import write_snapshot
+from .parallel import run_jobs
 
 # Settings of the demo (choices)
 N = 64                  # grid points per side
 WAVES = 8               # wavelengths 2 pi across the box
 DT = 0.25               # time step
 C = 2.0                 # stabilising constant of the semi-implicit scheme
-T_RELAX = 500.0         # time before the first saved snapshot
+T_RELAX = 5000.0        # time before the first saved snapshot (500 left one boundary point in a transient, 2026-11-17)
 EVERY = 25.0            # time between saved snapshots
 N_SAVE = 6              # saved snapshots per run
 EPS = np.round(np.arange(-0.075, 0.70, 0.05), 3)   # off eps = 0, where growth is critically slow
 G = np.round(np.arange(0.0, 1.401, 0.1), 3)
 SEEDS = tuple(range(8))  # runs per point: with 2, the hexagon-stripe wall is too weak for the test
                          # (each half of a point is then one frozen run); found from 6 (2026-11-17)
+GRID = {"eps": EPS, "g": G}                       # default parameter grid
+SETTINGS = {"n": N, "waves": WAVES, "dt": DT, "t_relax": T_RELAX, "every": EVERY, "n_save": N_SAVE}
+N_FIELDS = 1          # fields per snapshot
+SECONDS_PER_POINT_STEP = 2.6e-8   # measured on a laptop (Apple M4 Max), one process: for cost estimates
+QUICK = {"eps": EPS[::3], "g": G[::3], "n": 32, "waves": 4, "t_relax": 500.0}   # --quick: seconds, too coarse for all three phases
 UNIFORM_STD = 1e-3      # reference_label: below this standard deviation, uniform
 HEXAGON_SKEW = 0.4      # reference_label: above this |skewness|, hexagons
 
@@ -49,13 +54,36 @@ def box(n: int = N, waves: int = WAVES) -> tuple[float, np.ndarray]:
     return dx, k[:, None] ** 2 + k[None, :] ** 2
 
 
+def initial(n: int, waves: int, seed: int, init: str = "noise", patch: tuple[float, float] = (2.0, 5.0),
+            amplitude: float = 0.3) -> np.ndarray:
+    """Initial field: small noise ("noise"), or ("patch") hexagons of wavenumber about 1
+    inside a smooth disc of random radius (in wavelengths, uniform in `patch`) at a random
+    place, plus small noise; the seed sets both."""
+    rng = np.random.default_rng(seed)
+    noise = 0.1 * rng.standard_normal((n, n))
+    if init == "noise":
+        return noise
+    if init != "patch":
+        raise ValueError(f"init must be 'noise' or 'patch', not {init!r}")
+    x = np.arange(n) / n * 2 * np.pi
+    X, Y = np.meshgrid(x, x, indexing="ij")
+    k2y = round(waves * np.sqrt(3) / 2)          # three wavevectors of the grid closest to a hexagonal triad
+    hexa = np.cos(waves * X) + np.cos(-waves / 2 * X + k2y * Y) + np.cos(-waves / 2 * X - k2y * Y)
+    radius = rng.uniform(*patch) * n / waves      # in grid points
+    cx, cy = rng.integers(0, n, 2)
+    dxp = (np.arange(n)[:, None] - cx + n / 2) % n - n / 2
+    dyp = (np.arange(n)[None, :] - cy + n / 2) % n - n / 2
+    mask = np.exp(-(np.hypot(dxp, dyp) / radius) ** 8)
+    return amplitude * hexa * mask + 0.01 * noise
+
+
 def simulate(eps: float, g: float, seed: int, n: int = N, waves: int = WAVES, dt: float = DT,
-             t_relax: float = T_RELAX, every: float = EVERY, n_save: int = N_SAVE) -> list[tuple[float, np.ndarray]]:
-    """The saved snapshots (time, u indexed [x, y]) of one run."""
+             t_relax: float = T_RELAX, every: float = EVERY, n_save: int = N_SAVE, init: str = "noise",
+             patch: tuple[float, float] = (2.0, 5.0)) -> list[tuple[float, np.ndarray]]:
+    """The saved snapshots (time, u indexed [x, y]) of one run; init: see initial()."""
     _, k2 = box(n, waves)
     implicit = 1 - dt * (eps - (1 - k2) ** 2 - C)
-    rng = np.random.default_rng(seed)
-    uh = np.fft.fft2(0.1 * rng.standard_normal((n, n)))
+    uh = np.fft.fft2(initial(n, waves, seed, init, patch))
     save_steps = {round((t_relax + j * every) / dt): t_relax + j * every for j in range(n_save)}
     out = []
     for step in range(max(save_steps) + 1):
@@ -64,6 +92,14 @@ def simulate(eps: float, g: float, seed: int, n: int = N, waves: int = WAVES, dt
         u = np.fft.ifft2(uh).real
         uh = (uh + dt * np.fft.fft2(g * u**2 - u**3 + C * u)) / implicit
     return out
+
+
+def seconds_per_run(**kw) -> float:
+    """Rough time of one run in one process (seconds), from the measured cost per grid point
+    and time step."""
+    s = SETTINGS | kw
+    steps = (s["t_relax"] + s["every"] * (s["n_save"] - 1)) / s["dt"]
+    return SECONDS_PER_POINT_STEP * steps * s["n"] ** 2
 
 
 def reference_label(u: np.ndarray) -> str:
@@ -84,7 +120,7 @@ def _one(args):
     return label
 
 
-def make_ensemble(folder: str | Path, eps=EPS, g=G, seeds=SEEDS, workers: int = 1, **kw) -> pd.DataFrame:
+def make_ensemble(folder: str | Path, eps=EPS, g=G, seeds=SEEDS, workers: int = 1, progress=None, **kw) -> pd.DataFrame:
     """Write the demo ensemble into `folder`: one subfolder per run with its snapshots,
     runs.csv (path, eps, g, seed, and the reference label of the last snapshot, for checking)
     and phasewall.toml. Returns the table of runs."""
@@ -92,11 +128,7 @@ def make_ensemble(folder: str | Path, eps=EPS, g=G, seeds=SEEDS, workers: int = 
     folder.mkdir(parents=True, exist_ok=True)
     grid = list(itertools.product(eps, g, seeds))
     jobs = [(folder, i, float(e), float(gg), int(s), kw) for i, (e, gg, s) in enumerate(grid)]
-    if workers > 1:
-        with ProcessPoolExecutor(workers) as pool:
-            labels = list(pool.map(_one, jobs))
-    else:
-        labels = [_one(j) for j in jobs]
+    labels = run_jobs(_one, jobs, workers, progress, "simulate")
     runs = pd.DataFrame({"run": range(len(grid)), "path": [f"run{i:04d}" for i in range(len(grid))],
                          "eps": [e for e, _, _ in grid], "g": [gg for _, gg, _ in grid],
                          "seed": [s for _, _, s in grid], "reference": labels})

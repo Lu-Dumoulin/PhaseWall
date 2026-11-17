@@ -13,6 +13,7 @@ phasewall = "phasewall.cli:main"
 dev = ["pytest", "ruff"]
 nn = ["torch>=2.4"]
 baselines = ["scikit-learn>=1.4"]     # blind grouping and logistic probe, for comparisons
+app = ["marimo", "torch>=2.4", "scikit-learn>=1.4"]   # the notebook interface (apps/), with nn and baselines
 
 [build-system]
 requires = ["setuptools>=68"]

@@ -12,7 +12,6 @@ has a single pair), each turned by a random element of D4 with the rules of fiel
 and nematics turn with the grid) and, in a periodic frame only, shifted at random.
 """
 
-from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 
 import numpy as np
@@ -23,6 +22,7 @@ from ..describe import prepared, run_frame
 from ..fields import Field, mirror_x, rotate90
 from ..frames import prepare
 from ..io import Ensemble, read_snapshot, run_snapshots
+from ..parallel import Progress, run_jobs
 
 DRAWS = 4       # every run is drawn this many times per epoch (a choice)
 
@@ -77,18 +77,15 @@ def _run_pairs(args):
     return run, rows, frame.periodic if frame else None
 
 
-def load_frames(ens: Ensemble, workers: int = 1, scale: np.ndarray | None = None) -> FrameSet:
+def load_frames(ens: Ensemble, workers: int = 1, scale: np.ndarray | None = None,
+                progress: Progress | None = None) -> FrameSet:
     """All pairs of an ensemble. scale: per field, from a training ensemble (default: the
     standard deviation of each field over this ensemble)."""
     if ens.pair_dt is None:
         raise ValueError("the learned description needs pairs of snapshots: set pair_dt")
     dxs = ens.runs["dx"] if "dx" in ens.runs else [ens.dx] * len(ens.runs)
     jobs = [(ens, int(r.run), r.path, float(d)) for r, d in zip(ens.runs.itertuples(), dxs)]
-    if workers > 1:
-        with ProcessPoolExecutor(workers) as pool:
-            results = list(pool.map(_run_pairs, jobs))
-    else:
-        results = [_run_pairs(j) for j in jobs]
+    results = run_jobs(_run_pairs, jobs, workers, progress, "frames")
     xs, runs, times, periodic = [], [], [], set()
     for run, rows, per in results:
         for t, pair in rows:

@@ -120,13 +120,55 @@ phase as across the hexagon-stripe boundary, so no wall is found there; only the
 state is split off. The hand-made descriptors change abruptly at that boundary (skewness,
 domain counts) and give the three phases, in the periodic box and in the crop. A training that
 rewards differences between phases rather than between runs is one of the open questions
-below.
+below. Training on 2 or 4 runs per point instead of 8 gives the same result, so more data is
+not expected to help on its own.
+
+## Walls against blind grouping and a linear probe
+
+Is cutting the parameter grid better than grouping the runs by their description alone? On
+the same descriptions, the walls are compared with three blind methods adapted from hfml
+(`phasewall.baselines`, extra `[baselines]`, scikit-learn): each run is the mean of its
+snapshots, compressed to the principal components that explain 95% of the variance, then
+grouped by a Gaussian mixture ($k$ = 1 to 10, chosen by BIC), k-means ($k$ = 2 to 10, chosen
+by silhouette) or HDBSCAN (minimum sizes 5 to 40; sparse runs are noise). A logistic
+regression of the three states, tested on held-out parameter points, measures how well a
+description separates the states at best; it sees the labels, so it is a ceiling, not a way
+to find the states.
+
+| frame | description | method | groups | points agreeing (of 240) | ARI | pieces on the grid | runs left as noise |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| periodic | hand-made | walls | 3 | 231 | 0.87 | 3 | 0 |
+| periodic | hand-made | Gaussian mixture ($k$ = 10) | 9 | 226 | 0.33 | 13 | 0 |
+| periodic | hand-made | k-means ($k$ = 2) | 2 | 169 | 0.36 | 2 | 0 |
+| periodic | hand-made | HDBSCAN (size 10) | 11 | 210 | 0.93 (0.77 with noise) | 13 | 14% |
+| crop | hand-made | walls | 3 | 227 | 0.82 | 3 | 0 |
+| crop | hand-made | HDBSCAN (size 20) | 3 | 169 | 0.34 | 3 | 0 |
+| periodic | learned | walls | 2 | 169 | 0.36 | 2 | 0 |
+| periodic | learned | Gaussian mixture ($k$ = 10) | 10 | 189 | 0.12 | 18 | 0 |
+
+ARI is the adjusted Rand index between the groups and the reference states of the points (1
+for the same partition, about 0 by chance); "pieces" counts the connected pieces of the groups
+on the parameter grid (3 for the reference). All methods and settings:
+[docs/comparison/summary.md](docs/comparison/summary.md).
+
+![Groups found by each method](docs/comparison/methods_maps.png)
+
+On the hand-made description, only the walls give the three states as three connected
+regions. The mixture asks for the top of its range and cuts the phases into bands that follow
+the smooth drift of the description with $\varepsilon$ and $g$; k-means only separates the
+uniform state; HDBSCAN comes closest in the periodic box but leaves 14-17% of the runs as noise
+(mostly along the hexagon-stripe boundary) and breaks the uniform state into small groups, and
+merges hexagons and stripes in the crop. The
+probe recognises the three states in 99.5-99.7% of held-out snapshots with the hand-made
+description and 96-98.5% with the learned one: every description contains the states. Blind
+grouping needs them to form separate clouds, which they do not here (the hexagon and stripe
+clouds touch and drift with the parameters); the walls only need a jump along the grid.
 
 ## Usage
 
 ```
 python3.12 -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"          # add ,nn for the learned description: ".[dev,nn]"
+pip install -e ".[dev]"          # optional extras: nn (learned description), baselines (comparisons)
 pytest
 
 phasewall demo data/demo                 # the example above (about one minute)
@@ -190,9 +232,29 @@ wall), `cuts.csv` and `robustness.csv`, and the figures shown above. It also acc
 with one row per snapshot and descriptor columns named `field.block.name`, for example
 descriptions made by a neural network, with `--parameters` instead of `--config`.
 
+### Interactive interface
+
+The same analyses can be run from an interactive page, a [marimo](https://marimo.io) notebook
+that also opens as a dashboard ([apps/explore.py](apps/explore.py)):
+
+```
+pip install -e ".[app]"              # marimo, with the extras nn and baselines
+marimo run apps/explore.py           # dashboard in the browser
+marimo edit apps/explore.py          # the same page as a notebook, code visible
+```
+
+A side panel sets the source (a demo, an ensemble TOML file or a CSV table of descriptors), the
+parameter grid and numerical settings of a demo, the frame, the descriptions (hand-made,
+learned, combined) and the methods (walls, blind grouping, probe, robustness and learning
+curves), with an estimate of the cost before the run. Tabs show the phase map, the comparison
+of descriptions and methods, snapshots of each phase, the details of the walls, the training
+curves, and export the tables and figures. Every step is cached, so changing a method or a
+threshold re-runs in seconds. The page only calls `phasewall.pipeline` and `phasewall.report`;
+details in [apps/README.md](apps/README.md).
+
 ## Tests
 
-`pytest` runs 89 tests on small synthetic fields with known answers, in about 8 seconds:
+`pytest` runs 94 tests on small synthetic fields with known answers, in about 8 seconds:
 the symmetry rules of vector and nematic fields against the gradient of a scalar and the
 tensor of a director field; file round trips in Julia layout; the structure factor of a single
 wave, domain counts of spots against stripes, curl-free and divergence-free flows, frozen,
@@ -205,8 +267,10 @@ crops against the exact one, finite against spectral derivatives, the windowed m
 correlation, rotation and mirror invariance, the same descriptors at $\Delta x$ and
 $\Delta x/2$ after coarsening, mixed grids refused without a common frame); the learned description (augmentations
 against the field rules, shift invariance of the periodic encoder, the loss at collapse, a short
-training that separates stripes from spots, saving and loading); and every command of the
-command-line tool.
+training that separates stripes from spots, saving and loading); the blind grouping and the
+probe (separated clouds found, groups in two places, real against random labels); and every
+command of the command-line tool. With the extra `[app]`, `tests/test_app.py` also checks the
+interface: the parsing of typed values, and a run of the quick demo with every tab drawn.
 
 ## Development plan
 
@@ -215,14 +279,17 @@ This section is for development and will be revised before any public release.
 | Step | Content | Status |
 | --- | --- | --- |
 | 1 | Package: fields and their symmetries, descriptors, parameter graph, walls method, Swift-Hohenberg demo | done |
-| 2 | Tests on synthetic data with known answers (89), continuous integration (ruff, pytest) | done |
+| 2 | Tests on synthetic data with known answers (94), continuous integration (ruff, pytest) | done |
 | 2b | Frames: crops, coarsening, per-run grid spacing, non-periodic boxes; errors for unknown settings | done |
 | 3 | Command-line tool `phasewall toy \| describe \| walls \| demo`, report (summary, tables, figures) | done |
 | 4 | Documentation: method, mathematics, physics parallels, tests ([PDF](docs/documentation.pdf)) | done |
 | 5 | Check on real simulations of an active fluid, from their descriptors and from a learned description; compare the phases found with published phase diagrams. The data stay outside this repository. | next |
 | 6 | Learned description (extra `[nn]`, PyTorch): contrastive encoder on snapshot pairs, with augmentations from the field symmetries; compared with the hand-made one on the demo (it finds 2 phases of 3) | done |
+| 6b | Comparison with blind grouping (Gaussian mixture, k-means, HDBSCAN) and a logistic probe, on both descriptions | done |
 | 7 | README figures of the method itself (graph, jumps, cut, test) and of the encoder | planned |
 | 8 | More examples with known answers (below) | planned |
+| 8a | Gray-Scott demo (`phasewall demo --example gray-scott`), examples registry; package side of the interface: `phasewall.pipeline` (one call, cached steps), plot functions returning figures, progress callbacks, CSV tables as input, combined description, learning curve | done |
+| 8b | Interactive interface ([apps/explore.py](apps/explore.py), marimo notebook and dashboard): demos, ensembles or tables as source; grid, frame, descriptions (hand-made, learned, combined) and methods chosen in a side panel; phase maps, comparison, snapshots, walls, training curves and export in tabs; cached steps ([docs/plan_interface.md](docs/plan_interface.md)) | done |
 | 9 | Licence and public release, once step 5 shows that the method works on real data | planned |
 
 Examples to add after Swift-Hohenberg (step 8, in this order). Swift-Hohenberg is a gradient
