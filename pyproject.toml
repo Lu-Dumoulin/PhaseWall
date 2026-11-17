@@ -1,0 +1,27 @@
+[project]
+name = "phasewall"
+version = "0.1.0"
+description = "Phases of simulated hydrodynamic systems from the walls between them in parameter space"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["numpy", "scipy", "pandas", "h5py", "matplotlib"]
+
+[project.scripts]
+phasewall = "phasewall.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+nn = ["torch>=2.4"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110

@@ -1,0 +1,342 @@
+"""Walls between phases: lines of links of the parameter graph across which the description
+of the snapshots jumps more than it does on either side.
+
+1. Jumps. For each link a-b of the scan graph, J(a, b) is the energy distance between the
+   snapshots of the two points, averaged over the pairs of halves (a1, b1), (a1, b2), ...;
+   each point also gets a spread s(a) = D(a1, a2) between its own two halves. Jump and
+   spread compare sets of the same size, so J / s is about 1 when b looks like a again.
+   Two more jumps are kept apart: J1 = D(a1, b1) between the first halves, used to place
+   the cuts (step 2), and J2 = D(a2, b2) between the second halves, used to test them
+   (step 3). They come from different snapshots, so they are independent estimates.
+
+2. Cuts. Each link gets a weight w = exp(-(J1 / median J1)^2): large for small jumps. A random
+   walker hopping along the links with these weights stays trapped in regions bounded by
+   large jumps. The slowest mode of this diffusion (the second eigenvector of the normalised
+   graph Laplacian, the Fiedler vector) orders the points from one side of the strongest
+   barrier to the other; the cut along this order with the smallest normalised cut
+   (Shi and Malik 2000) splits the region in two.
+
+        o---o---o | o---o
+        |   |   | | |   |        crossing links: the four links cut by the wall
+        o---o---o | o---o        inner links:    all the others
+        |   |   | | |   |
+        o---o---o | o---o
+
+3. Test. The cut is kept as a wall only if the crossing links jump more than the inner ones,
+   measured with J2: one-sided Mann-Whitney test with p < ALPHA, and median crossing J2 at
+   least RATIO times the median inner J2. A single phase whose description changes smoothly
+   has crossing links like the others, so no wall is kept. The cut must be tested on other
+   data than those that placed it: step 2 puts it where the noisy J1 happen to be largest,
+   so J1 on the crossing links is large by construction, and testing with J1 found two or
+   three phases in pure noise (synthetic tests, 2026-11-17). This is the selection bias of
+   fitting a peak and judging its height on the same noisy spectrum; J2 does not know where
+   the cut was put. Each side is then split again, until no cut
+   passes: the regions left are the candidate phases, regions with fewer than MIN_PHASE
+   points are boundary regions.
+
+The links are not independent (neighbouring jumps are correlated), so p is used as a score
+with a strict threshold, not as an exact probability. Next to a first-order transition the
+runs of one point can fall in different states (bistability, hysteresis); such points have
+an outlying spread and are flagged `mixed`, a second, independent sign of a boundary.
+
+Physics parallel: domain walls are found where the order parameter changes abruptly in
+space. Here "space" is the parameter grid and the "order parameter" is the distribution of
+the descriptors at each point; the diffusion is the walker exploring the grid, slowed down
+at the walls, as a particle in a landscape with barriers between basins.
+
+Energy distance (Szekely and Rizzo): E = 2 <|x - y|> - <|x - x'|> - <|y - y'|> for samples X
+and Y, zero only when the two distributions are equal; its square root is used.
+"""
+
+from dataclasses import dataclass, field
+
+import numpy as np
+import pandas as pd
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import connected_components
+from scipy.spatial.distance import cdist
+from scipy.stats import mannwhitneyu
+
+from .describe import descriptor_columns
+from .graph import grid_edges, parameter_nodes
+
+ALPHA = 1e-3           # a cut is a wall if the Mann-Whitney p is below this ... (a choice)
+RATIO = 1.5            # ... and its crossing links jump RATIO times more than the inner ones (a choice)
+MIN_PHASE = 3          # smaller regions are boundary regions, not phases; also the smallest side of a cut (a choice)
+FLOOR_QUANTILE = 0.1   # jumps below this quantile of all positive spreads count as no jump (a choice)
+MAX_PER_NODE = 200     # at most this many snapshots per point, drawn at random (a choice)
+MIXED_K = 6.0          # a point is mixed when its energy statistic > median + MIXED_K robust std (a choice:
+                       # the statistic is right-skewed; on pure noise, ordinary points reach 5-6)
+MAD_TO_STD = 1.4826    # median absolute deviation of a Gaussian times this = its standard deviation
+MIN_WEIGHT = 1e-8      # links never weigh less than this, so that a strong wall leaves the graph connected (a choice)
+SEED = 0
+
+
+# ---------------------------------------------------------------- features
+def feature_matrix(table: pd.DataFrame, columns: list[str] | None = None,
+                   weight_blocks: bool = True) -> tuple[np.ndarray, list[str]]:
+    """Standardised descriptors (mean 0, standard deviation 1 over all snapshots) and their
+    names. Constant columns are dropped; missing values (for example the dynamics of a
+    snapshot without partner) are set to the column median (a choice). With weight_blocks,
+    each block of columns (field.block, for example rho.shape) is divided by the square root
+    of its size, so that every block counts the same in distances, whatever its number of
+    columns (a choice)."""
+    cols = columns or descriptor_columns(table)
+    X = table[cols].to_numpy(dtype=float)
+    med = np.nanmedian(X, axis=0)
+    X = np.where(np.isnan(X), med, X)
+    std = X.std(axis=0)
+    keep = std > 0
+    X = (X[:, keep] - X[:, keep].mean(axis=0)) / std[keep]
+    names = [c for c, k in zip(cols, keep) if k]
+    if weight_blocks:
+        block = np.array([".".join(c.split(".")[:2]) for c in names])
+        for b in np.unique(block):
+            X[:, block == b] /= np.sqrt(np.sum(block == b))
+    return X, names
+
+
+# ---------------------------------------------------------------- jumps and spreads
+def energy_statistic(A: np.ndarray, B: np.ndarray) -> float:
+    """The energy distance 2 <|x - y|> - <|x - x'|> - <|y - y'|> between two samples (rows);
+    the terms within a sample leave out the pairs of a point with itself, so the estimate is
+    unbiased and comes out negative about half of the time when the two distributions are
+    equal."""
+    ab = cdist(A, B).mean()
+    aa = cdist(A, A).sum() / max(len(A) * (len(A) - 1), 1)
+    bb = cdist(B, B).sum() / max(len(B) * (len(B) - 1), 1)
+    return float(2 * ab - aa - bb)
+
+
+def energy_distance(A: np.ndarray, B: np.ndarray) -> float:
+    """Square root of the energy statistic; 0 when it comes out negative."""
+    return float(np.sqrt(max(energy_statistic(A, B), 0.0)))
+
+
+def halves(run: np.ndarray, time: np.ndarray) -> np.ndarray:
+    """True for the rows in the first half of a point: half of its runs if it has several
+    (alternately, by run number), otherwise its earlier half of snapshots in time."""
+    ids = np.unique(run)
+    if len(ids) > 1:
+        return np.isin(run, ids[::2])
+    return time < np.median(time) if len(np.unique(time)) > 1 else np.arange(len(time)) % 2 == 0
+
+
+def jump(X: np.ndarray, sa, sb, ia: np.ndarray, ib: np.ndarray) -> float:
+    """Mean energy distance between the halves of two points (the whole points when one of
+    them cannot be split)."""
+    if sa is None or sb is None:
+        return energy_distance(X[ia], X[ib])
+    return float(np.mean([energy_distance(X[p], X[q]) for p in sa for q in sb]))
+
+
+def half_jumps(X: np.ndarray, sa, sb, ia: np.ndarray, ib: np.ndarray) -> tuple[float, float]:
+    """(J1, J2): energy distance between the first halves of two points and between their
+    second halves. When one of them cannot be split, both are the distance between the
+    whole points (then they are not independent)."""
+    if sa is None or sb is None:
+        d = energy_distance(X[ia], X[ib])
+        return d, d
+    return energy_distance(X[sa[0]], X[sb[0]]), energy_distance(X[sa[1]], X[sb[1]])
+
+
+def robust_outliers(values: np.ndarray, k: float, min_scale: float = 0.0) -> np.ndarray:
+    """values > median + k robust standard deviations (from the median absolute deviation,
+    never below min_scale)."""
+    v = values[np.isfinite(values)]
+    med = float(np.median(v))
+    scale = max(MAD_TO_STD * float(np.median(np.abs(v - med))), min_scale)
+    return values > med + k * scale
+
+
+# ---------------------------------------------------------------- cuts
+def _positions(members: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    pos = np.full(max(a.max(), b.max(), members.max()) + 1, -1)
+    pos[members] = np.arange(len(members))
+    return pos
+
+
+def pieces(members: np.ndarray, a: np.ndarray, b: np.ndarray) -> list[np.ndarray]:
+    """The members split into the connected pieces of their subgraph (links between two
+    members only), each piece sorted."""
+    pos = _positions(members, a, b)
+    inside = (pos[a] >= 0) & (pos[b] >= 0)
+    m = len(members)
+    adj = csr_matrix((np.ones(int(inside.sum())), (pos[a[inside]], pos[b[inside]])), shape=(m, m))
+    n, lab = connected_components(adj, directed=False)
+    return [np.sort(members[lab == k]) for k in range(n)]
+
+
+def best_cut(members: np.ndarray, a: np.ndarray, b: np.ndarray, weight: np.ndarray,
+             min_side: int = MIN_PHASE) -> np.ndarray | None:
+    """Boolean side of each member for the smallest normalised cut along the Fiedler vector
+    of the members' subgraph, which must be connected (see pieces); None if it is too small.
+    Weights must be positive: a very strong wall then still leaves a small but non-zero link
+    between its sides, and the Fiedler vector separates them."""
+    m = len(members)
+    if m < 2 * min_side:
+        return None
+    pos = _positions(members, a, b)
+    inside = (pos[a] >= 0) & (pos[b] >= 0)
+    A = np.zeros((m, m))
+    A[pos[a[inside]], pos[b[inside]]] = weight[inside]
+    A += A.T
+    d = A.sum(axis=1)
+    if np.any(d == 0):
+        return None
+    dm = 1 / np.sqrt(d)
+    _, vec = np.linalg.eigh(np.eye(m) - dm[:, None] * A * dm[None, :])
+    order = np.argsort(vec[:, 1] * dm)
+    best, side = np.inf, None
+    vol = d.sum()
+    S = np.zeros(m, dtype=bool)
+    for k in range(m - min_side):
+        S[order[k]] = True
+        if k + 1 < min_side:
+            continue
+        cut = A[S][:, ~S].sum()
+        vs = d[S].sum()
+        ncut = cut / vs + cut / (vol - vs)
+        if ncut < best:
+            best, side = ncut, S.copy()
+    return side
+
+
+def test_cut(side: np.ndarray, members: np.ndarray, a: np.ndarray, b: np.ndarray,
+             log_jump: np.ndarray) -> dict:
+    """Crossing against inner links of a cut: the crossing links, Mann-Whitney p, ratio of
+    the median jumps."""
+    pos = _positions(members, a, b)
+    inside = np.flatnonzero((pos[a] >= 0) & (pos[b] >= 0))
+    crossing = side[pos[a[inside]]] != side[pos[b[inside]]]
+    cross, inner = inside[crossing], inside[~crossing]
+    if len(cross) == 0 or len(inner) == 0:
+        return {"crossing": cross, "p": 1.0, "ratio": 1.0}
+    p = float(mannwhitneyu(log_jump[cross], log_jump[inner], alternative="greater").pvalue)
+    ratio = float(np.exp(np.median(log_jump[cross]) - np.median(log_jump[inner])))
+    return {"crossing": cross, "p": p, "ratio": ratio}
+
+
+def split_regions(n_nodes: int, a: np.ndarray, b: np.ndarray, log_jump: np.ndarray,
+                  alpha: float = ALPHA, ratio: float = RATIO, min_phase: int = MIN_PHASE,
+                  log_test: np.ndarray | None = None) -> tuple[np.ndarray, list[dict], np.ndarray]:
+    """Repeated cuts of the graph (see the module docstring): log_jump (log J1) places the
+    cuts, log_test (log J2; log_jump itself if None) tests them. Returns the region of every
+    node (0 = largest), the list of the cuts tried (accepted or not) and a boolean per link:
+    True for the walls."""
+    if log_test is None:
+        log_test = log_jump
+    weight = np.maximum(np.exp(-(np.exp(log_jump - np.median(log_jump))) ** 2), MIN_WEIGHT)
+    wall = np.zeros(len(a), dtype=bool)
+    queue, done, tried = [np.arange(n_nodes)], [], []
+    while queue:
+        members = queue.pop(0)
+        parts = pieces(members, a, b)
+        if len(parts) > 1:          # a side of a cut may be in pieces that share no link
+            queue += parts
+            continue
+        side = best_cut(members, a, b, weight, min_phase)
+        if side is None:
+            done.append(members)
+            continue
+        t = test_cut(side, members, a, b, log_test)
+        accepted = t["p"] < alpha and t["ratio"] >= ratio
+        tried.append({"size": len(members), "side_1": int(side.sum()), "side_2": int((~side).sum()),
+                      "crossing_links": len(t["crossing"]), "p": t["p"], "ratio": t["ratio"],
+                      "accepted": accepted})
+        if accepted:
+            wall[t["crossing"]] = True
+            queue += [members[side], members[~side]]
+        else:
+            done.append(members)
+    done.sort(key=lambda m: (-len(m), m.min()))
+    region = np.empty(n_nodes, dtype=int)
+    for r, m in enumerate(done):
+        region[m] = r
+    return region, tried, wall
+
+
+# ---------------------------------------------------------------- the whole method
+@dataclass
+class Walls:
+    nodes: pd.DataFrame     # one row per parameter point
+    edges: pd.DataFrame     # one row per link: jump J, jump_select J1, jump_test J2, contrast J / noise, wall
+    cuts: pd.DataFrame      # every cut tried, accepted or not
+    floor: float            # jumps below this count as no jump
+    noise: float            # median spread of one point
+    parameters: list[str]
+    features: list[str]
+    settings: dict = field(default_factory=dict)    # alpha, ratio, min_phase used
+
+    @property
+    def n_phases(self) -> int:
+        return int(self.nodes.loc[self.nodes["phase"] >= 0, "phase"].nunique())
+
+
+def find_walls(table: pd.DataFrame, parameters: list[str], columns: list[str] | None = None,
+               alpha: float = ALPHA, ratio: float = RATIO, min_phase: int = MIN_PHASE,
+               seed: int = SEED) -> Walls:
+    """Walls and candidate phases of a table of descriptors (one row per snapshot, columns
+    run, time, the parameters and the descriptors)."""
+    X, names = feature_matrix(table, columns)
+    node, points = parameter_nodes(table[parameters].to_numpy())
+    rng = np.random.default_rng(seed)
+    rows_of = []
+    for n in range(len(points)):
+        idx = np.flatnonzero(node == n)
+        if len(idx) > MAX_PER_NODE:
+            idx = np.sort(rng.choice(idx, MAX_PER_NODE, replace=False))
+        rows_of.append(idx)
+    run, time = table["run"].to_numpy(), table["time"].to_numpy(dtype=float)
+    split = []                                   # (first half, second half) of every point
+    for i in rows_of:
+        h = halves(run[i], time[i])
+        split.append((i[h], i[~h]) if h.any() and (~h).any() else None)
+    # energy statistic between the two halves of each point (can be negative), and its root
+    within = np.array([energy_statistic(X[p[0]], X[p[1]]) if p else np.nan for p in split])
+    spread = np.sqrt(np.maximum(within, 0.0))
+
+    edges = grid_edges(points)
+    edges["param"] = [parameters[a] for a in edges["axis"]]
+    edges["jump"] = [jump(X, split[a], split[b], rows_of[a], rows_of[b]) for a, b in zip(edges.a, edges.b)]
+    positive = spread[spread > 0]
+    # no point with any spread: floor and noise come from the jumps themselves (a choice)
+    pool = positive if len(positive) else edges["jump"][edges["jump"] > 0].to_numpy()
+    floor = float(np.quantile(pool, FLOOR_QUANTILE)) if len(pool) else 1.0
+    noise = max(float(np.median(pool)), floor) if len(pool) else 1.0
+    log_jump = np.log(np.maximum(edges["jump"].to_numpy(), floor))
+    edges["contrast"] = np.exp(log_jump) / noise
+    j12 = np.array([half_jumps(X, split[a], split[b], rows_of[a], rows_of[b])
+                    for a, b in zip(edges.a, edges.b)]).reshape(-1, 2)
+    edges["jump_select"], edges["jump_test"] = j12[:, 0], j12[:, 1]
+    log_select, log_test = np.log(np.maximum(j12, floor)).T
+
+    region, tried, wall = split_regions(len(points), edges["a"].to_numpy(), edges["b"].to_numpy(),
+                                        log_select, alpha, ratio, min_phase, log_test=log_test)
+    edges["wall"] = wall
+    sizes = np.bincount(region)
+    phase_of_region = np.where(sizes >= min_phase, np.cumsum(sizes >= min_phase) - 1, -1)
+
+    nodes = pd.DataFrame(points, columns=parameters)
+    nodes["runs"] = [len(np.unique(run[node == n])) for n in range(len(points))]
+    nodes["snapshots"] = np.bincount(node, minlength=len(points))
+    nodes["spread"] = spread
+    # the unclipped statistic scatters around 0 for an ordinary point, so its median and MAD
+    # are meaningful; deviations below floor^2 (the floor in the same units) never count
+    nodes["mixed"] = robust_outliers(within, MIXED_K, min_scale=floor**2) & ~np.isnan(within)
+    nodes["region"] = region
+    nodes["phase"] = phase_of_region[region]
+    settings = {"alpha": alpha, "ratio": ratio, "min_phase": min_phase}
+    return Walls(nodes, edges, pd.DataFrame(tried), floor, noise, list(parameters), names, settings)
+
+
+def phases_against_ratio(table: pd.DataFrame, parameters: list[str],
+                         ratios=(1.2, 1.3, 1.5, 1.75, 2.0, 2.5, 3.0), **kw) -> pd.DataFrame:
+    """Number of phases for several values of RATIO: a count that stays the same over a range
+    of ratios is a robust answer; one that changes with every value is not."""
+    out = []
+    for r in ratios:
+        w = find_walls(table, parameters, ratio=r, **kw)
+        out.append({"ratio": r, "phases": w.n_phases, "walls": int(w.edges["wall"].sum()),
+                    "boundary_points": int((w.nodes["phase"] < 0).sum())})
+    return pd.DataFrame(out)
