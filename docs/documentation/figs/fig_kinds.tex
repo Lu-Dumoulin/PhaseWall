@@ -1,0 +1,50 @@
+% What the vector and nematic blocks see (invented fields): divergence and curl of a velocity,
+% a defect core and global order of a polarity, the scalar order of a nematic.
+\begin{tikzpicture}[fig]
+% arrow field: #1 = angle offset (0: aster, 90: vortex)
+\newcommand{\afield}[1]{%
+  \foreach \i in {-2,...,2} \foreach \j in {-2,...,2} {
+    \ifnum\i=0 \ifnum\j=0 \else
+      \pgfmathsetmacro{\ph}{atan2(\j,\i)+#1}
+      \draw[->, cInk2, thick] ({0.42*\i-0.13*cos(\ph)},{0.42*\j-0.13*sin(\ph)}) -- ++({0.26*cos(\ph)},{0.26*sin(\ph)});
+    \fi \else
+      \pgfmathsetmacro{\ph}{atan2(\j,\i)+#1}
+      \draw[->, cInk2, thick] ({0.42*\i-0.13*cos(\ph)},{0.42*\j-0.13*sin(\ph)}) -- ++({0.26*cos(\ph)},{0.26*sin(\ph)});
+    \fi}}
+% ---------- (a) velocity: divergence and curl
+\node[lab] at (1.25,1.55) {(a) velocity: flow block};
+\begin{scope}
+  \afield{0}
+  \node[small, text width=2.2cm] at (0,-1.45) {source: $\nabla\!\cdot\mathbf v>0$\\ curl share 0};
+\end{scope}
+\begin{scope}[xshift=2.5cm]
+  \afield{90}
+  \node[small, text width=2.2cm] at (0,-1.45) {vortex: $\nabla\!\times\mathbf v\ne0$\\ curl share 1};
+\end{scope}
+% ---------- (b) polarity: defect core and global order
+\node[lab] at (6.35,1.55) {(b) polarity: $|\mathbf p|$ and order};
+\begin{scope}[xshift=5.1cm]
+  \fill[cP1!25] (0,0) circle (0.32);
+  \afield{0}
+  \node[small, text width=2.3cm] at (0,-1.45) {aster ($+1$ defect): low-$|\mathbf p|$ core, one domain of the topo block};
+\end{scope}
+\begin{scope}[xshift=7.6cm]
+  \foreach \i in {-2,...,2} \foreach \j in {-2,...,2}
+    \draw[->, cInk2, thick] ({0.42*\i-0.13},{0.42*\j}) -- ++(0.26,0);
+  \node[small, text width=2.3cm] at (0,-1.45) {aligned: $|\avg{\mathbf p}|/\avg{|\mathbf p|}=1$\\ (order block)};
+\end{scope}
+% ---------- (c) nematic: rods, a +1/2 defect
+\node[lab] at (11.0,1.55) {(c) nematic: $S=2|\mathsf Q|$, order};
+\begin{scope}[xshift=11.0cm]
+  \fill[cP1!25] (0,0) circle (0.3);
+  \foreach \i in {-2,...,2} \foreach \j in {-2,...,2} {
+    \pgfmathsetmacro{\ph}{0.5*atan2(\j,\i+0.001)}
+    \ifnum\i=0 \ifnum\j=0 \else
+      \draw[cInk2, line width=1.6pt] ({0.42*\i-0.14*cos(\ph)},{0.42*\j-0.14*sin(\ph)}) -- ++({0.28*cos(\ph)},{0.28*sin(\ph)});
+    \fi \else
+      \draw[cInk2, line width=1.6pt] ({0.42*\i-0.14*cos(\ph)},{0.42*\j-0.14*sin(\ph)}) -- ++({0.28*cos(\ph)},{0.28*sin(\ph)});
+    \fi}
+  \node[small, text width=3.0cm] at (0,-1.45) {$+\frac12$ defect: low-$S$ core; rods have no head, so
+    $\mathsf Q$, not a vector, is stored};
+\end{scope}
+\end{tikzpicture}

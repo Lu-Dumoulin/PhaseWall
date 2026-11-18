@@ -1,0 +1,24 @@
+% Overview: runs -> fields -> encoders -> table of h -> methods -> phases, with the checks.
+\begin{tikzpicture}[fig, node distance=0.45cm]
+\tikzset{col/.style={draw, rounded corners, align=left, font=\footnotesize, inner sep=4pt, fill=black!3, text width=#1},
+         hd/.style={font=\footnotesize\bfseries, align=center}}
+\node[col=2.3cm] (runs) {\textbf{Runs}\\ one row per run:\\ parameters, path to HDF5 snapshots\\[2pt] \textbf{Fields}\\ scalar, vector, nematic};
+\node[col=3.0cm, right=of runs] (enc) {\textbf{Encoders} (Sec.~\ref{sec:encoders})\\[1pt]
+  $\bullet$ hand-made: blocks of observables per field\\
+  $\bullet$ learned: convolutional network\\
+  $\bullet$ combined: both, as blocks\\
+  $\bullet$ external table};
+\node[col=1.6cm, right=of enc, align=center] (h) {\textbf{Table}\\ one vector $h$\\ per snapshot\\ + parameters};
+\node[col=3.2cm, right=of h] (meth) {\textbf{Methods} (Sec.~\ref{sec:methods-h})\\[1pt]
+  $\bullet$ walls: spectral cuts, tested\\
+  $\bullet$ unsupervised threshold tree\\
+  $\bullet$ blind grouping: mixture, k-means, HDBSCAN};
+\node[col=2.2cm, right=of meth, align=center] (out) {\textbf{Phases}\\ one phase (or noise) per parameter point};
+\foreach \a/\b in {runs/enc, enc/h, h/meth, meth/out} \draw[->, thick] (\a) -- (\b);
+\node[col=7.0cm, below=0.55cm of meth.south east, anchor=north east, align=left] (chk)
+  {\textbf{Checks} (Sec.~\ref{sec:checks}): robustness against the thresholds; halves swapped;
+   steady state (examples); with labels, and only for scoring: agreement, ARI, pieces, linear probe};
+\draw[->, thick, cInk2] (out.south) |- (chk.east);
+\node[small, text width=4.6cm, anchor=north west] at ($(runs.south west)+(0,-0.6)$)
+  {No label and no number of phases enter an encoder or a method.};
+\end{tikzpicture}

@@ -1,0 +1,32 @@
+% Principal component analysis on standardised descriptors (invented points), before the blind
+% grouping. Two groups spread along PC1 = (0.8, 0.6), little along PC2 = (-0.6, 0.8).
+% Adapted from the hfml plan (same author).
+\begin{tikzpicture}[fig]
+\begin{scope}
+  \draw[->] (-2.1,0) -- (2.2,0) node[below left, small] {descriptor 1};
+  \draw[->] (0,-1.7) -- (0,1.8) node[above, small] {descriptor 2};
+  \pgfmathsetseed{4}
+  \foreach \c in {-1,1} \foreach \n in {1,...,25} {
+    \pgfmathsetmacro{\a}{0.3*(rand+rand+rand) + 1.0*\c}
+    \pgfmathsetmacro{\b}{0.09*(rand+rand+rand)}
+    \fill[black!60] ({0.8*\a - 0.6*\b}, {0.6*\a + 0.8*\b}) circle (1.2pt);
+  }
+  \draw[->, very thick, cAcc] (0,0) -- (1.68,1.26) node[above right, small] {PC1};
+  \draw[->, very thick, cAcc] (0,0) -- (-0.36,0.48) node[above left, small] {PC2};
+  \node[lab] at (0,2.35) {(a) directions of largest spread};
+\end{scope}
+\begin{scope}[xshift=6.0cm]
+  \draw[->, cAcc, thick] (-2.1,0) -- (2.3,0) node[below left, small] {PC1};
+  \pgfmathsetseed{4}
+  \foreach \c in {-1,1} \foreach \n in {1,...,25} {
+    \pgfmathsetmacro{\a}{0.3*(rand+rand+rand) + 1.0*\c}
+    \pgfmathsetmacro{\b}{0.09*(rand+rand+rand)}
+    \fill[black!60] (\a, {1.5*\b}) circle (1.2pt);   % small vertical jitter, only to see the points
+  }
+  \node[lab] at (0,2.35) {(b) keep the main ones};
+  \node[small, text width=4.2cm] at (0.1,-0.9) {one number per run instead of two; the two groups remain visible};
+\end{scope}
+\node[note, text width=3.7cm, align=left] at (11.1,0.4)
+  {In \pw: each run is the mean of its snapshots (block-weighted), reduced to the principal
+   components that keep 95\% of the variance, before the grouping.};
+\end{tikzpicture}

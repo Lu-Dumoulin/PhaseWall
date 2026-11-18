@@ -1,0 +1,33 @@
+% Scores of a partition of the points against reference labels (invented 6 x 4 grid).
+\begin{tikzpicture}[fig]
+% reference: state A for i < 3, B otherwise
+\begin{scope}
+  \node[lab] at (1.25,2.0) {reference labels};
+  \foreach \i in {0,...,5} \foreach \j in {0,...,3} {
+    \ifnum\i<3 \def\cc{cP0}\else\def\cc{cP1}\fi
+    \node[dot=\cc, minimum size=6pt] at (0.5*\i,0.5*\j) {};
+  }
+\end{scope}
+% found: groups 0 (i < 3), 1 (i >= 3 and j >= 2), 2 (i >= 3, j < 2), one point of group 1 far away
+\begin{scope}[xshift=4.3cm]
+  \node[lab] at (1.25,2.0) {groups found};
+  \foreach \i in {0,...,5} \foreach \j in {0,...,3} {
+    \ifnum\i<3 \def\cc{cP2}\else \ifnum\j<2 \def\cc{cInk2}\else\def\cc{cAcc}\fi\fi
+    \node[dot=\cc, minimum size=6pt] at (0.5*\i,0.5*\j) {};
+  }
+  \node[dot=cAcc, minimum size=6pt] at (0,0) {};
+  \draw[cInk2] (0,0) circle (0.17);
+\end{scope}
+% contingency and scores
+\begin{scope}[xshift=8.6cm, yshift=0.2cm]
+  \node[lab] at (1.3,1.8) {contingency $n_{ij}$};
+  \node[small] at (0.9,1.35) {A}; \node[small] at (1.7,1.35) {B};
+  \node[small, anchor=east] at (0.5,1.0) {group 0}; \node[small] at (0.9,1.0) {11}; \node[small] at (1.7,1.0) {0};
+  \node[small, anchor=east] at (0.5,0.6) {group 1}; \node[small] at (0.9,0.6) {1}; \node[small] at (1.7,0.6) {6};
+  \node[small, anchor=east] at (0.5,0.2) {group 2}; \node[small] at (0.9,0.2) {0}; \node[small] at (1.7,0.2) {6};
+  \node[small, text width=4.6cm, align=left, anchor=north west] at (-0.9,-0.15)
+    {agree: points with the majority label of their group, $23/24$;
+     ARI: pairs of points grouped alike in both, corrected for chance;
+     pieces: connected parts of the groups on the grid, 4 (group 1 is in two places)};
+\end{scope}
+\end{tikzpicture}

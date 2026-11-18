@@ -334,6 +334,72 @@ This section is for development and will be revised before any public release.
 | 8a | Gray-Scott demo (`phasewall demo --example gray-scott`), examples registry; package side of the interface: `phasewall.pipeline` (one call, cached steps), plot functions returning figures, progress callbacks, CSV tables as input, combined description, learning curve | done |
 | 8b | Interactive interface ([apps/explore.py](apps/explore.py), marimo notebook and dashboard): demos, ensembles or tables as source; grid, frame, descriptions (hand-made, learned, combined) and methods chosen in a side panel; phase maps, comparison, snapshots, walls, training curves and export in tabs; cached steps ([docs/plan_interface.md](docs/plan_interface.md)) | done |
 | 9 | Licence and public release, once step 5 shows that the method works on real data | planned |
+| 10 | Field roles: scalar, velocity, polarity, nematic; a vector or a tensor read from one dataset or assembled from several scalar datasets ($v_x$, $v_y$); an inspector that lists the datasets of a file and suggests roles that the user confirms | planned |
+| 11 | Observables per role, each a named block that can be switched on or off per field; new blocks for velocity (vorticity, kinetic energy spectrum), polarity (winding defects $\pm1$, splay and bend) and nematic order (defects $\pm1/2$) | planned |
+| 12 | Registries of encoders and of methods with one common interface, so that a new encoder or method is added in one file (or by another package) and appears in the interface without changing it; shared contract tests for every registered entry | planned |
+| 13 | Tunable CNN: number of blocks, channels per block, dimension of $h$ and of the projection, checked against the constraints of the architecture and the frame | planned |
+| 14 | Interface on top of steps 10 to 13: the controls are built from the settings of each registered encoder and method | planned |
+
+### Finished package (target)
+
+The finished package has three layers. The core (`phasewall`) does all the work and has no
+dependency on any interface; a programming layer (`phasewall.pipeline`: settings in, results
+out) is what scripts, the command-line tool and the interface call; the interface (`apps/`,
+marimo) only fills in settings and shows results. The core already works this way; what is
+missing is the field roles, the selection of observables, the registries and the tunable CNN.
+
+A session follows the order below; each step is one function of the core, and each choice is a
+field of a settings object, so a script can do exactly what the interface does.
+
+1. **System.** An example from the registry (simulated on demand), or the user's own CSV file:
+   one line per run, one column per parameter and a column `path` to the run's snapshot files
+   (HDF5, including JLD2). Optional columns: `dx`, a label column (only for the scores).
+2. **Fields.** The first snapshot is inspected: every dataset with its name, shape and type is
+   listed. The user declares the fields and their role: scalar, velocity, polarity or nematic. A
+   vector or tensor stored as one dataset of shape $(2, N, N)$ is one field; stored as separate
+   scalar datasets (`vx`, `vy`, `px`, `py`, `Qxx`, `Qxy`), its components are grouped into one
+   field. Names suggest roles (`v`, `vx`: velocity; `p`, `px`: polarity; `Q`, `Qxx`: nematic),
+   but a suggestion is never applied without confirmation, and an ungrouped `vx` is refused as a
+   scalar unless the user insists: the descriptors and the augmentations of the CNN rotate the
+   components of a vector together, and $v_x$ alone is not invariant under a rotation by
+   $90^\circ$ (it becomes $v_y$). The fields given to the encoders are chosen here.
+3. **Encoders** (several at once, one description each): the hand-made encoder, with a checkbox
+   per observable block and per field, the blocks offered depending on the role; the CNN, with its
+   architecture settings (step 13); the combined description; an external table of descriptors.
+4. **Methods** (several at once, on every description): walls, unsupervised threshold tree, blind
+   grouping (Gaussian mixture, k-means, HDBSCAN). **Checks**: robustness against the thresholds,
+   stability with the halves swapped, steady state (examples), and, only when the CSV has a label
+   column, the scores against the labels and the linear probe. Labels never enter a method.
+5. **Results.** Phase maps per description and method, the comparison table, rules of the tree,
+   snapshots of each phase, export of tables and figures.
+
+Extension points:
+
+- **Encoders.** An encoder is a settings dataclass and a function `describe(ensemble, frame,
+  settings) -> table` (one row per snapshot, columns `name.block.observable`). Methods only see
+  the table, so any encoder works with every method.
+- **Observables.** A block is a function of one field (or of a pair of snapshots, for the
+  dynamics) registered for the roles it applies to; the hand-made encoder is the list of selected
+  blocks.
+- **Methods.** A method is a settings dataclass and a function `find(table, parameters, settings)
+  -> partition` (a phase or "noise" for every parameter point, plus its own extra outputs: walls,
+  rules, groups). Scores, phase maps and the comparison table take any partition.
+- **Registration** by a decorator inside the package, and by Python entry points for other
+  packages. The interface builds its controls from the fields of each settings dataclass (type,
+  default, allowed values or range, help text), so a new entry needs no interface code.
+- **Contract tests.** Every registered encoder is checked on the shared synthetic fields
+  (invariance under rotations, mirrors and periodic shifts; finite values on a flat field); every
+  registered method on the shared synthetic tables (one phase in pure noise and under a smooth
+  drift; two and three phases on the right links).
+
+Constraints of the tunable CNN (step 13), checked before any training, with a message saying
+which one fails: every block halves the grid, so $n_{\rm blocks} \le \log_2(n / n_{\min})$ for a
+frame of $n$ points and a smallest final map $n_{\min}$ (4, a choice); the number of channels does
+not decrease from one block to the next; $\dim h$ is the number of channels of the last block; the
+projection is no larger than $h$; the receptive field ($7, 19, 43, 91, \ldots$ points) is shown
+next to the frame size; the estimated memory of one batch must fit the chosen device. Settings
+are chosen without labels: from the loss, the alignment, the uniformity and the effective rank of
+$h$, not from the scores, which would bring the labels back in.
 
 Examples (step 8). Swift-Hohenberg is a gradient flow: all its patterns end frozen, it has one
 scalar field, and three states. Added on 2026-11-17, each with a pilot scan to choose its window

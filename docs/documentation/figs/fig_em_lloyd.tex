@@ -1,0 +1,85 @@
+% k-means (Lloyd) and the Gaussian mixture (EM) on the same invented points: two groups centred
+% at A(0.75, 1.1) and B(1.9, 0.75). Adapted from the hfml plan (same author).
+\begin{tikzpicture}[fig]
+\def\W{2.6}\def\H{1.9}
+\newcommand{\frm}{\draw[black!30] (0,0) rectangle (\W,\H);}
+% the same 28 points in every panel; #1 #2 #3 #4: centres (c1x, c1y, c2x, c2y) used to colour
+% them (mode h: hard, nearest centre; s: soft, Gaussian responsibilities; g: grey)
+\newcommand{\pts}[5]{%
+  \pgfmathsetseed{5}
+  \foreach \cx/\cy in {0.75/1.1, 1.9/0.75} \foreach \n in {1,...,14} {
+    \pgfmathsetmacro{\px}{\cx + 0.13*(rand+rand+rand)}
+    \pgfmathsetmacro{\py}{\cy + 0.13*(rand+rand+rand)}
+    \pgfmathsetmacro{\da}{(\px-#1)^2 + (\py-#2)^2}
+    \pgfmathsetmacro{\db}{(\px-#3)^2 + (\py-#4)^2}
+    \if#5h
+      \pgfmathtruncatemacro{\w}{\da < \db ? 100 : 0}
+    \else
+      \pgfmathsetmacro{\e}{max(-8, min(8, (\da - \db)/0.6))}% clamped: TikZ numbers stay below 16384
+      \pgfmathtruncatemacro{\w}{100/(1 + exp(\e))}
+    \fi
+    \if#5g \fill[black!45] (\px,\py) circle (1.2pt);
+    \else \fill[cK1!\w!cK2] (\px,\py) circle (1.2pt); \fi
+  }}
+\newcommand{\cen}[3]{\draw[very thick, #3] (#1,#2) ++(-0.08,-0.08) -- ++(0.16,0.16)
+  ++(-0.16,0) -- ++(0.16,-0.16);}
+\newcommand{\pcap}[1]{\node[small, text width=2.8cm, anchor=north] at ({\W/2},-0.08) {#1};}
+% ================= k-means =================
+\node[lab, anchor=west] at (-0.1,2.35) {k-means: Lloyd's algorithm};
+\begin{scope}
+  \frm \pts{1.0}{1.6}{1.3}{0.4}{g} \cen{1.0}{1.6}{cK1} \cen{1.3}{0.4}{cK2}
+  \pcap{1. start: $k = 2$ random centres}
+\end{scope}
+\begin{scope}[xshift=3.2cm]
+  \begin{scope} \clip (0,0) rectangle (\W,\H);
+    \draw[black!50, densely dashed] (1.15,1.0) -- ++(1.2*2,0.3*2);
+    \draw[black!50, densely dashed] (1.15,1.0) -- ++(-1.2*2,-0.3*2); \end{scope}
+  \frm \pts{1.0}{1.6}{1.3}{0.4}{h} \cen{1.0}{1.6}{cK1} \cen{1.3}{0.4}{cK2}
+  \pcap{2. assign each point to the nearest centre}
+\end{scope}
+\begin{scope}[xshift=6.4cm]
+  \frm \pts{1.0}{1.6}{1.3}{0.4}{h}
+  \draw[->, black!60] (1.0,1.6) -- (0.85,1.2); \draw[->, black!60] (1.3,0.4) -- (1.72,0.72);
+  \cen{0.85}{1.2}{cK1} \cen{1.72}{0.72}{cK2}
+  \pcap{3. move each centre to the mean of its points}
+\end{scope}
+\begin{scope}[xshift=9.6cm]
+  \begin{scope} \clip (0,0) rectangle (\W,\H);
+    \draw[black!50, densely dashed] (1.325,0.925) -- ++(0.35*3,1.15*3);
+    \draw[black!50, densely dashed] (1.325,0.925) -- ++(-0.35*3,-1.15*3); \end{scope}
+  \frm \pts{0.75}{1.1}{1.9}{0.75}{h} \cen{0.75}{1.1}{cK1} \cen{1.9}{0.75}{cK2}
+  \pcap{4. repeat 2--3 until no point changes group}
+\end{scope}
+\node[note, text width=2.9cm, align=left, anchor=west] at (12.3,0.95)
+  {each step lowers\\ $E = \sum_i \|\mathbf x_i - \boldsymbol\mu_{c(i)}\|^2$;\\ 10 random
+   starts, lowest $E$ kept};
+% ================= Gaussian mixture =================
+\begin{scope}[yshift=-3.9cm]
+\node[lab, anchor=west] at (-0.1,2.35) {Gaussian mixture: expectation-maximisation (EM)};
+\begin{scope}
+  \frm \pts{1.0}{1.6}{1.3}{0.4}{g}
+  \draw[cK1, thick] (1.0,1.55) ellipse (0.55 and 0.3); \draw[cK2, thick] (1.3,0.4) ellipse (0.55 and 0.3);
+  \pcap{1. start: $k$ Gaussians (means, covariances, weights)}
+\end{scope}
+\begin{scope}[xshift=3.2cm]
+  \frm \pts{1.0}{1.6}{1.3}{0.4}{s}
+  \draw[cK1, thick, densely dashed] (1.0,1.55) ellipse (0.55 and 0.3);
+  \draw[cK2, thick, densely dashed] (1.3,0.4) ellipse (0.55 and 0.3);
+  \pcap{2. E-step: each point belongs to each Gaussian with a probability $r_{ic}$ (colour mix)}
+\end{scope}
+\begin{scope}[xshift=6.4cm]
+  \frm \pts{1.0}{1.6}{1.3}{0.4}{s}
+  \draw[->, black!60] (1.0,1.6) -- (0.82,1.15); \draw[->, black!60] (1.3,0.4) -- (1.75,0.75);
+  \draw[cK1, thick] (0.82,1.15) ellipse (0.42 and 0.36); \draw[cK2, thick] (1.75,0.75) ellipse (0.45 and 0.34);
+  \pcap{3. M-step: refit each Gaussian to its points, weighted by $r_{ic}$}
+\end{scope}
+\begin{scope}[xshift=9.6cm]
+  \frm \pts{0.75}{1.1}{1.9}{0.75}{s}
+  \draw[cK1, thick] (0.75,1.1) ellipse (0.36 and 0.33); \draw[cK2, thick] (1.9,0.75) ellipse (0.36 and 0.33);
+  \pcap{4. repeat 2--3 until the likelihood stops rising}
+\end{scope}
+\node[note, text width=2.9cm, align=left, anchor=west] at (12.3,0.95)
+  {each step raises $\ln L$; a point between groups keeps a split membership; BIC compares
+   $k = 1..10$};
+\end{scope}
+\end{tikzpicture}

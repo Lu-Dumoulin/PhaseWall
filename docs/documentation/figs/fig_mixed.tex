@@ -1,0 +1,37 @@
+% Mixed points: an ordinary point and a point whose runs end in two states (invented data).
+\begin{tikzpicture}[fig]
+\newcommand{\cloud}[4]{% centre x, y, colour, seed
+  \pgfmathsetseed{#4}
+  \foreach \n in {1,...,6} \fill[#3] ({#1+0.12*(rand+rand)},{#2+0.12*(rand+rand)}) circle (1.6pt);}
+\newcommand{\ring}[4]{%
+  \pgfmathsetseed{#4}
+  \foreach \n in {1,...,6} \draw[#3, thick] ({#1+0.12*(rand+rand)},{#2+0.12*(rand+rand)}) circle (1.6pt);}
+% ordinary
+\begin{scope}
+  \draw[black!30] (0,0) rectangle (2.8,2.0);
+  \cloud{1.4}{1.0}{cP0}{3} \ring{1.4}{1.0}{cP0}{8}
+  \node[lab] at (1.4,2.3) {ordinary point};
+  \node[small, text width=2.9cm, anchor=north] at (1.4,-0.1) {halves $a_1$ (dots) and $a_2$ (rings) mixed: $E_a\approx0$};
+\end{scope}
+% mixed
+\begin{scope}[xshift=3.6cm]
+  \draw[black!30] (0,0) rectangle (2.8,2.0);
+  \cloud{0.75}{1.35}{cP0}{3} \ring{2.0}{0.6}{cP1}{8}
+  \pgfmathsetseed{11}
+  \fill[cP0] ({2.0+0.1*rand},{0.6+0.1*rand}) circle (1.6pt);
+  \node[lab] at (1.4,2.3) {mixed point};
+  \node[small, text width=2.9cm, anchor=north] at (1.4,-0.1) {runs end in two states, in different shares in the two halves: $E_a$ large};
+\end{scope}
+% robust z over all points
+\begin{scope}[xshift=7.4cm]
+  \draw[->] (0,0) -- (4.3,0) node[below left, small] {$z_a$};
+  \draw[->] (0,0) -- (0,2.0);
+  \foreach \x/\h in {0.2/0.3,0.4/0.9,0.6/1.5,0.8/1.7,1.0/1.3,1.2/0.9,1.4/0.6,1.6/0.4,1.8/0.25,2.0/0.15,2.2/0.1}
+    \fill[cGrid] (\x-0.09,0) rectangle (\x+0.09,\h);
+  \fill[cP1] (3.71,0) rectangle (3.89,0.12);
+  \draw[cAcc, thick, dashed] (3.2,0) -- (3.2,1.8) node[above, small] {$z=6$};
+  \node[lab] at (2.1,2.3) {all points};
+  \node[small, text width=4.2cm, anchor=north] at (2.1,-0.1) {$z_a=(E_a-\med E)/(1.48\,\mathrm{MAD})$;
+    right-skewed even for ordinary points, hence a high threshold};
+\end{scope}
+\end{tikzpicture}

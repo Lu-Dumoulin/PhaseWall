@@ -1,0 +1,30 @@
+% The linear probe: logistic regression with folds of whole parameter points (invented data).
+\begin{tikzpicture}[fig]
+% ---------- (a) folds of points
+\node[lab, anchor=west] at (-1.3,0.45) {(a) five folds of whole parameter points};
+\foreach \r in {1,...,5} {
+  \node[small, anchor=east] at (-0.15,{-0.55*\r}) {fold \r};
+  \foreach \g in {1,...,10} {
+    \pgfmathtruncatemacro{\f}{ceil(\g/2)}
+    \ifnum\f=\r \def\cc{cAcc!65}\else\def\cc{cP0!30}\fi
+    \foreach \s in {0,1,2} \fill[\cc] ({0.62*(\g-1)+0.17*\s},{-0.55*\r-0.15}) rectangle ++(0.15,0.3);
+  }
+}
+\draw[decorate, decoration={brace, amplitude=4pt}] (0,0.02) -- (0.49,0.02)
+  node[midway, above=5pt, small, text width=2.6cm] {one point, its runs: always on one side};
+\fill[cP0!30] (0.6,-3.45) rectangle ++(0.3,0.25); \node[small, anchor=west] at (0.95,-3.33) {train};
+\fill[cAcc!65] (2.1,-3.45) rectangle ++(0.3,0.25); \node[small, anchor=west] at (2.45,-3.33) {test};
+\node[small, anchor=west] at (3.4,-3.33) {score: balanced accuracy of the held-out points};
+% ---------- (b) a linear reading of h
+\begin{scope}[xshift=8.4cm, yshift=-2.9cm]
+  \node[lab] at (1.5,3.35) {(b) a linear reading of $h$};
+  \draw[->] (0,0) -- (3.2,0) node[below left, small] {$h_1$};
+  \draw[->] (0,0) -- (0,3.0) node[above, small] {$h_2$};
+  \pgfmathsetseed{9}
+  \foreach \n in {1,...,14} \fill[cP0] ({0.9+0.25*(rand+rand)},{2.0+0.25*(rand+rand)}) circle (1.4pt);
+  \foreach \n in {1,...,14} \fill[cP1] ({2.1+0.25*(rand+rand)},{0.9+0.25*(rand+rand)}) circle (1.4pt);
+  \draw[cAcc, thick, dashed] (0.3,0.2) -- (2.9,2.8);
+  \node[small, text width=3.2cm, anchor=north] at (1.6,-0.15) {$P(c\,|\,h)\propto e^{\mathbf w_c\cdot h+b_c}$;
+    labels are used: a ceiling, never a method};
+\end{scope}
+\end{tikzpicture}

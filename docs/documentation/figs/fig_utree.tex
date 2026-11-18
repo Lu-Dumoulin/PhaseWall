@@ -1,0 +1,46 @@
+% The unsupervised threshold tree (invented values): a split of the parameter plane by one
+% descriptor, the score of a threshold, and the tree of rules on the demo.
+\begin{tikzpicture}[fig]
+% ---------- (a) parameter plane coloured by the value of one descriptor
+\begin{scope}
+  \node[lab] at (1.25,2.75) {(a) value of one descriptor};
+  \foreach \i in {0,...,5} \foreach \j in {0,...,4} {
+    \pgfmathsetmacro{\v}{(\i+0.5*\j > 3.2) ? 70 : 12+3*\i}
+    \fill[cP1!\v!white, draw=cInk2] (0.5*\i,0.5*\j) circle (0.13);
+  }
+  \draw[wall] (1.75,-0.25) -- (1.75,0.25) -- (1.25,0.25) -- (1.25,1.25) -- (0.75,1.25) -- (0.75,2.25);
+  \draw[->] (-0.35,-0.35) -- (2.8,-0.35) node[below left, small] {$p_1$};
+  \draw[->] (-0.35,-0.35) -- (-0.35,2.4) node[above, small] {$p_2$};
+  \node[small, text width=3cm, anchor=north] at (1.25,-0.55) {median per point, on the first halves ($v_1$)};
+\end{scope}
+% ---------- (b) thresholds: gap against drift
+\begin{scope}[xshift=4.0cm]
+  \node[lab] at (1.6,2.75) {(b) score of a threshold};
+  \draw[->] (0,1.3) -- (3.3,1.3) node[below left, small] {value};
+  \foreach \x in {0.2,0.35,0.45,0.6,0.7,0.8} \fill[cInk2] (\x,1.42) circle (1.5pt);
+  \foreach \x in {2.3,2.45,2.6,2.7,2.85,3.0} \fill[cP1] (\x,1.42) circle (1.5pt);
+  \draw[cAcc, thick, dashed] (1.55,1.15) -- (1.55,1.9);
+  \node[small, anchor=west] at (0.2,2.15) {gap: $\eta^2\approx1$};
+  \draw[->] (0,0) -- (3.3,0) node[below left, small] {value};
+  \foreach \k in {0,...,11} \fill[cInk2] ({0.2+0.25*\k},0.12) circle (1.5pt);
+  \draw[cAcc, thick, dashed] (1.55,-0.15) -- (1.55,0.6);
+  \node[small, anchor=west] at (0.2,0.8) {drift: $\eta^2\approx0.75$, fails the test};
+  \node[small, text width=3.3cm, anchor=north] at (1.6,-0.55) {score $=\eta^2(1-\mathrm{Ncut}/2)$:
+    separated values, contiguous sides};
+\end{scope}
+% ---------- (c) the tree of the demo
+\begin{scope}[xshift=8.9cm]
+  \node[lab] at (1.9,2.75) {(c) tree, tested on $v_2$};
+  \node[blk, font=\scriptsize] (r) at (1.9,1.9) {\code{u.amp.log10var} $\le-12$?};
+  \node[blk, font=\scriptsize, fill=cP2!20] (u) at (0.4,0.8) {uniform};
+  \node[blk, font=\scriptsize] (s) at (2.9,0.8) {\code{u.topo.below-1} $>0.023$?};
+  \node[blk, font=\scriptsize, fill=cP1!20] (hx) at (2.0,-0.3) {hexagons};
+  \node[blk, font=\scriptsize, fill=cP0!20] (st) at (3.9,-0.3) {stripes};
+  \draw[->] (r) -- node[left, small] {yes} (u);
+  \draw[->] (r) -- node[right, small] {no} (s);
+  \draw[->] (s) -- node[left, small] {yes} (hx);
+  \draw[->] (s) -- node[right, small] {no} (st);
+  \node[small, text width=4.0cm, anchor=north] at (1.9,-0.75) {each split kept only if, on $v_2$, the
+    sides differ, the descriptor jumps across the wall, and 90\% of the points agree};
+\end{scope}
+\end{tikzpicture}
