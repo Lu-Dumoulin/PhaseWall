@@ -308,10 +308,13 @@ The same analyses can be run from an interactive page, a [marimo](https://marimo
 that also opens as a dashboard ([apps/explore.py](apps/explore.py)):
 
 ```
-pip install -e ".[app]"              # marimo, with the extras nn and baselines
-marimo run apps/explore.py           # dashboard in the browser
-marimo edit apps/explore.py          # the same page as a notebook, code visible
+./explore.sh                         # dashboard in the browser, from any folder
+./explore.sh --edit                  # the same page as a notebook, code visible
 ```
+
+The script makes the environment `.venv` the first time (Python 3.11 or newer) and installs
+phasewall with the extra `[app]` (marimo, PyTorch, scikit-learn), then starts at once; nothing has
+to be activated. By hand: `pip install -e ".[app]"`, then `marimo run apps/explore.py`.
 
 A side panel follows the order of an analysis:
 

@@ -5,11 +5,14 @@ An interactive interface to phasewall, written as a [marimo](https://marimo.io) 
 dashboard, with only the controls and the results.
 
 ```
-pip install -e ".[app]"              # marimo, PyTorch and scikit-learn
-
-marimo run apps/explore.py           # dashboard in the browser
-marimo edit apps/explore.py          # notebook: cells visible and editable
+./explore.sh                         # from the root of the repository: dashboard in the browser
+./explore.sh --edit                  # notebook: cells visible and editable
 ```
+
+`explore.sh` makes the environment `.venv` and installs the package with the extra `[app]`
+(marimo, PyTorch and scikit-learn) the first time, then starts marimo from it. By hand, in an
+activated environment: `pip install -e ".[app]"`, then `marimo run apps/explore.py` or
+`marimo edit apps/explore.py`.
 
 ## What it does
 
