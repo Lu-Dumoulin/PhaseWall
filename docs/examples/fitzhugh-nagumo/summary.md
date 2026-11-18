@@ -1,6 +1,6 @@
 # fitzhugh-nagumo
 
-396 runs on 99 parameter points (eps, delta); analysis 45 min.
+396 runs on 99 parameter points (eps, delta); analysis 0 min.
 
 Reference labels (runs): uniform 134, dynamic 121, stripes 83, fronts 51, holes 7
 

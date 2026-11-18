@@ -2,6 +2,31 @@
 
 | example | describer | method | groups | agree | points | ari | ari_all | pieces | noise_runs | probe |
 |---|---|---|---|---|---|---|---|---|---|---|
+| barkley | hand | walls | 2 | 132 | 165 | 0.586 | 0.586 | 2 | 0 | 0.986 |
+| barkley | hand | mixture | 10 | 152 | 165 | 0.462 | 0.462 | 43 | 0 | 0.986 |
+| barkley | hand | kmeans | 2 | 131 | 165 | 0.566 | 0.566 | 3 | 0 | 0.986 |
+| barkley | hand | hdbscan_10 | 10 | 145 | 165 | 0.747 | 0.635 | 35 | 0.076 | 0.986 |
+| barkley | hand | hdbscan_20 | 5 | 134 | 165 | 0.84 | 0.734 | 20 | 0.136 | 0.986 |
+| barkley | learned seed 0 | walls | 1 | 90 | 165 | 0 | 0 | 1 | 0 | 0.96 |
+| barkley | learned seed 0 | mixture | 10 | 149 | 165 | 0.294 | 0.294 | 24 | 0 | 0.96 |
+| barkley | learned seed 0 | kmeans | 10 | 152 | 165 | 0.298 | 0.298 | 24 | 0 | 0.96 |
+| barkley | learned seed 0 | hdbscan_10 | 3 | 123 | 165 | 0.957 | 0.624 | 6 | 0.248 | 0.96 |
+| barkley | learned seed 0 | hdbscan_20 | 2 | 95 | 165 | 0.763 | 0.425 | 5 | 0.317 | 0.96 |
+| barkley | combined seed 0 | walls | 2 | 132 | 165 | 0.586 | 0.586 | 2 | 0 | 0.993 |
+| barkley | combined seed 0 | mixture | 10 | 158 | 165 | 0.466 | 0.466 | 31 | 0 | 0.993 |
+| barkley | combined seed 0 | kmeans | 2 | 131 | 165 | 0.566 | 0.566 | 3 | 0 | 0.993 |
+| barkley | combined seed 0 | hdbscan_10 | 9 | 132 | 165 | 0.762 | 0.635 | 34 | 0.152 | 0.993 |
+| barkley | combined seed 0 | hdbscan_20 | 4 | 126 | 165 | 0.856 | 0.754 | 13 | 0.214 | 0.993 |
+| barkley | learned seed 1 | walls | 1 | 90 | 165 | 0 | 0 | 1 | 0 | 0.927 |
+| barkley | learned seed 1 | mixture | 10 | 145 | 165 | 0.291 | 0.291 | 35 | 0 | 0.927 |
+| barkley | learned seed 1 | kmeans | 10 | 141 | 165 | 0.281 | 0.281 | 28 | 0 | 0.927 |
+| barkley | learned seed 1 | hdbscan_10 | 2 | 127 | 165 | 0.608 | 0.56 | 4 | 0.058 | 0.927 |
+| barkley | learned seed 1 | hdbscan_20 | 2 | 96 | 165 | 0.857 | 0.456 | 8 | 0.342 | 0.927 |
+| barkley | combined seed 1 | walls | 2 | 132 | 165 | 0.586 | 0.586 | 2 | 0 | 0.992 |
+| barkley | combined seed 1 | mixture | 10 | 158 | 165 | 0.451 | 0.451 | 33 | 0 | 0.992 |
+| barkley | combined seed 1 | kmeans | 2 | 131 | 165 | 0.566 | 0.566 | 3 | 0 | 0.992 |
+| barkley | combined seed 1 | hdbscan_10 | 9 | 130 | 165 | 0.767 | 0.624 | 32 | 0.171 | 0.992 |
+| barkley | combined seed 1 | hdbscan_20 | 4 | 125 | 165 | 0.855 | 0.757 | 12 | 0.211 | 0.992 |
 | swift-hohenberg | hand | walls | 3 | 235 | 240 | 0.928 | 0.928 | 3 | 0 | 0.999 |
 | swift-hohenberg | hand | mixture | 10 | 230 | 240 | 0.382 | 0.382 | 14 | 0 | 0.999 |
 | swift-hohenberg | hand | kmeans | 5 | 235 | 240 | 0.583 | 0.583 | 5 | 0 | 0.999 |
@@ -52,7 +77,7 @@
 | fitzhugh-nagumo | combined seed 1 | kmeans | 6 | 88 | 99 | 0.569 | 0.569 | 20 | 0 | 0.787 |
 | fitzhugh-nagumo | combined seed 1 | hdbscan_10 | 7 | 77 | 99 | 0.727 | 0.56 | 16 | 0.167 | 0.787 |
 | fitzhugh-nagumo | combined seed 1 | hdbscan_20 | 5 | 75 | 99 | 0.742 | 0.548 | 16 | 0.194 | 0.787 |
-| gray-scott | hand | walls | 10 | 482 | 525 | 0.8 | 0.8 | 10 | 0 | 0.962 |
+| gray-scott | hand | walls | 8 | 482 | 525 | 0.886 | 0.886 | 10 | 0 | 0.962 |
 | gray-scott | hand | mixture | 10 | 515 | 525 | 0.953 | 0.953 | 35 | 0 | 0.962 |
 | gray-scott | hand | kmeans | 7 | 516 | 525 | 0.987 | 0.987 | 23 | 0 | 0.962 |
 | gray-scott | hand | hdbscan_10 | 22 | 490 | 525 | 0.78 | 0.754 | 36 | 0.062 | 0.962 |
@@ -62,7 +87,7 @@
 | gray-scott | learned seed 0 | kmeans | 10 | 421 | 525 | 0.483 | 0.483 | 34 | 0 | 0.924 |
 | gray-scott | learned seed 0 | hdbscan_10 | 8 | 376 | 525 | 0.677 | 0.519 | 20 | 0.2 | 0.924 |
 | gray-scott | learned seed 0 | hdbscan_20 | 3 | 331 | 525 | 0.862 | 0.596 | 8 | 0.324 | 0.924 |
-| gray-scott | combined seed 0 | walls | 8 | 503 | 525 | 0.86 | 0.86 | 8 | 0 | 0.965 |
+| gray-scott | combined seed 0 | walls | 6 | 503 | 525 | 0.951 | 0.951 | 8 | 0 | 0.965 |
 | gray-scott | combined seed 0 | mixture | 10 | 517 | 525 | 0.758 | 0.758 | 27 | 0 | 0.965 |
 | gray-scott | combined seed 0 | kmeans | 4 | 356 | 525 | 0.535 | 0.535 | 10 | 0 | 0.965 |
 | gray-scott | combined seed 0 | hdbscan_10 | 21 | 476 | 525 | 0.822 | 0.748 | 36 | 0.109 | 0.965 |
@@ -72,7 +97,7 @@
 | gray-scott | learned seed 1 | kmeans | 10 | 398 | 525 | 0.451 | 0.451 | 35 | 0 | 0.917 |
 | gray-scott | learned seed 1 | hdbscan_10 | 12 | 355 | 525 | 0.859 | 0.493 | 23 | 0.323 | 0.917 |
 | gray-scott | learned seed 1 | hdbscan_20 | 6 | 256 | 525 | 0.933 | 0.455 | 11 | 0.504 | 0.917 |
-| gray-scott | combined seed 1 | walls | 8 | 503 | 525 | 0.86 | 0.86 | 8 | 0 | 0.962 |
+| gray-scott | combined seed 1 | walls | 6 | 503 | 525 | 0.951 | 0.951 | 8 | 0 | 0.962 |
 | gray-scott | combined seed 1 | mixture | 10 | 516 | 525 | 0.754 | 0.754 | 32 | 0 | 0.962 |
 | gray-scott | combined seed 1 | kmeans | 4 | 356 | 525 | 0.535 | 0.535 | 10 | 0 | 0.962 |
 | gray-scott | combined seed 1 | hdbscan_10 | 21 | 469 | 525 | 0.827 | 0.742 | 36 | 0.128 | 0.962 |
@@ -102,28 +127,3 @@
 | sh-localized | combined seed 1 | kmeans | 3 | 105 | 105 | 1 | 1 | 3 | 0 | 1 |
 | sh-localized | combined seed 1 | hdbscan_10 | 3 | 94 | 105 | 1 | 0.901 | 4 | 0.162 | 1 |
 | sh-localized | combined seed 1 | hdbscan_20 | 2 | 91 | 105 | 0.829 | 0.824 | 2 | 0.067 | 1 |
-| barkley | hand | walls | 2 | 132 | 165 | 0.586 | 0.586 | 2 | 0 | 0.986 |
-| barkley | hand | mixture | 10 | 152 | 165 | 0.462 | 0.462 | 43 | 0 | 0.986 |
-| barkley | hand | kmeans | 2 | 131 | 165 | 0.566 | 0.566 | 3 | 0 | 0.986 |
-| barkley | hand | hdbscan_10 | 10 | 145 | 165 | 0.747 | 0.635 | 35 | 0.076 | 0.986 |
-| barkley | hand | hdbscan_20 | 5 | 134 | 165 | 0.84 | 0.734 | 20 | 0.136 | 0.986 |
-| barkley | learned seed 0 | walls | 1 | 90 | 165 | 0 | 0 | 1 | 0 | 0.96 |
-| barkley | learned seed 0 | mixture | 10 | 149 | 165 | 0.294 | 0.294 | 24 | 0 | 0.96 |
-| barkley | learned seed 0 | kmeans | 10 | 152 | 165 | 0.298 | 0.298 | 24 | 0 | 0.96 |
-| barkley | learned seed 0 | hdbscan_10 | 3 | 123 | 165 | 0.957 | 0.624 | 6 | 0.248 | 0.96 |
-| barkley | learned seed 0 | hdbscan_20 | 2 | 95 | 165 | 0.763 | 0.425 | 5 | 0.317 | 0.96 |
-| barkley | combined seed 0 | walls | 2 | 132 | 165 | 0.586 | 0.586 | 2 | 0 | 0.993 |
-| barkley | combined seed 0 | mixture | 10 | 158 | 165 | 0.466 | 0.466 | 31 | 0 | 0.993 |
-| barkley | combined seed 0 | kmeans | 2 | 131 | 165 | 0.566 | 0.566 | 3 | 0 | 0.993 |
-| barkley | combined seed 0 | hdbscan_10 | 9 | 132 | 165 | 0.762 | 0.635 | 34 | 0.152 | 0.993 |
-| barkley | combined seed 0 | hdbscan_20 | 4 | 126 | 165 | 0.856 | 0.754 | 13 | 0.214 | 0.993 |
-| barkley | learned seed 1 | walls | 1 | 90 | 165 | 0 | 0 | 1 | 0 | 0.927 |
-| barkley | learned seed 1 | mixture | 10 | 145 | 165 | 0.291 | 0.291 | 35 | 0 | 0.927 |
-| barkley | learned seed 1 | kmeans | 10 | 141 | 165 | 0.281 | 0.281 | 28 | 0 | 0.927 |
-| barkley | learned seed 1 | hdbscan_10 | 2 | 127 | 165 | 0.608 | 0.56 | 4 | 0.058 | 0.927 |
-| barkley | learned seed 1 | hdbscan_20 | 2 | 96 | 165 | 0.857 | 0.456 | 8 | 0.342 | 0.927 |
-| barkley | combined seed 1 | walls | 2 | 132 | 165 | 0.586 | 0.586 | 2 | 0 | 0.992 |
-| barkley | combined seed 1 | mixture | 10 | 158 | 165 | 0.451 | 0.451 | 33 | 0 | 0.992 |
-| barkley | combined seed 1 | kmeans | 2 | 131 | 165 | 0.566 | 0.566 | 3 | 0 | 0.992 |
-| barkley | combined seed 1 | hdbscan_10 | 9 | 130 | 165 | 0.767 | 0.624 | 32 | 0.171 | 0.992 |
-| barkley | combined seed 1 | hdbscan_20 | 4 | 125 | 165 | 0.855 | 0.757 | 12 | 0.211 | 0.992 |

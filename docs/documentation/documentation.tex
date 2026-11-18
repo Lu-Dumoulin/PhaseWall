@@ -129,6 +129,7 @@ Method & Uses the grid & Gives & Status \\
 \midrule
 walls (Sec.~\ref{sec:walls}) & yes & walls between neighbouring points, each tested on data that did not place it; phases as the regions between walls & implemented \\
 mixed points (Sec.~\ref{sec:mixed}) & no & points whose runs end in different states & implemented \\
+separated parts (Sec.~\ref{sec:merge}) & yes & one phase for parts of one phase that another phase separates & implemented \\
 unsupervised threshold tree (Sec.~\ref{sec:tree}) & yes & phases as leaves of a tree of rules ``descriptor $>$ threshold'' & prototype \\
 Gaussian mixture (Sec.~\ref{sec:blind}) & no & groups of runs, number by BIC & implemented \\
 k-means (Sec.~\ref{sec:blind}) & no & groups of runs, number by silhouette & implemented \\
@@ -969,6 +970,76 @@ of \code{nodes}. \textbf{Test:} on a flat table where one of the two runs of one
 another state, that point and only that point is flagged.
 \end{codebox}
 
+\subsection{Phases in separate places}\label{sec:merge}
+
+\begin{figure}[H]
+\centering
+\input{figs/fig_merge}
+\caption{One phase in two places (invented grid). The cuts give two regions, since no link joins
+them; their cores are compared, with the spread between the two halves of a core as the scale.}\label{fig:merge}
+\end{figure}
+
+\begin{tech}
+A phase can lie in two places with another phase between them: in Gray-Scott the uniform state
+lies on both sides of the pattern band (Sec.~\ref{sec:gs}). The cuts give two regions, and since
+no link joins them, the walls method never compares them. After the walls, every pair of phases
+of at least $2\,$\code{MIN_PHASE} points that share no link is compared (Fig.~\ref{fig:merge}).
+
+\textbf{Cores.} The core of a phase is the set of its points at least 2 grid steps (counted by
+rank of the parameter values, so that a logarithmic grid has equal steps; largest step over the
+parameters) from any point of another phase: the points at the edge of a phase are its least
+typical ones (faint leftover patterns, transients).
+
+\textbf{Gap and spread.} The gap is the energy distance between the snapshots of the two cores
+(at most 400 each, drawn at random); the spread of a core is the energy distance between its two
+halves in space, on either side of the median along its longest axis. The spread includes the
+drift of the description across the phase. The two parts are one phase when
+\[
+\frac{\text{gap}(A_1,A_2)}{\max\big(s(A_1),\,s(A_2),\,\text{floor}\big)}<\text{\code{RATIO}}=1.5 :
+\]
+they differ no more than the two halves of one of them. Merges are joined transitively, they
+only renumber phases (the walls stay), and the cores are chosen from the grid alone, without
+looking at the data.
+
+\textbf{Two versions that failed} (Gray-Scott, 2026-11-18). Comparing the points that face each
+other across the gap with pairs of points inside the phases at the same distance joined stripes
+with the uniform state, because any two far points differ; comparing them with neighbouring points
+inside the phases joined nothing, not even the pieces of the uniform state, because the facing
+points are edge points. Cores avoid both.
+
+\emph{Physics parallel.} Two domains of the same phase separated by a domain of another phase are
+recognised by their bulk properties, measured away from the interfaces, not by what happens at
+the interfaces; the spread of a core plays the role of the variation of the bulk properties within
+one phase (a smooth dependence on the control parameters).
+\end{tech}
+
+\begin{algobox}{phases in separate places}
+\begin{algorithmic}[1]
+\Require phases after the walls; links; features of every snapshot; grid positions by rank; floor
+\For{each phase $P$ of at least $2\,$\code{MIN_PHASE} points}
+  \State core$(P)\gets$ points of $P$ at least 2 grid steps from every other phase (all of $P$ if fewer than \code{MIN_PHASE})
+  \State $s(P)\gets D(\text{half}_1,\text{half}_2)$, halves of the core on either side of the median along its longest axis
+\EndFor
+\For{each pair $(P,Q)$ of such phases that share no link}
+  \State gap $\gets D(\text{core}(P),\text{core}(Q))$
+  \If{gap $/\max(s(P),s(Q),\text{floor})<$ \code{RATIO}} \State join $P$ and $Q$ (union-find) \EndIf
+\EndFor
+\Ensure phases renumbered from the largest; the table of every pair tested
+\end{algorithmic}
+\end{algobox}
+
+\begin{codebox}
+\textbf{Files.} \srcref{src/phasewall/walls.py}: \code{grid_coordinates}, \code{core},
+\code{split_in_space}, \code{merge_phases}, \code{find_walls(..., merge=True)} (default
+\code{MERGE}); results in \code{Walls.merges} (one row per pair tested: cores, gap, spreads, ratio,
+merged) and the column \code{phase_unmerged} of \code{nodes}; \code{Methods(merge=...)} in the
+pipeline.
+
+\textbf{Tests.} A grid with levels 0, 8, 0 in three bands gives 3 phases without merging and 2
+with it, the outer bands as one phase, with the same walls; levels 0, 8, 16 stay 3 phases; grid
+positions are ranks of the parameter values.
+\end{codebox}
+
 \subsection{An unsupervised threshold tree}\label{sec:tree}
 
 \begin{figure}[H]
@@ -1652,9 +1723,14 @@ the walls found in grey.}\label{fig:gsmap}
 \begin{tech}
 \textbf{Results} (hand-made description unless stated).
 \begin{itemize}[leftmargin=1.2em, itemsep=1pt]
-\item \emph{Walls:} 10 phases, 482 of 525 points agree, ARI 0.80 (Fig.~\ref{fig:gsmap}). They follow
+\item \emph{Walls:} 10 regions, 482 of 525 points agree (Fig.~\ref{fig:gsmap}). They follow
   the reference regions: the two uniform states, the moving region, stripes, spots and isolated
-  spots; the uniform state lies in two places and counts as two phases. Most of the stripe band is
+  spots. The uniform state lies in three places; the three are joined into one phase
+  (Sec.~\ref{sec:merge}: gap between cores 0.57 and 1.46 times the larger spread), so 8 phases,
+  ARI 0.89 (0.80 without joining). Two of the three pieces are joined to the largest directly
+  (ratios 0.57 and 1.46); between these two, both cores are flat (spread 0, so the floor sets the
+  scale) and the ratio is 4.0, so they are joined only through the largest piece. Every pair of
+  different states has a ratio of 2.3 to 7.4 and stays apart. Most of the stripe band is
   flagged as mixed, although only 19 of the 525 points have runs that end with different labels:
   the flag reflects the spread of labyrinths there, not coexisting states.
 \item \emph{Tree:} 16 and 21 leaves (halves as given and swapped), ARI 0.84 and 0.82. Its rules read
@@ -1662,7 +1738,7 @@ the walls found in grey.}\label{fig:gsmap}
   over-splits: 13 to 18 points sit in leaves below \code{MIN_PHASE}.
 \item \emph{Blind grouping:} k-means with $k=7$ matches the reference best (ARI 0.99); its 23 pieces
   are close to the 20 of the reference itself, whose boundaries are ragged.
-\item \emph{Learned:} 1 phase (probe 0.92); \emph{combined:} 8 phases, 503 points, ARI 0.86, the
+\item \emph{Learned:} 1 phase (probe 0.92); \emph{combined:} 6 phases, 503 points, ARI 0.95, the
   only example where the combination helps. Probe of the hand-made description: 0.96.
 \end{itemize}
 \end{tech}
@@ -1885,11 +1961,11 @@ example & description & phases & agree & ARI & closest blind method (ARI, pieces
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 4 / 3 & 235 / 237 & 0.90 / 0.96 &  &  \\
 \midrule
-\multirow{4}{=}{\textbf{Gray-Scott}\\ 525 points $\times$ 4 runs} & hand-made & 10 & 482 & 0.80 & k-means, $k=7$ (0.99, 23) & 0.96 \\
+\multirow{4}{=}{\textbf{Gray-Scott}\\ 525 points $\times$ 4 runs} & hand-made & 8 & 482 & 0.89 & k-means, $k=7$ (0.99, 23) & 0.96 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & learned & 1 & 207 & 0 & HDBSCAN 20 (0.86, 8; 32\%) & 0.92 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & combined & 8 & 503 & 0.86 & HDBSCAN 20 (0.82, 30) & 0.97 \\
+ & combined & 6 & 503 & 0.95 & HDBSCAN 20 (0.82, 30) & 0.97 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 16 / 21 & 499 / 492 & 0.84 / 0.82 &  &  \\
 \midrule
@@ -1942,7 +2018,7 @@ where the hexagon and stripe clouds touch and drift, are the walls clearly ahead
 \textbf{The learned description has no jump.} Alone, it gives one phase on Gray-Scott, localised SH,
 FitzHugh-Nagumo and Barkley, and two on Swift-Hohenberg, while the probe still recognises the
 states (0.70 to 1.00): the states are in $h$ but $h$ changes smoothly across their boundaries.
-Combined with the hand-made description it helps on Gray-Scott (ARI 0.80 to 0.86) and removes walls
+Combined with the hand-made description it helps on Gray-Scott (ARI 0.89 to 0.95) and removes walls
 on Swift-Hohenberg and localised SH, where the walls of the combined table follow those of the
 learned one. Why the learned block dominates although it is weighted as one block among the
 hand-made ones has not been looked into yet.
@@ -1982,6 +2058,7 @@ role names (io) & \code{v}, \code{p}, \code{Q}, \ldots & names that suggest a ro
 \code{FLOOR_QUANTILE} (walls) & 0.1 & jumps below this quantile of the spreads count as no jump \\
 \code{MAX_PER_NODE} (walls) & 200 & snapshots per point used at most (cost of distances) \\
 \code{MIXED_K} (walls) & 6 & robust $z$ above which a point is mixed ($E$ is right-skewed) \\
+\code{MERGE}, \code{CORE_DEPTH}, \code{MAX_CORE} (walls) & on, 2, 400 & join separated parts of a phase; core depth in grid steps; snapshots per core \\
 \code{MIN_WEIGHT} (walls) & $10^{-8}$ & lower bound of link weights: strong walls keep the graph connected \\
 \code{N_THRESHOLDS}, \code{AGREE} (trees) & 32, 0.9 & candidate thresholds per descriptor; share of points on the same side with the other half \\
 \code{PCA_VARIANCE}, \code{K_MIXTURE}, \code{K_KMEANS} (baselines) & 0.95, 1--10, 2--10 & blind grouping, as in hfml \\
@@ -1998,7 +2075,7 @@ choices too (documented in their docstrings).}
 \section{Tests}\label{sec:tests}
 %======================================================================
 
-\code{pytest} runs 150 tests in about a minute, all on small synthetic data with known
+\code{pytest} runs 153 tests in about a minute, all on small synthetic data with known
 answers (no data from any laboratory is in the repository). On every push, the
 continuous-integration workflow \srcref{.github/workflows/tests.yml} runs \code{ruff} and
 \code{pytest}.
@@ -2017,7 +2094,7 @@ File & What is checked, against which known answer \\
 \code{test_nn.py} & augmentations against the field rules; shift invariance of a periodic encoder; loss at collapse and for perfect pairs; a short training separates stripes from spots; saving and loading; \code{learn} and \code{describe --encoder} (skipped without PyTorch) \\
 \code{test_blocks.py} & default blocks of every kind; a field's own blocks; blocks that do not fit refused; blocks from the configuration; vortex cores of Gaussian vortices, a cellular and a shear flow; $\pm1$ and $\pm\frac12$ winding defects; no defect in a uniform field \\
 \code{test_graph.py} & nodes merge rounding errors; links of a full grid, of a refined line, of one parameter; numbering of regions \\
-\code{test_walls.py} & energy distance; halves; feature matrix; cut of a chain; no wall in noise (5 seeds) or a smooth drift; two and three phases with the exact walls; mixed point; count against \code{RATIO} \\
+\code{test_walls.py} & energy distance; halves; feature matrix; cut of a chain; no wall in noise (5 seeds) or a smooth drift; two and three phases with the exact walls; mixed point; count against \code{RATIO}; one phase in two places joined, two different phases not \\
 \code{test_trees.py} & no split in noise or under drifts; two and three phases with the right rules; halves swapped; principal components \\
 \code{test_baselines.py} & separated clouds found by the mixture, k-means and HDBSCAN; groups in two places counted as two pieces; probe on real and random labels; no ARI without placed points (skipped without scikit-learn) \\
 \code{test_toy.py} & states at six points; stripe amplitude $\sqrt{2\varepsilon/3}$; seeds differ; ensemble readable \\
@@ -2055,9 +2132,9 @@ File & What is checked, against which known answer \\
 \item \textbf{Learned description.} It carries the states but without a jump at their boundaries
   (Secs.~\ref{sec:comparison} and~\ref{sec:examples-results}); why it dominates the combined table
   is open.
-\item \textbf{One phase in two places.} A phase split by another phase between its parts (the
-  uniform state of Gray-Scott) is counted twice; comparing the phases that do not touch, and
-  merging those whose points are as close as points inside one phase, is planned.
+\item \textbf{One phase in two places.} Joined only when the cores of the two parts are as
+  close as the halves of one of them (Sec.~\ref{sec:merge}): a phase whose description drifts
+  strongly across the gap stays in two parts.
 \item \textbf{Tree.} A stopping rule that does not over-split (Gray-Scott) and works with one run
   per point.
 \item \textbf{Planned for the package.} Registries of encoders and methods with one common
@@ -2081,7 +2158,7 @@ File & Content & Section \\
 \srcref{src/phasewall/describe.py} & hand-made encoder; combined tables & \ref{sec:describe}, \ref{sec:combined} \\
 \srcref{src/phasewall/nn/} & learned encoder: data, model, loss, training, learning curve & \ref{sec:learned} \\
 \srcref{src/phasewall/graph.py} & nodes and links of the scan, regions & \ref{sec:compare} \\
-\srcref{src/phasewall/walls.py} & features, distances, cuts, tests, mixed points & \ref{sec:compare}--\ref{sec:mixed} \\
+\srcref{src/phasewall/walls.py} & features, distances, cuts, tests, mixed points, separated parts & \ref{sec:compare}--\ref{sec:merge} \\
 \srcref{src/phasewall/trees.py} & unsupervised threshold tree & \ref{sec:tree} \\
 \srcref{src/phasewall/baselines.py} & blind grouping and linear probe & \ref{sec:blind}, \ref{sec:probe} \\
 \srcref{src/phasewall/scores.py} & agreement, ARI, pieces on the grid & \ref{sec:scores} \\
@@ -2099,7 +2176,7 @@ File & Content & Section \\
 \srcref{scripts/compare_describers.py} & encoders and methods compared on Swift-Hohenberg & \ref{sec:comparison}, \ref{sec:sh-blind} \\
 \srcref{scripts/run_examples.py} & all examples: steady-state check, descriptions, methods & \ref{sec:steady}, \ref{sec:examples-results} \\
 \srcref{scripts/tree_examples.py} & the tree on all examples & \ref{sec:examples-results} \\
-\srcref{tests/} & 150 tests & \ref{sec:tests} \\
+\srcref{tests/} & 153 tests & \ref{sec:tests} \\
 \bottomrule
 \end{tabular}
 \end{table}

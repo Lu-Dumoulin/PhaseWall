@@ -1,0 +1,35 @@
+% Phases in separate places (invented grid): two parts of one phase on both sides of another
+% phase; their cores are compared, with the spread between the two halves of a core as the scale.
+\begin{tikzpicture}[fig]
+\def\nx{11}\def\ny{6}
+% points: columns 0-3 phase A (left part), 4-6 phase B (barrier), 7-10 phase A (right part)
+\foreach \i in {0,...,10} \foreach \j in {0,...,5} {
+  \pgfmathtruncatemacro{\band}{(\i<4) ? 0 : ((\i<7) ? 1 : 2)}
+  \ifnum\band=1 \def\cc{cP1}\else\def\cc{cP2}\fi
+  \node[dot=\cc, minimum size=5pt] at (0.45*\i,0.45*\j) {};
+}
+% cores: at least 2 steps from the other phase (columns 0-2 and 8-10)
+\draw[cInk2, thick, dashed, rounded corners] (-0.2,-0.2) rectangle (0.45*2+0.2,0.45*5+0.2);
+\draw[cInk2, thick, dashed, rounded corners] (0.45*8-0.2,-0.2) rectangle (0.45*10+0.2,0.45*5+0.2);
+\draw[wall] (0.45*3.5,-0.3) -- (0.45*3.5,0.45*5+0.3);
+\draw[wall] (0.45*6.5,-0.3) -- (0.45*6.5,0.45*5+0.3);
+\node[small] at (0.45,-0.55) {core of A$_1$};
+\node[small] at (0.45*9,-0.55) {core of A$_2$};
+\node[small] at (0.45*5,-0.55) {phase B};
+\draw[<->, thick] (0.45*1,0.45*5+0.3) to[bend left=20] node[above, small] {gap $=D(\text{core A}_1,\text{core A}_2)$} (0.45*9,0.45*5+0.3);
+\node[lab] at (0.45*5,3.75) {(a) two places, no link between them};
+% (b) the spread of a core: its two halves in space
+\begin{scope}[xshift=6.3cm]
+  \foreach \i in {0,...,3} \foreach \j in {0,...,5} \node[dot=cP2, minimum size=5pt] at (0.45*\i,0.45*\j) {};
+  \draw[cAcc, thick, dashed] (-0.3,0.45*2.5) -- (0.45*3+0.3,0.45*2.5);
+  \node[small, anchor=west] at (0.45*3+0.35,0.45*4) {half 1};
+  \node[small, anchor=west] at (0.45*3+0.35,0.45*1) {half 2};
+  \draw[<->, cInk2] (0.45*3+0.25,0.45*3.5) -- node[right, small] {spread} (0.45*3+0.25,0.45*1.5);
+  \node[lab] at (0.9,3.75) {(b) spread of a core};
+  \node[small, text width=3.0cm] at (0.7,-0.65) {either side of the median along its longest axis: includes the drift};
+\end{scope}
+% (c) the rule
+\node[note, text width=3.6cm, align=left] at (12.4,1.2)
+  {\textbf{One phase} if\\[2pt] gap $<$ \code{RATIO} $\times$ larger spread:\\[2pt] the two parts differ no
+   more than the two halves of one of them. Only the phase numbers change; the walls stay.};
+\end{tikzpicture}

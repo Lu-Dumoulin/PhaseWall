@@ -1,6 +1,6 @@
 # barkley
 
-660 runs on 165 parameter points (a, b); analysis 58 min.
+660 runs on 165 parameter points (a, b); analysis 0 min.
 
 Reference labels (runs): spirals 325, rest 198, plane waves 137
 

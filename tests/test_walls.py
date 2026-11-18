@@ -1,5 +1,6 @@
 """Tests of walls.py on synthetic descriptor tables with a known answer: one smooth phase (no
-wall), two and three phases (walls on the right links), a bistable point (mixed), and the
+wall), two and three phases (walls on the right links), a bistable point (mixed), one phase in
+two places joined across the phase between them, and the
 building blocks (energy distance, halves, cuts on a chain)."""
 
 import numpy as np
@@ -142,3 +143,32 @@ def test_phase_count_against_ratio():
     curve = w.phases_against_ratio(t, ["a", "b"], ratios=(1.5, 2.0, 1e6))
     assert curve.phases.tolist() == [2, 2, 1]
     assert curve.walls.tolist()[-1] == 0
+
+
+def bands(levels: tuple) -> callable:
+    """A mean that is levels[k] (every descriptor) in the k-th third of the grid along a."""
+    def mean_of(a, b):
+        return np.full(DIM, float(levels[min(int(3 * a / NA), 2)]))
+    return mean_of
+
+
+def test_one_phase_in_two_places_is_joined():
+    t = table(bands((0.0, 8.0, 0.0)), noise=0.5, seed=3)
+    apart = w.find_walls(t, ["a", "b"], merge=False)
+    joined = w.find_walls(t, ["a", "b"], merge=True)
+    assert apart.n_phases == 3 and joined.n_phases == 2
+    left, right = joined.nodes[joined.nodes.a == 0].phase, joined.nodes[joined.nodes.a == NA - 1].phase
+    assert left.nunique() == 1 and set(left) == set(right)
+    assert walls_between(joined) == walls_between(apart)            # the walls stay
+    assert joined.merges.merged.tolist() == [True]
+
+
+def test_different_phases_in_two_places_stay_apart():
+    t = table(bands((0.0, 8.0, 16.0)), noise=0.5, seed=3)
+    r = w.find_walls(t, ["a", "b"], merge=True)
+    assert r.n_phases == 3 and r.merges.merged.tolist() == [False]
+
+
+def test_grid_coordinates_count_steps_by_rank():
+    pts = np.array([[0.01, 1.0], [0.1, 1.0], [1.0, 2.0], [0.1, 5.0]])
+    assert w.grid_coordinates(pts).tolist() == [[0, 0], [1, 0], [2, 1], [1, 2]]

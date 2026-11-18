@@ -1,6 +1,6 @@
 # gray-scott
 
-2100 runs on 525 parameter points (F, k); analysis 50 min.
+2100 runs on 525 parameter points (F, k); analysis 1 min.
 
 Reference labels (runs): uniform (high v) 827, uniform 577, stripes 267, dynamic 239, isolated spots 91, spots 68, holes 31
 
@@ -41,7 +41,7 @@ Each row: a description and a method; agree = points carrying the most common re
 
 | describer | method | groups | noise_points | agree | points | ari | ari_all | pieces | noise_runs |
 |---|---|---|---|---|---|---|---|---|---|
-| hand | walls | 10 | 0 | 482 | 525 | 0.8 | 0.8 | 10 | 0 |
+| hand | walls | 8 | 0 | 482 | 525 | 0.886 | 0.886 | 10 | 0 |
 | hand | mixture | 10 | 0 | 515 | 525 | 0.953 | 0.953 | 35 | 0 |
 | hand | kmeans | 7 | 0 | 516 | 525 | 0.987 | 0.987 | 23 | 0 |
 | hand | hdbscan_10 | 22 | 26 | 490 | 525 | 0.78 | 0.754 | 36 | 0.062 |
@@ -51,7 +51,7 @@ Each row: a description and a method; agree = points carrying the most common re
 | learned seed 0 | kmeans | 10 | 0 | 421 | 525 | 0.483 | 0.483 | 34 | 0 |
 | learned seed 0 | hdbscan_10 | 8 | 103 | 376 | 525 | 0.677 | 0.519 | 20 | 0.2 |
 | learned seed 0 | hdbscan_20 | 3 | 168 | 331 | 525 | 0.862 | 0.596 | 8 | 0.324 |
-| combined seed 0 | walls | 8 | 0 | 503 | 525 | 0.86 | 0.86 | 8 | 0 |
+| combined seed 0 | walls | 6 | 0 | 503 | 525 | 0.951 | 0.951 | 8 | 0 |
 | combined seed 0 | mixture | 10 | 0 | 517 | 525 | 0.758 | 0.758 | 27 | 0 |
 | combined seed 0 | kmeans | 4 | 0 | 356 | 525 | 0.535 | 0.535 | 10 | 0 |
 | combined seed 0 | hdbscan_10 | 21 | 48 | 476 | 525 | 0.822 | 0.748 | 36 | 0.109 |
@@ -61,7 +61,7 @@ Each row: a description and a method; agree = points carrying the most common re
 | learned seed 1 | kmeans | 10 | 0 | 398 | 525 | 0.451 | 0.451 | 35 | 0 |
 | learned seed 1 | hdbscan_10 | 12 | 170 | 355 | 525 | 0.859 | 0.493 | 23 | 0.323 |
 | learned seed 1 | hdbscan_20 | 6 | 264 | 256 | 525 | 0.933 | 0.455 | 11 | 0.504 |
-| combined seed 1 | walls | 8 | 0 | 503 | 525 | 0.86 | 0.86 | 8 | 0 |
+| combined seed 1 | walls | 6 | 0 | 503 | 525 | 0.951 | 0.951 | 8 | 0 |
 | combined seed 1 | mixture | 10 | 0 | 516 | 525 | 0.754 | 0.754 | 32 | 0 |
 | combined seed 1 | kmeans | 4 | 0 | 356 | 525 | 0.535 | 0.535 | 10 | 0 |
 | combined seed 1 | hdbscan_10 | 21 | 56 | 469 | 525 | 0.827 | 0.742 | 36 | 0.128 |

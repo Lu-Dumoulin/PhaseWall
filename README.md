@@ -182,7 +182,7 @@ final snapshots and are used only for the scores. ARI: adjusted Rand index with 
 | example | points x runs | walls, hand-made | tree, hand-made | walls, learned | walls, combined | closest blind method (hand-made) |
 | --- | --- | --- | --- | --- | --- | --- |
 | Swift-Hohenberg | 240 x 8 | 3 phases, ARI 0.93 | 4 or 3 phases, 0.90 or 0.96 | 2 phases, 0.36 | 2 phases, 0.36 | HDBSCAN 20: 0.78 (20% noise) |
-| Gray-Scott | 525 x 4 | 10 phases, 0.80 | 16 or 21 phases, 0.84 or 0.82 | 1 phase | 8 phases, 0.86 | k-means, $k$ = 7: 0.99 |
+| Gray-Scott | 525 x 4 | 8 phases, 0.89 | 16 or 21 phases, 0.84 or 0.82 | 1 phase | 6 phases, 0.95 | k-means, $k$ = 7: 0.99 |
 | localised Swift-Hohenberg | 105 x 4 | 3 phases, 0.96 | 3 phases, 0.98 | 1 phase | 1 phase | HDBSCAN 10: 1.00 (13% noise) |
 | FitzHugh-Nagumo | 99 x 4 | 1 phase | 1 phase | 1 phase | 1 phase | HDBSCAN 20: 0.71 (23% noise) |
 | Barkley | 165 x 4 | 2 phases, 0.59 | 2 phases, 0.58 | 1 phase | 2 phases, 0.59 | HDBSCAN 20: 0.84 (14% noise) |
@@ -193,6 +193,9 @@ final snapshots and are used only for the scores. ARI: adjusted Rand index with 
   92-98% of the points agree with the reference. The tree states its phases as rules, for
   example the variance of $u$ alone for localised Swift-Hohenberg (zero, small for a patch, large
   for stripes everywhere), but over-splits Gray-Scott.
+- A phase split in two places by another phase is joined when the cores of the two parts are as
+  close as the two halves of one part: on Gray-Scott the three pieces of the uniform state become
+  one phase (10 phases become 8, ARI 0.80 to 0.89); nothing changes on the other examples.
 - Blind grouping is sometimes closer: on Gray-Scott k-means matches the reference better than
   the walls. The walls are clearly ahead only on Swift-Hohenberg.
 - The learned description contains the states (probe 0.70-1.00) but gives no jump at their
@@ -347,7 +350,7 @@ This section is for development and will be revised before any public release.
 | 6 | Learned description (extra `[nn]`, PyTorch): contrastive encoder on snapshot pairs, with augmentations from the field symmetries; compared with the hand-made one on the demo (it finds 2 phases of 3) | done |
 | 6b | Comparison with blind grouping (Gaussian mixture, k-means, HDBSCAN) and a logistic probe, on both descriptions | done |
 | 6c | Unsupervised threshold tree (`phasewall.trees`): phases as leaves of a tree of single-descriptor thresholds, chosen and tested without any label (design below). On the demo: 3 phases with two physical rules (no amplitude; many low domains for hexagons), ARI 0.96 with the reference (walls 0.93); on the other examples as good as the walls, but it over-splits Gray-Scott | prototype; stopping rule open (over-splitting, single-run points) |
-| 6d | Phases in separate places: after the walls, compare every pair of phases that do not touch (energy distance between their points against the spread inside each) and merge those that are one phase split by a phase in between (the uniform state of Gray-Scott counts as two phases today); a merge never crosses a wall between neighbours, it only renames | planned |
+| 6d | Phases in separate places: after the walls, every pair of phases that share no link is compared by their cores (points at least 2 grid steps from other phases); they are one phase when the gap between the cores is below `RATIO` times the spread between the two halves of a core. Gray-Scott: the three pieces of the uniform state are joined (10 to 8 phases, ARI 0.80 to 0.89); no change elsewhere | done (2026-11-18; on by default, `merge=False` to switch off) |
 | 7 | README figures of the method itself (graph, jumps, cut, test) and of the encoder | planned |
 | 8 | More examples with known answers (below): Gray-Scott, FitzHugh-Nagumo, Barkley, localised (cubic-quintic) Swift-Hohenberg added; batch run of all examples with hand-made, learned and combined descriptions (`scripts/run_examples.py`, results in `docs/examples/` and [above](#further-examples)) | done (Barkley rerun to $t = 4000$) |
 | 8a | Gray-Scott demo (`phasewall demo --example gray-scott`), examples registry; package side of the interface: `phasewall.pipeline` (one call, cached steps), plot functions returning figures, progress callbacks, CSV tables as input, combined description, learning curve | done |
@@ -428,8 +431,9 @@ and run time, and a steady-state check (a sample of runs continued to 2 and 4 ti
   states, spots, isolated spots, holes, stripes and labyrinths, moving states, as in Pearson
   (1993). On a grid of steps 0.005 and 0.0025, 5 phases are found (113 of 143 points agree): the
   uniform states and the moving region, but the pattern band, one to three points wide, is
-  merged with a uniform state. Rerun on a grid twice as fine, to $t = 40\,000$: 10 phases that
-  follow the reference regions ([above](#further-examples)).
+  merged with a uniform state. Rerun on a grid twice as fine, to $t = 40\,000$: 10 regions that
+  follow the reference regions, 8 phases once the pieces of the uniform state are joined
+  ([above](#further-examples)).
 - **Hand-made and learned description combined** (implemented; compared with each alone on
   every example in the batch run): one table with both sets of columns as separate blocks, so
   that the jumps of the hand-made descriptors and what the network learns are both used. It

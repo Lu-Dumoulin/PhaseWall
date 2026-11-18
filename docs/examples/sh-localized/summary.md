@@ -1,6 +1,6 @@
 # sh-localized
 
-420 runs on 105 parameter points (a, b); analysis 79 min.
+420 runs on 105 parameter points (a, b); analysis 0 min.
 
 Reference labels (runs): uniform 204, extended 167, localized 49
 

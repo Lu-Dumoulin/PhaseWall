@@ -1,6 +1,6 @@
 # swift-hohenberg
 
-1920 runs on 240 parameter points (eps, g); analysis 8 min.
+1920 runs on 240 parameter points (eps, g); analysis 1 min.
 
 Reference labels (runs): stripes 1131, hexagons 549, uniform 240
 

@@ -39,6 +39,21 @@ with a strict threshold, not as an exact probability. Next to a first-order tran
 runs of one point can fall in different states (bistability, hysteresis); such points have
 an outlying spread and are flagged `mixed`, a second, independent sign of a boundary.
 
+4. Separated parts of one phase (merge=True). A phase can lie in two places with another phase
+   between them (in Gray-Scott, the uniform state on both sides of the pattern band); the cuts
+   give two regions, since no link joins them. For every pair of phases (of at least
+   2 MIN_PHASE points) that share no link, their cores (points at least CORE_DEPTH grid steps
+   from any other phase, grid steps counted by rank of the parameter values) are compared: the
+   gap is the energy distance between the snapshots of the two cores, the spread of a core the
+   energy distance between its two halves in space (either side of the median along its longest
+   axis), which includes the drift of the description across the phase. The two are one phase
+   when gap / larger spread < RATIO: they differ no more than the two halves of one of them.
+   Cores, not the points facing each other across the gap, because the points at the edge of a
+   phase are the least typical of it (faint leftover patterns, transients); two earlier versions
+   that compared facing points joined different states or none (Gray-Scott, 2026-11-18). Merges
+   are joined transitively (A with B and B with C makes one phase), they only rename phases (the
+   walls stay), and the cores are chosen by the geometry alone.
+
 Physics parallel: domain walls are found where the order parameter changes abruptly in
 space. Here "space" is the parameter grid and the "order parameter" is the distribution of
 the descriptors at each point; the diffusion is the walker exploring the grid, slowed down
@@ -69,6 +84,10 @@ MIXED_K = 6.0          # a point is mixed when its energy statistic > median + M
                        # the statistic is right-skewed; on pure noise, ordinary points reach 5-6)
 MAD_TO_STD = 1.4826    # median absolute deviation of a Gaussian times this = its standard deviation
 MIN_WEIGHT = 1e-8      # links never weigh less than this, so that a strong wall leaves the graph connected (a choice)
+MERGE = True           # join separated parts of one phase (step 4) by default (a choice: on the examples it
+                       # joins the three pieces of the uniform state of Gray-Scott and changes nothing else)
+CORE_DEPTH = 2         # merge test: core of a phase = its points at least 2 grid steps from other phases (a choice)
+MAX_CORE = 400         # merge test: at most this many snapshots per core, drawn at random (cost; a choice)
 SEED = 0
 
 
@@ -267,17 +286,95 @@ class Walls:
     parameters: list[str]
     features: list[str]
     settings: dict = field(default_factory=dict)    # alpha, ratio, min_phase used
+    merges: pd.DataFrame = field(default_factory=pd.DataFrame)   # merge tests of separated phases (merge=True)
 
     @property
     def n_phases(self) -> int:
         return int(self.nodes.loc[self.nodes["phase"] >= 0, "phase"].nunique())
 
 
+def grid_coordinates(points: np.ndarray) -> np.ndarray:
+    """Position of every point in grid steps: the rank of its value among the values of each
+    parameter (so a logarithmic grid has equal steps; a choice)."""
+    return np.stack([np.searchsorted(np.unique(points[:, k]), points[:, k]) for k in range(points.shape[1])],
+                    axis=1).astype(float)
+
+
+def core(members: np.ndarray, phase: np.ndarray, pos: np.ndarray, depth: int) -> np.ndarray:
+    """The members at least `depth` grid steps (largest of the steps along each parameter) from
+    every node outside their phase; all members if fewer than MIN_PHASE are that deep."""
+    others = np.flatnonzero(phase != phase[members[0]])
+    if not len(others):
+        return members
+    deep = members[cdist(pos[members], pos[others], "chebyshev").min(axis=1) >= depth]
+    return deep if len(deep) >= MIN_PHASE else members
+
+
+def split_in_space(members: np.ndarray, pos: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Two halves of a set of nodes on either side of the median along its longest axis."""
+    centred = pos[members] - pos[members].mean(axis=0)
+    axis = np.linalg.svd(centred, full_matrices=False)[2][0]
+    t = centred @ axis
+    lower = t <= np.median(t)
+    return members[lower], members[~lower]
+
+
+def merge_phases(phase: np.ndarray, points: np.ndarray, a: np.ndarray, b: np.ndarray, X: np.ndarray,
+                 rows_of: list[np.ndarray], floor: float, ratio: float = RATIO, rng=None
+                 ) -> tuple[np.ndarray, pd.DataFrame]:
+    """Step 4 of the module docstring. phase: phase of every node (-1: boundary region); a, b:
+    the links; X, rows_of: the feature rows of every node. Returns the new phase of every node
+    (numbered from the largest) and one row per pair of phases tested."""
+    rng = rng or np.random.default_rng(SEED)
+    pos = grid_coordinates(points)
+    labels = sorted(set(phase.tolist()) - {-1})
+    touching = {(min(p, q), max(p, q)) for p, q in zip(phase[a], phase[b]) if p != q}
+
+    def rows(nodes):
+        r = np.concatenate([rows_of[n] for n in nodes])
+        return X[rng.choice(r, MAX_CORE, replace=False)] if len(r) > MAX_CORE else X[r]
+
+    cores, spread = {}, {}
+    for p in labels:
+        members = np.flatnonzero(phase == p)
+        if len(members) < 2 * MIN_PHASE:
+            continue
+        cores[p] = core(members, phase, pos, CORE_DEPTH)
+        h1, h2 = split_in_space(cores[p], pos)
+        spread[p] = energy_distance(rows(h1), rows(h2)) if len(h1) and len(h2) else np.nan
+    parent = {p: p for p in labels}
+
+    def root(p):
+        while parent[p] != p:
+            p = parent[p]
+        return p
+
+    out = []
+    for i, pa in enumerate(labels):
+        for pb in labels[i + 1:]:
+            if (pa, pb) in touching or pa not in cores or pb not in cores:
+                continue
+            gap = energy_distance(rows(cores[pa]), rows(cores[pb]))
+            scale = max(np.nanmax([spread[pa], spread[pb]]), floor)
+            merged = gap / scale < ratio
+            out.append({"phase_a": pa, "phase_b": pb, "core_a": len(cores[pa]), "core_b": len(cores[pb]),
+                        "gap": gap, "spread_a": spread[pa], "spread_b": spread[pb], "ratio": gap / scale,
+                        "merged": merged})
+            if merged:
+                parent[root(pb)] = root(pa)
+    group = np.array([root(p) if p >= 0 else -1 for p in phase])
+    sizes = pd.Series(group[group >= 0]).value_counts()
+    order = sorted(sizes.index, key=lambda g: (-sizes[g], g))
+    new = {g: k for k, g in enumerate(order)}
+    return np.array([new.get(g, -1) for g in group]), pd.DataFrame(out)
+
+
 def find_walls(table: pd.DataFrame, parameters: list[str], columns: list[str] | None = None,
                alpha: float = ALPHA, ratio: float = RATIO, min_phase: int = MIN_PHASE,
-               seed: int = SEED) -> Walls:
+               seed: int = SEED, merge: bool = MERGE) -> Walls:
     """Walls and candidate phases of a table of descriptors (one row per snapshot, columns
-    run, time, the parameters and the descriptors)."""
+    run, time, the parameters and the descriptors). merge: join phases in separate places
+    that are one phase (step 4 of the module docstring)."""
     X, names = feature_matrix(table, columns)
     node, points = parameter_nodes(table[parameters].to_numpy())
     rng = np.random.default_rng(seed)
@@ -326,8 +423,14 @@ def find_walls(table: pd.DataFrame, parameters: list[str], columns: list[str] | 
     nodes["mixed"] = robust_outliers(within, MIXED_K, min_scale=floor**2) & ~np.isnan(within)
     nodes["region"] = region
     nodes["phase"] = phase_of_region[region]
-    settings = {"alpha": alpha, "ratio": ratio, "min_phase": min_phase}
-    return Walls(nodes, edges, pd.DataFrame(tried), floor, noise, list(parameters), names, settings)
+    merges = pd.DataFrame()
+    if merge:
+        nodes["phase_unmerged"] = nodes["phase"]
+        nodes["phase"], merges = merge_phases(
+            nodes["phase"].to_numpy(), points, edges["a"].to_numpy(), edges["b"].to_numpy(), X, rows_of,
+            floor, ratio, rng)
+    settings = {"alpha": alpha, "ratio": ratio, "min_phase": min_phase, "merge": merge}
+    return Walls(nodes, edges, pd.DataFrame(tried), floor, noise, list(parameters), names, settings, merges)
 
 
 def phases_against_ratio(table: pd.DataFrame, parameters: list[str],

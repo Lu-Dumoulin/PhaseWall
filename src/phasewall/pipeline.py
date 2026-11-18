@@ -22,22 +22,19 @@ Nothing here changes the other modules: it only calls them.
 """
 
 import dataclasses
-import hashlib
-import json
 import shutil
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
 
-from . import report
-from .describe import combine_tables, describe_ensemble
+from . import registry, report
+from .describe import combine_tables, descriptor_columns
 from .examples import example as example_module
-from .graph import parameter_nodes
 from .io import MIN_WAVELENGTHS, Ensemble, load_ensemble, load_table
 from .parallel import Progress
 from .scores import point_scores
-from .walls import ALPHA, MIN_PHASE, RATIO, Walls, find_walls, phases_against_ratio
+from .walls import ALPHA, MERGE, MIN_PHASE, RATIO, Walls, phases_against_ratio
 
 QUICK_SEEDS = 2                         # runs per point of a quick demo (as the command line)
 # rough costs for estimate(), measured on a laptop (Apple M4 Max) on the demos (choices of display only)
@@ -91,6 +88,7 @@ class Describers:
     seeds: tuple[int, ...] = (0,)
     device: str | None = None                   # "cpu", "mps", "cuda"; None: the fastest available
     blocks: dict = field(default_factory=dict)  # hand-made: {field name: blocks}; others keep their own or default
+    others: dict = field(default_factory=dict)  # other registered encoders: {name: settings} (registry.py)
 
 
 @dataclass
@@ -101,12 +99,15 @@ class Methods:
     alpha: float = ALPHA
     ratio: float = RATIO
     min_phase: int = MIN_PHASE
+    merge: bool = MERGE                         # walls: join separated parts of one phase
+    tree: bool = False                          # unsupervised threshold tree (its default settings)
     robustness: bool = False
     mixture: bool = False
     kmeans: bool = False
     hdbscan: tuple[int, ...] = ()               # minimum sizes; empty: not run
     probe: bool = False                         # needs labels
     learning_curve: tuple[int, ...] = ()        # runs per point; empty: not run (needs learned)
+    others: dict = field(default_factory=dict)  # other registered methods: {name: settings} (registry.py)
 
 
 @dataclass
@@ -139,6 +140,7 @@ class Results:
     scores: pd.DataFrame = field(default_factory=pd.DataFrame)          # description x method
     probe: dict[str, float] = field(default_factory=dict)
     training: pd.DataFrame | None = None                                # logs, column name
+    extras: dict = field(default_factory=dict)                          # (description, method) -> its extra output
     learning_curve: pd.DataFrame | None = None
 
     def reference(self, name: str) -> pd.Series | None:
@@ -169,18 +171,32 @@ class Results:
 
 def methods_list(m: Methods) -> list[str]:
     """Names of the grouping methods asked for (columns of Results.groups)."""
-    out = ["walls"] if m.walls else []
-    out += ["mixture"] * m.mixture + ["kmeans"] * m.kmeans + [f"hdbscan_{s}" for s in m.hdbscan]
+    return [col for col, _, _ in method_calls(m)]
+
+
+def method_calls(m: Methods, table: pd.DataFrame | None = None) -> list[tuple[str, str, object]]:
+    """(column of Results.groups, registered method, its settings) for every method asked for.
+    With a table, the tree splits on principal components when every descriptor is learned."""
+    from .builtins import HDBSCANSettings, KMeansSettings, MixtureSettings, TreeSettings, WallsSettings
+    out = []
+    if m.walls:
+        out.append(("walls", "walls", WallsSettings(m.alpha, m.ratio, m.min_phase, m.merge)))
+    if m.tree:
+        learned_only = table is not None and all(c.startswith("cnn.") for c in descriptor_columns(table))
+        out.append(("tree", "tree", TreeSettings(components=learned_only)))
+    if m.mixture:
+        out.append(("mixture", "mixture", MixtureSettings()))
+    if m.kmeans:
+        out.append(("kmeans", "kmeans", KMeansSettings()))
+    out += [(f"hdbscan_{size}", "hdbscan", HDBSCANSettings(size)) for size in m.hdbscan]
+    out += [(name, name, settings) for name, settings in m.others.items()]
     return out
 
 
 # ---------------------------------------------------------------- cache
 def key(*parts) -> str:
-    """A short hash of settings (dataclasses, dicts, values)."""
-    def plain(x):
-        return asdict(x) if dataclasses.is_dataclass(x) else x
-    text = json.dumps([plain(p) for p in parts], sort_keys=True, default=str)
-    return hashlib.sha1(text.encode()).hexdigest()[:12]
+    """A short hash of settings (dataclasses, dicts, values): registry.cache_key."""
+    return registry.cache_key(*parts)
 
 
 def _demo_arguments(source: Source) -> tuple[object, dict, tuple, dict]:
@@ -223,13 +239,9 @@ def framed(ens: Ensemble, f: FrameSettings) -> Ensemble:
 
 
 def with_blocks(ens: Ensemble, blocks: dict) -> Ensemble:
-    """The ensemble with the blocks of some fields replaced ({field name: blocks}; checked by
-    Field against the kind of each field)."""
-    unknown = sorted(set(blocks) - {f.name for f in ens.fields})
-    if unknown:
-        raise ValueError(f"blocks given for unknown fields {unknown}")
-    fields = [dataclasses.replace(f, blocks=tuple(blocks[f.name])) if f.name in blocks else f for f in ens.fields]
-    return dataclasses.replace(ens, fields=fields)
+    """The ensemble with the blocks of some fields replaced ({field name: blocks})."""
+    from .builtins import _with_blocks
+    return _with_blocks(ens, blocks)
 
 
 # ---------------------------------------------------------------- estimate
@@ -270,22 +282,27 @@ def run(settings: Settings, progress: Progress | None = None) -> Results:
         res = Results(s, None, runs, labels, params, tables={"table": table})
     else:
         ens0, runs, labels, ek = ensemble_for(s.source, cache, w, progress)
-        ens = with_blocks(framed(ens0, s.frame), s.describers.blocks)
+        ens = framed(ens0, s.frame)
         res = Results(s, ens, runs, labels, list(ens.parameters))
+        d = s.describers
+        ctx = registry.Context(workers=w, cache=str(cache), key=ek, frame=s.frame, progress=progress,
+                               device=d.device)
+        encoders = registry.encoders()
         hand = None
-        if s.describers.hand or s.describers.combined:
-            f = cache / f"hand-{key(ek, s.frame, *([s.describers.blocks] if s.describers.blocks else []))}.pkl"
-            if f.exists():
-                hand = pd.read_pickle(f)
-            else:
-                hand, errors = describe_ensemble(ens, w, progress)
-                if errors:
-                    raise RuntimeError(f"{len(errors)} runs could not be described, e.g. {errors[0]}")
-                hand.to_pickle(f)
-            if s.describers.hand:
+        if d.hand or d.combined:
+            from .builtins import HandSettings
+            hand = encoders["hand"].run(ens, HandSettings(d.blocks), ctx).tables["hand"]
+            if d.hand:
                 res.tables["hand"] = hand
-        if s.describers.learned or s.describers.combined:
-            _learned(res, ens, ek, hand, cache, w, progress)
+        if d.learned or d.combined:
+            _learned(res, ens, ctx, hand)
+        for name, enc_settings in d.others.items():
+            registry.check_settings(enc_settings)
+            out = encoders[name].run(ens, enc_settings, ctx)
+            res.tables |= out.tables
+            if out.log is not None:
+                res.training = pd.concat([res.training, out.log], ignore_index=True) if res.training is not None \
+                    else out.log
 
     for name, table in res.tables.items():
         _methods(res, name, table, progress)
@@ -294,41 +311,29 @@ def run(settings: Settings, progress: Progress | None = None) -> Results:
     return res
 
 
-def _learned(res: Results, ens: Ensemble, ek: str, hand, cache: Path, workers: int, progress) -> None:
-    from .nn.data import load_frames
+def _learned(res: Results, ens: Ensemble, ctx: registry.Context, hand) -> None:
+    from .builtins import LearnedSettings
     from .nn.train import Settings as TrainSettings
-    from .nn.train import embed, h_table, save, train
 
     d = res.settings.describers
-    frames, logs = None, []
-    for seed in d.seeds:
-        folder = cache / f"learned-{key(ek, res.settings.frame, d.epochs, seed)}"
-        if (folder / "table.pkl").exists():
-            table = pd.read_pickle(folder / "table.pkl")
-            log = pd.read_csv(folder / "log.csv")
-        else:
-            frames = frames or load_frames(ens, workers, progress=progress)
-            ts = TrainSettings(epochs=d.epochs, seed=seed)
-            enc, log = train(frames, ts, dev=d.device, verbose=False, progress=progress)
-            save(folder, enc, frames, ts, log)
-            table = h_table(frames, embed(enc, frames), ens)
-            table.to_pickle(folder / "table.pkl")
-        logs.append(log.assign(name=f"learned seed {seed}"))
+    out = registry.encoders()["learned"].run(ens, LearnedSettings(d.epochs, tuple(d.seeds)), ctx)
+    for name, table in out.tables.items():
         if d.learned:
-            res.tables[f"learned seed {seed}"] = table
+            res.tables[name] = table
         if d.combined and hand is not None:
-            res.tables[f"combined seed {seed}"] = combine_tables(hand, table)
-    res.training = pd.concat(logs, ignore_index=True)
+            res.tables[name.replace("learned", "combined")] = combine_tables(hand, table)
+    res.training = out.log
     m = res.settings.methods
     if m.learning_curve:
-        f = cache / f"curve-{key(ek, res.settings.frame, d.epochs, d.seeds, m.learning_curve)}.pkl"
+        f = Path(ctx.cache) / f"curve-{key(ctx.key, res.settings.frame, d.epochs, d.seeds, m.learning_curve)}.pkl"
         if f.exists():
             res.learning_curve = pd.read_pickle(f)
         else:
             from .nn.curve import learning_curve
-            frames = frames or load_frames(ens, workers, progress=progress)
+            from .nn.data import load_frames
+            frames = load_frames(ens, ctx.workers, progress=ctx.progress)
             res.learning_curve = learning_curve(ens, frames, m.learning_curve, d.seeds,
-                                                TrainSettings(epochs=d.epochs), res.labels, d.device, progress)
+                                                TrainSettings(epochs=d.epochs), res.labels, d.device, ctx.progress)
             res.learning_curve.to_pickle(f)
 
 
@@ -336,22 +341,21 @@ def _methods(res: Results, name: str, table: pd.DataFrame, progress) -> None:
     m, params = res.settings.methods, res.parameters
     rows = []
     groups = table.groupby("run")[params].first().reset_index()
-    if m.walls:
-        w = find_walls(table, params, alpha=m.alpha, ratio=m.ratio, min_phase=m.min_phase)
-        res.walls[name] = w
-        node, _ = parameter_nodes(groups[params].to_numpy())
-        groups["walls"] = w.nodes["phase"].to_numpy()[node]
-        if m.robustness:
-            res.robustness[name] = phases_against_ratio(table, params, alpha=m.alpha, min_phase=m.min_phase)
-    blind = m.mixture or m.kmeans or m.hdbscan
-    if blind or m.probe:
+    ctx = registry.Context(workers=res.settings.execution.workers, cache=res.settings.execution.cache,
+                           progress=progress)
+    entries = registry.methods()
+    for col, method_name, settings in method_calls(m, table):
+        registry.check_settings(settings)
+        out = entries[method_name].run(table, params, settings, ctx)
+        groups[col] = out.groups.loc[groups.run].to_numpy()
+        res.extras[(name, col)] = out.extra
+        if col == "walls":
+            res.walls[name] = out.extra
+            if m.robustness:
+                res.robustness[name] = phases_against_ratio(table, params, alpha=m.alpha, min_phase=m.min_phase)
+    if m.probe and res.labels is not None:
         from . import baselines  # needs the extra [baselines] (scikit-learn)
-        if blind:
-            g, _ = baselines.blind_groups(table, params, sizes=tuple(m.hdbscan))
-            for col in [c for c in methods_list(m) if c != "walls"]:
-                groups[col] = g.set_index("run").loc[groups.run, col].to_numpy()
-        if m.probe and res.labels is not None:
-            res.probe[name] = baselines.probe(table, params, res.labels)
+        res.probe[name] = baselines.probe(table, params, res.labels)
     for col in [c for c in methods_list(m) if c in groups]:
         rows.append({"describer": name, "method": col, **point_scores(groups, col, params, res.labels)})
     res.groups[name] = groups
