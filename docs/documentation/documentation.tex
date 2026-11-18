@@ -49,7 +49,7 @@
 \newcommand{\srcref}[1]{\href{\repo/blob/main/#1}{\texttt{\detokenize{#1}}}}
 \newcommand{\code}[1]{\texttt{\detokenize{#1}}}
 \newcommand{\avg}[1]{\langle #1 \rangle}
-\newcommand{\pw}{\texttt{phasewall}}
+\newcommand{\pw}{PhaseWall}
 \newcommand{\yes}{$\checkmark$}
 \DeclareMathOperator{\std}{std}
 \DeclareMathOperator{\cut}{cut}
@@ -57,7 +57,7 @@
 \DeclareMathOperator{\med}{med}
 \input{figs/styles}
 
-\title{\textbf{phasewall: method, mathematics and tests}\\[0.3em]
+\title{\textbf{PhaseWall: method, mathematics and tests}\\[0.3em]
 \large Phases of simulated systems from the walls between them in parameter space}
 \author{Ludovic Dumoulin}
 \date{Version 0.2, 18 November 2026}
@@ -555,8 +555,8 @@ interrogation windows.
 \textbf{Files.} \srcref{src/phasewall/describe.py} (\code{field_descriptors},
 \code{structure_factor}, \code{window}, \code{gradients}, \code{div_curl}, \code{okubo_weiss},
 \code{vortex_cores}, \code{winding_charges}, \code{defect_counts}, \code{domain_counts},
-\code{correlations}, \code{describe_snapshot}, \code{describe_ensemble}),
-\srcref{src/phasewall/fields.py} (\code{BLOCKS}, \code{DEFAULT_BLOCKS}, \code{Field.selected});
+\code{correlations}, \code{describe_snapshot}, \code{describe_ensemble}, \code{explain}: a sentence for every column),
+\srcref{src/phasewall/fields.py} (\code{BLOCKS}, \code{BLOCK_HELP}, \code{DEFAULT_BLOCKS}, \code{Field.selected});
 tests \srcref{tests/test_describe.py}, \srcref{tests/test_frames.py}, \srcref{tests/test_blocks.py}. \code{describe_ensemble(ens, workers)} returns one row per snapshot
 (the last \code{last} snapshots of each run), plus the runs that could not be read, using
 \code{concurrent.futures.ProcessPoolExecutor}; keep 2 or 3 workers over a network share. Domains
@@ -1398,7 +1398,7 @@ ARI when every run is noise.
 \end{codebox}
 
 %======================================================================
-\section{Extending phasewall}\label{sec:extend}
+\section{Extending PhaseWall}\label{sec:extend}
 %======================================================================
 
 \begin{figure}[H]
@@ -2264,7 +2264,7 @@ choices too (documented in their docstrings).}
 \section{Tests}\label{sec:tests}
 %======================================================================
 
-\code{pytest} runs 192 tests in about a minute, all on small synthetic data with known
+\code{pytest} runs 195 tests in about a minute, all on small synthetic data with known
 answers (no data from any laboratory is in the repository). On every push, the
 continuous-integration workflow \srcref{.github/workflows/tests.yml} runs \code{ruff} and
 \code{pytest}.
@@ -2284,6 +2284,7 @@ File & What is checked, against which known answer \\
 \code{test_nn.py} & augmentations against the field rules; shift invariance of a periodic encoder; loss at collapse and for perfect pairs; a short training separates stripes from spots; saving and loading; \code{learn} and \code{describe --encoder} (skipped without PyTorch) \\
 \code{test_blocks.py} & default blocks of every kind; a field's own blocks; blocks that do not fit refused; blocks from the configuration; vortex cores of Gaussian vortices, a cellular and a shear flow; $\pm1$ and $\pm\frac12$ winding defects; no defect in a uniform field \\
 \code{test_contracts.py} & every registered encoder and method: format, one phase in noise and two on a step, two far clouds apart, invariance of invariant encoders; settings described and checked; registration errors; a method and an encoder added from outside run through the pipeline \\
+\code{test_explain.py} & every block has a definition; every column of every kind of field is explained; examples of explanations \\
 \code{test_graph.py} & nodes merge rounding errors; links of a full grid, of a refined line, of one parameter; numbering of regions \\
 \code{test_walls.py} & energy distance; halves; feature matrix; cut of a chain; no wall in noise (5 seeds) or a smooth drift; two and three phases with the exact walls; mixed point; count against \code{RATIO}; one phase in two places joined, two different phases not \\
 \code{test_trees.py} & no split in noise or under drifts; two and three phases with the right rules; halves swapped; splits found by both halves; one run per point (checkerboard): no split in noise or drift, two phases on a step; checkerboard colours and links; one phase in two places joined; principal components \\
@@ -2369,7 +2370,7 @@ File & Content & Section \\
 \srcref{scripts/run_examples.py} & all examples: steady-state check, descriptions, methods & \ref{sec:steady}, \ref{sec:examples-results} \\
 \srcref{scripts/tree_examples.py} & the tree on all examples & \ref{sec:examples-results} \\
 \srcref{scripts/compare_networks.py} & shapes of the learned encoder compared by label-free diagnostics & \ref{sec:networks} \\
-\srcref{tests/} & 192 tests & \ref{sec:tests} \\
+\srcref{tests/} & 195 tests & \ref{sec:tests} \\
 \bottomrule
 \end{tabular}
 \end{table}

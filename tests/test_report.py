@@ -32,7 +32,7 @@ def test_phase_extent_and_summary(two_phases):
     assert sorted(extent.a) == ["0 to 5", "6 to 9"]
     assert extent.points.sum() == len(w.nodes)
     text = report.summary(w, phases_against_ratio(t, ["a", "b"], ratios=(1.5, 3.0)), notes="extra note")
-    assert text.startswith("# phasewall result\n\n2 phases on 80 parameter points (a, b)")
+    assert text.startswith("# PhaseWall result\n\n2 phases on 80 parameter points (a, b)")
     assert f"{NB} of {len(w.edges)} links are walls: {NB} across a." in text
     assert text.rstrip().endswith("extra note")
 

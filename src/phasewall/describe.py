@@ -54,6 +54,8 @@ polarity or a nematic). Column names are field.block.name, for example rho.shape
 walls.py weights the blocks.
 """
 
+import re
+
 import numpy as np
 import pandas as pd
 from scipy import ndimage
@@ -447,3 +449,63 @@ def combine_tables(hand: pd.DataFrame, learned: pd.DataFrame) -> pd.DataFrame:
     one block among the hand-made ones (a choice). Snapshots in only one table are dropped."""
     keep = [c for c in learned.columns if c in ("run", "time") or c not in hand.columns]
     return hand.merge(learned[keep], on=["run", "time"], how="inner")
+
+
+# ---------------------------------------------------------------- explanation of the columns
+_VALUES = {"scalar": "{f}", "vector": "|{f}|", "nematic": "2|{f}| (scalar order S)"}
+
+
+def explain(column: str, fields: list[Field] | None = None) -> str:
+    """A sentence that says what a descriptor column measures, from its name field.block.name
+    (and the kind of the field, when `fields` are given): for example "u.topo.below-1" gives
+    "domains per unit area where u is below its mean minus 1 standard deviation". Columns of the
+    learned description (cnn.h.dNNN), of a table given (table.x.name) and principal components
+    (pc.N) are explained too; any other name is returned as it is."""
+    parts = column.split(".")
+    if len(parts) == 2 and parts[0] == "pc":
+        return f"principal component {parts[1]} of the description"
+    if len(parts) < 3:
+        return column
+    f, block, name = parts[0], parts[1], ".".join(parts[2:])
+    if f == "cnn" and block == "h":
+        return f"component {int(name[1:])} of h, the learned description" if name[1:].isdigit() else column
+    if f == "table":
+        return f"column {name} of the table of descriptors given"
+    kind = next((x.symmetry for x in fields or [] if x.name == f), None)
+    v = _VALUES[kind].format(f=f) if kind else f"the values of {f}"
+    if block == "amp":
+        return f"log10 of the variance of {f} (how strong the pattern is)"
+    if block == "shape" and name.startswith("k") and name[1:].isdigit():
+        return (f"share of the power of {f} in shell {int(name[1:])} of |k| (S(k) divided by its sum; "
+                "shells from long to short wavelengths)")
+    if block == "mom":
+        what = {"mean": "mean", "std": "standard deviation", "skew": "skewness", "kurt": "excess kurtosis"}
+        if name in what:
+            return f"{what[name]} of {v}"
+    if block == "topo":
+        m = re.fullmatch(r"(above|below)([+-]\d+)", name)
+        if m:
+            z = int(m.group(2))
+            level = "its mean" if z == 0 else f"its mean {'plus' if z > 0 else 'minus'} {abs(z)} standard deviation"
+            return f"domains per unit area where {v} is {m.group(1)} {level}"
+    if block == "order" and name == "global":
+        return f"global order of {f}: |<{f}>| / <|{f}|>, 1 when everything points the same way"
+    if block == "flow":
+        what = {"log10div2": f"log10 of the mean square divergence of {f}",
+                "log10curl2": f"log10 of the mean square curl of {f}",
+                "curl_share": f"share of the curl in the derivatives of {f}: 0 splay or sources, 1 bend or vortices"}
+        if name in what:
+            return what[name]
+    if block == "vortex":
+        what = {"share": f"share of the area in vortex cores of {f} (Okubo-Weiss W < -0.2 std W)",
+                "cores": f"vortex cores of {f} per unit area"}
+        if name in what:
+            return what[name]
+    if block == "defects" and name in ("plus", "minus"):
+        return f"{'positive' if name == 'plus' else 'negative'} topological defects of {f} per unit area (winding number)"
+    if block == "dyn":
+        what = {"still": f"change of {f} over the lag, at the same place: log10(1 - C + 0.001)",
+                "moving": f"change of {f} over the lag, following the pattern (best shift): log10(1 - C + 0.001)"}
+        if name in what:
+            return what[name]
+    return column

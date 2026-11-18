@@ -1,0 +1,52 @@
+/* PhaseWall explorer: light styling on top of marimo's own theme, loaded by
+   marimo.App(css_file="explore.css") in explore.py. Change freely: the page works without it.
+   The accent is the blue of the phase maps (phasewall.report). */
+
+:root {
+  --pw-accent: #2a78d6;          /* section bars, titles, step labels */
+  --pw-border: #dcdad5;          /* frame of the sections */
+  --pw-card-bg: #fbfaf8;         /* background of the sections */
+  --pw-pill-bg: #e8f0fb;         /* background of the step labels in the header */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --pw-accent: #6da7ec;
+    --pw-border: #3a3a3a;
+    --pw-card-bg: transparent;
+    --pw-pill-bg: #1f2d40;
+  }
+}
+
+/* titles */
+h1 {
+  letter-spacing: -0.015em;
+}
+
+h3 {
+  color: var(--pw-accent);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* the steps of an analysis, in the header */
+.pw-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin-top: 0.6rem;
+}
+
+.pw-pill {
+  background: var(--pw-pill-bg);
+  color: var(--pw-accent);
+  border-radius: 999px;
+  padding: 0.15rem 0.75rem;
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.pw-arrow {
+  opacity: 0.5;
+}

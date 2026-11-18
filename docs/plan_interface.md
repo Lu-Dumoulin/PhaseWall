@@ -1,4 +1,4 @@
-# Plan: an interactive interface to explore phasewall
+# Plan: an interactive interface to explore PhaseWall
 
 Status: plan (2026-11-17), not implemented. The interface will be written in a separate
 session; this file is its contract with the package. Part of the development plan of the
@@ -53,7 +53,7 @@ that changing a method does not recompute the descriptions.
 
 ## Principle: the package does not depend on the interface
 
-phasewall stays complete without the interface: Python modules, the `phasewall` command and
+PhaseWall stays complete without the interface: Python modules, the `phasewall` command and
 the scripts keep working as they do. The interface is a layer on top, in `apps/`, with
 `marimo` only in an optional extra `[app]`. Changes to existing code for it are additions
 whose defaults keep the present behaviour (for example `progress=None`); existing functions,

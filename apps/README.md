@@ -1,6 +1,6 @@
-# phasewall explorer
+# PhaseWall explorer
 
-An interactive interface to phasewall, written as a [marimo](https://marimo.io) notebook
+An interactive interface to PhaseWall, written as a [marimo](https://marimo.io) notebook
 (`explore.py`). The same file opens as a notebook, with the code of every cell, or as a
 dashboard, with only the controls and the results.
 
@@ -16,8 +16,9 @@ activated environment: `pip install -e ".[app]"`, then `marimo run apps/explore.
 
 ## What it does
 
-The panel on the left sets every choice of an analysis, in the order of the analysis, then **Run**
-starts it:
+The page is a column of sections, one per step of an analysis (1 System, 2 Fields, 3 Encoders,
+4 Methods, 5 Frame and execution, folded), then a run bar with the cost estimate and **Run**, then
+the results:
 
 - **System**: an example (Swift-Hohenberg, Gray-Scott, FitzHugh-Nagumo, Barkley, localised
   Swift-Hohenberg, or a quick version of any that runs in seconds), **your runs** (a CSV table of
@@ -35,15 +36,17 @@ starts it:
   configuration into the cache folder (`phasewall.io.write_config`) and reads the runs from it.
 - **Frame**: whole box or a centred crop, coarsening, the largest shift of the moving
   correlation, periodic or not. Empty fields keep the settings of the ensemble.
-- **Encoders**: hand-made descriptors, with the blocks of observables of each field (those that
-  fit its kind are offered, its defaults ticked); learned (a CNN per training seed) with epochs,
+- **Encoders**: hand-made descriptors, with the blocks of observables in a grid of checkboxes (one
+  row per field, one column per block, a box only where the block fits the kind of the field, its
+  defaults ticked; the definition of each block on hover and below the grid, from
+  `phasewall.fields.BLOCK_HELP`); learned (a CNN per training seed) with epochs,
   seeds, device and the shape of the network (blocks, width, dimension of h, head, temperature),
   checked against the frame before any training, with the receptive field and the number of
   weights shown; combined (both sets of columns as separate blocks); and any encoder registered
   by another package.
 - **Methods**: walls (`ALPHA`, `RATIO`, `MIN_PHASE`, joining of separated parts of one phase), the
   robustness curve, the unsupervised threshold tree (its settings), a Gaussian mixture, k-means,
-  HDBSCAN, and any method registered by another package. **Checks**: the logistic probe (needs
+  HDBSCAN (minimum sizes as checkboxes), and any method registered by another package. **Checks**: the logistic probe (needs
   labels; a ceiling, never a method) and the learning curve.
 - **Execution**: processes and the cache folder (default `data/cache_app`, not tracked;
   separate from the cache of scripts that may run at the same time).
@@ -65,7 +68,7 @@ Results, for the description chosen above the tabs:
 | Phase map | jumps across the links, the phases (of the walls or of the tree) with their walls, and the labels if known |
 | Comparison | one row per description and method (groups, pieces on the grid, agreement, ARI, noise), probe scores, and the groups of every method side by side |
 | Snapshots | one snapshot from the middle of each phase (walls or tree), per field, on a common colour scale |
-| Rules (tree) | the rule of each phase, every split tried (with the agreement of the two halves), the separated leaves compared |
+| Rules (tree) | the rule of each phase, the meaning of each descriptor in the rules (`phasewall.describe.explain`), every split tried (with its meaning and the agreement of the two halves), the separated leaves compared |
 | Walls | summary of the cuts tried, the robustness curve, the tables of points, links, cuts and separated phases compared |
 | Learned description | the network, training curves (loss, effective rank of $h$) and the learning curve |
 | Export | the tables as CSV, the rules of the tree and the phase map as PNG |
@@ -74,6 +77,10 @@ Command line, without a browser (a smoke test; also used by the tests):
 `python apps/explore.py --run [--quick] [--tree] [--runs runs.csv --dx 0.5 --pair-dt 25] [--cache DIR]`.
 
 ## How it is built
+
+The look comes from `explore.css` (loaded with `marimo.App(css_file=...)`): the accent colour, the
+frames of the sections and the step labels of the header are variables at its top, with a dark
+mode version; the page works without it.
 
 The notebook only reads the controls and calls the package: `phasewall.pipeline` (settings,
 `estimate`, `run`, cached steps, `fields_for`, `frame_side`), `phasewall.registry` (the entries and

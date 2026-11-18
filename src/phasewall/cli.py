@@ -155,7 +155,7 @@ def cmd_demo(args) -> Path:
         "## Check against the reference labels (demo only)",
         "",
         (f"The demo knows the state of every run from direct measurements ({args.example}: reference_label); "
-         "phasewall never sees these labels. Points (rows: reference label, columns: region found):"),
+         "PhaseWall never sees these labels. Points (rows: reference label, columns: region found):"),
         "",
         report._markdown(counts.reset_index()),
         "",

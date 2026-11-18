@@ -49,6 +49,18 @@ BLOCKS = {
     "vortex": ("velocity", "vector"),         # Okubo-Weiss vortex cores
     "defects": ("polarity", "vector", "nematic"),   # winding-number defects (+-1, or +-1/2 for nematics)
 }
+# One-line definition of every block, for interfaces and reports (describe.explain gives every column).
+BLOCK_HELP = {
+    "amp": "how strong the pattern is: log10 of the variance of the field",
+    "shape": "which length scales are present: the structure factor S(k) on shells of |k|, divided by its sum",
+    "mom": "distribution of the values (|a| for a vector, 2|Q| for a nematic): mean, std, skewness, kurtosis",
+    "topo": "connected domains per unit area above and below the mean plus -1, 0, 1 standard deviations",
+    "order": "global alignment |<a>| / <|a|>: 1 when everything points the same way",
+    "flow": "divergence and curl: splay against bend, sources against vortices",
+    "vortex": "vortex cores of a flow (Okubo-Weiss: rotation stronger than strain): area share and number",
+    "defects": "topological defects counted by their winding number (+-1, nematic +-1/2), per unit area",
+    "dyn": "change over the lag between two snapshots, at the same place (still) and following the pattern (moving)",
+}
 COMMON = ("amp", "shape", "mom", "topo")
 DEFAULT_BLOCKS = {
     "scalar": (*COMMON, "dyn"),

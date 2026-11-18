@@ -23,7 +23,7 @@ def test_describe_and_walls(ensemble):
     assert len(table) == 4 * 2 * 2 * 3 and {"run", "time", "eps", "g"} <= set(table.columns)
     out = cli.run(["walls", str(csv), "--parameters", "eps", "g", "--out", str(ensemble / "w1")])
     assert {"summary.md", "nodes.csv", "edges.csv", "cuts.csv", "phase_map.png"} <= {p.name for p in out.iterdir()}
-    assert (out / "summary.md").read_text().startswith("# phasewall result")
+    assert (out / "summary.md").read_text().startswith("# PhaseWall result")
     # with --config the parameters come from the ensemble, and example snapshots are drawn
     out = cli.run(["walls", str(csv), "--config", str(ensemble / "phasewall.toml"), "--out", str(ensemble / "w2")])
     assert (out / "snapshots.png").exists()

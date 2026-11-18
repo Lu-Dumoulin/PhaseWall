@@ -1,4 +1,4 @@
-"""phasewall explorer: a marimo notebook that is also a dashboard.
+"""PhaseWall explorer: a marimo notebook that is also a dashboard.
 
     marimo edit apps/explore.py    notebook: the code of every cell is visible and editable
     marimo run apps/explore.py     dashboard: only the controls and the results
@@ -20,7 +20,7 @@ pipeline caches them on disk, so a second run with another method or threshold t
 import marimo
 
 __generated_with = "0.25.2"
-app = marimo.App(width="full", app_title="phasewall explorer")
+app = marimo.App(width="full", app_title="PhaseWall explorer", css_file="explore.css")
 
 with app.setup:
     import dataclasses
@@ -37,8 +37,9 @@ with app.setup:
     from phasewall import pipeline as pl
     from phasewall import registry, report
     from phasewall.builtins import TreeSettings
+    from phasewall.describe import explain
     from phasewall.examples import EXAMPLES, example, fields_of
-    from phasewall.fields import BLOCKS, KINDS, Field
+    from phasewall.fields import BLOCK_HELP, BLOCKS, KINDS, Field
     from phasewall.io import inspect_snapshot, list_snapshots, load_ensemble, suggest_fields, write_config
     from phasewall.nn.architecture import Network
     from phasewall.nn.architecture import check as check_network
@@ -243,6 +244,42 @@ def parse_field_lines(text: str) -> list:
 
 
 @app.function
+def card(title: str, body):
+    """A section of the page: a title and its content in a light frame."""
+    return mo.vstack([mo.md(f"### {title}"), body], gap=0.6).style({
+        "border": "1px solid var(--pw-border, #dcdad5)", "border-left": "4px solid var(--pw-accent, #2a78d6)",
+        "background": "var(--pw-card-bg, transparent)", "border-radius": "12px", "padding": "1.0rem 1.4rem",
+        "margin": "0.5rem 0"})
+
+
+@app.function
+def columns(*items):
+    """Content side by side, in columns of equal width, aligned at the top."""
+    return mo.hstack(list(items), widths="equal", gap=2, align="start")
+
+
+@app.function
+def block_grid(block_inputs, fields):
+    """The checkboxes of the blocks as a grid: one row per field, one column per block (a box only
+    where the block fits the kind of the field), the definition of each block on hover and below."""
+    used = [b for b in BLOCKS if any(b in block_inputs[f.name] for f in fields)]
+    widths = [2] + [1] * len(used)
+
+    def head(b):
+        return mo.Html(f'<span title="{BLOCK_HELP[b]}" style="cursor: help; border-bottom: 1px dotted; '
+                       f'font-family: var(--monospace-font, monospace); font-size: 0.85em">{b}</span>')
+    rows = [mo.hstack([mo.md(" "), *[head(b) for b in used]], widths=widths, justify="start")]
+    for f in fields:
+        boxes = block_inputs[f.name]
+        rows.append(mo.hstack([mo.md(f"**{f.name}** <span style='opacity: 0.6'>{f.kind}</span>"),
+                               *[boxes[b] if b in boxes else mo.md("") for b in used]],
+                              widths=widths, justify="start"))
+    legend = mo.md("  \n".join(f"`{b}`: {BLOCK_HELP[b]}" for b in used)).style(
+        {"font-size": "0.82em", "opacity": "0.75", "margin-top": "0.4rem"})
+    return mo.vstack([*rows, legend], gap=0.3)
+
+
+@app.function
 def seconds_text(s: float) -> str:
     if s < 1:
         return "under 1 s"
@@ -278,12 +315,18 @@ class Bars:
 @app.cell(hide_code=True)
 def _():
     mo.md(r"""
-    # phasewall explorer
+    # PhaseWall explorer
 
-    phasewall finds the phases of a simulated system from runs on a grid of parameters: it
-    describes every snapshot (encoders), then finds the phases from the descriptions (methods).
-    Choose the system, its fields, the encoders and the methods in the panel on the left, then
-    press **Run**. Steps already computed with the same settings are read from the cache.
+    PhaseWall finds the phases of a simulated system from runs on a grid of parameters: it
+    describes every snapshot (encoders), then finds the phases from the descriptions (methods),
+    without labels. Choose each step below, then press **Run**; steps already computed with the
+    same settings are read from the cache.
+
+    <div class="pw-steps"><span class="pw-pill">1 System</span><span class="pw-arrow">→</span>
+    <span class="pw-pill">2 Fields</span><span class="pw-arrow">→</span>
+    <span class="pw-pill">3 Encoders</span><span class="pw-arrow">→</span>
+    <span class="pw-pill">4 Methods</span><span class="pw-arrow">→</span>
+    <span class="pw-pill">Run</span><span class="pw-arrow">→</span><span class="pw-pill">Results</span></div>
     """)
     return
 
@@ -295,7 +338,7 @@ def _():
     source_kind = mo.ui.radio(
         {"an example": "example", "your runs (CSV of runs and their snapshot files)": "runs",
          "an ensemble (TOML file)": "config", "a table of descriptors (CSV)": "table"},
-        value="your runs (CSV of runs and their snapshot files)" if _own else "an example", label="System",
+        value="your runs (CSV of runs and their snapshot files)" if _own else "an example", label="Runs from",
     )
     example_choice = mo.ui.dropdown(list(EXAMPLES), value="swift-hohenberg", label="example")
     quick = mo.ui.checkbox(value="quick" in mo.cli_args(),
@@ -487,11 +530,11 @@ def _():
 
 @app.cell
 def _(known_fields):
-    # Blocks of observables of the hand-made encoder, per field: those that fit its kind are
-    # offered, the defaults of the kind are ticked.
+    # Blocks of observables of the hand-made encoder: one checkbox per field and block, only
+    # where the block fits the kind of the field; the defaults of the kind are ticked.
     block_inputs = mo.ui.dictionary({
-        _f.name: mo.ui.multiselect([b for b, kinds in BLOCKS.items() if _f.kind in kinds], value=list(_f.selected),
-                                   label=f"{_f.name} ({_f.kind})")
+        _f.name: mo.ui.dictionary({b: mo.ui.checkbox(value=b in _f.selected) for b, kinds in BLOCKS.items()
+                                   if _f.kind in kinds})
         for _f in known_fields
     })
     return (block_inputs,)
@@ -512,9 +555,8 @@ def _():
     tree_inputs = spec_controls(TreeSettings)
     mixture_input = mo.ui.checkbox(label="Gaussian mixture (k by BIC)", disabled=not HAS_SKLEARN)
     kmeans_input = mo.ui.checkbox(label="k-means (k by silhouette)", disabled=not HAS_SKLEARN)
-    hdbscan_input = mo.ui.multiselect(
-        [str(s) for s in HDBSCAN_SIZES], label="HDBSCAN minimum sizes", disabled=not HAS_SKLEARN
-    )
+    hdbscan_input = mo.ui.dictionary({str(s): mo.ui.checkbox(label=str(s), disabled=not HAS_SKLEARN)
+                                      for s in HDBSCAN_SIZES})
     probe_input = mo.ui.checkbox(label="logistic probe (needs labels; a check, never a method)",
                                  disabled=not HAS_SKLEARN)
     curve_input = mo.ui.text(placeholder="e.g. 1, 2, 4", label="learning curve: training runs per point")
@@ -664,7 +706,8 @@ def _(
         _learned = learned_input.value or combined_input.value
         _blocks = {}
         for _f in known_fields:
-            _chosen = tuple(block_inputs.value.get(_f.name, _f.selected))
+            _boxes = block_inputs.value.get(_f.name)
+            _chosen = tuple(b for b, on in _boxes.items() if on) if _boxes is not None else _f.selected
             if not _chosen:
                 raise ValueError(f"choose at least one block of observables for {_f.name}")
             if set(_chosen) != set(_f.selected):
@@ -694,7 +737,7 @@ def _(
                 walls=walls_input.value, alpha=float(alpha_input.value), ratio=float(ratio_input.value),
                 min_phase=int(min_phase_input.value), merge=merge_input.value, robustness=robustness_input.value,
                 mixture=mixture_input.value, kmeans=kmeans_input.value,
-                hdbscan=tuple(sorted(int(s) for s in hdbscan_input.value)), probe=probe_input.value,
+                hdbscan=tuple(sorted(int(k) for k, on in hdbscan_input.value.items() if on)), probe=probe_input.value,
                 learning_curve=parse_ints(curve_input.value) if _learned else (), others=_others_m,
             ),
             execution=pl.Execution(workers=int(workers_input.value), cache=cache_input.value),
@@ -750,130 +793,178 @@ def _(settings, settings_notes, settings_problems):
 
 @app.cell
 def _(
-    alpha_input,
-    block_inputs,
-    cache_input,
-    combined_input,
     config_label,
     config_path,
-    crop_input,
-    curve_input,
     demo,
-    device_input,
     dx_input,
-    dx_target_input,
-    epochs_input,
     example_choice,
-    extra_fields,
-    field_rows,
     grid_inputs,
-    hand_input,
-    hdbscan_input,
-    inspection,
-    inspection_problem,
     julia_input,
-    kmeans_input,
     last_input,
-    learned_input,
-    max_shift_input,
-    merge_input,
-    min_phase_input,
-    min_wavelengths_input,
-    mixture_input,
-    network_inputs,
-    nn_seeds_input,
     pair_dt_input,
-    parameter_choice,
-    periodic_input,
     periodic_own,
-    plugin_encoder_inputs,
-    plugin_method_inputs,
-    probe_input,
     quick,
-    ratio_input,
-    robustness_input,
-    run_button,
     runs_label,
     runs_path,
     seeds_input,
     setting_inputs,
     snapshots_input,
     source_kind,
-    status,
     table_label,
     table_parameters,
     table_path,
     table_prefix,
     time_regex_input,
     time_unit_input,
-    tree_input,
-    tree_inputs,
-    usable_suggestions,
-    walls_input,
-    workers_input,
 ):
-    # The control panel, in the sidebar: System, Fields, Frame, Encoders, Methods, Execution.
+    # 1. System: where the runs come from. Only the part of the chosen source is shown.
     _kind = source_kind.value
-    _sections = {}
     if _kind == "example":
-        _sections["System"] = mo.vstack([
-            source_kind, example_choice, mo.md(f"*{demo.__doc__.split(chr(10) * 2)[0]}*"), quick,
-            mo.md("Parameter values: `a, b, c`, `start:step:stop` or `start:*factor:stop` (geometric)."),
-            *[mo.hstack([mo.md(f"`{p}`"), el], widths=[1, 5]) for p, el in grid_inputs.items()],
-            seeds_input, mo.md("Numerical settings:"), *setting_inputs.values(),
-        ])
+        _body = columns(
+            mo.vstack([example_choice, mo.md(f"*{demo.__doc__.split(chr(10) * 2)[0]}*"), quick, seeds_input]),
+            mo.vstack([mo.md("**Parameter grid**: `a, b, c`, `start:step:stop` or `start:*factor:stop`"),
+                       *[mo.hstack([mo.md(f"`{p}`"), el], widths=[1, 6]) for p, el in grid_inputs.items()]]),
+            mo.vstack([mo.md("**Numerical settings**"), *setting_inputs.values()]),
+        )
     elif _kind == "runs":
-        _sections["System"] = mo.vstack([source_kind, runs_path, snapshots_input, time_regex_input, time_unit_input,
-                                         julia_input, dx_input, periodic_own, last_input, pair_dt_input, runs_label])
+        _body = columns(
+            mo.vstack([runs_path, snapshots_input, time_regex_input, time_unit_input]),
+            mo.vstack([julia_input, periodic_own, dx_input, last_input, pair_dt_input, runs_label]),
+        )
+    elif _kind == "config":
+        _body = columns(config_path, config_label)
+    else:
+        _body = columns(mo.vstack([table_path, table_parameters]), mo.vstack([table_label, table_prefix]))
+    card("1 · System", mo.vstack([source_kind, _body], gap=1))
+    return
+
+
+@app.cell
+def _(extra_fields, field_rows, inspection, inspection_problem, known_fields, parameter_choice, source_kind):
+    # 2. Fields: for your runs, the datasets of the first snapshot and the fields you confirm;
+    # otherwise the fields of the example or of the TOML file.
+    _kind = source_kind.value
+    if _kind == "runs":
         if inspection_problem:
-            _fields_view = mo.callout(inspection_problem, kind="warn")
+            _body = mo.callout(inspection_problem, kind="warn")
         elif inspection is None:
-            _fields_view = mo.md("Give the table of runs: the first snapshot is inspected.")
+            _body = mo.md("Give the table of runs above: the first snapshot of the first run is inspected.")
         else:
             _unused = [s for s in inspection["suggestions"] if s["kind"] is None]
-            _fields_view = mo.vstack([
-                mo.md(f"Datasets of `{inspection['file'].name}` (shape as read, [x, y, component]):"),
-                mo.ui.table(inspection["datasets"][["name", "shape", "dtype"]].astype(str), selection=None,
-                            pagination=False),
-                mo.md("**Fields** (suggested from the names: check every kind; components saved apart are "
-                      "grouped, since a component alone is not invariant under rotations):"),
-                *[mo.vstack([r["use"], mo.hstack([r["kind"], r["relative"]], justify="start")])
-                  for r in field_rows],
-                *([mo.md("Not used: " + "; ".join(f"`{s['name']}` ({s['reason']})" for s in _unused))]
-                  if _unused else []),
-                extra_fields, parameter_choice,
-            ])
-        _sections["Fields"] = _fields_view
-    elif _kind == "config":
-        _sections["System"] = mo.vstack([source_kind, config_path, config_label])
+            _body = columns(
+                mo.vstack([
+                    mo.md(f"Datasets of `{inspection['file'].name}` (shape as read, [x, y, component]):"),
+                    mo.ui.table(inspection["datasets"][["name", "shape", "dtype"]].astype(str), selection=None,
+                                pagination=False),
+                    *([mo.md("Not used: " + "; ".join(f"`{s['name']}` ({s['reason']})" for s in _unused))]
+                      if _unused else []),
+                ]),
+                mo.vstack([
+                    mo.md("Suggested from the names; **check every kind**. Components saved apart are grouped: "
+                          "a component alone is not invariant under rotations."),
+                    *[mo.vstack([r["use"], mo.hstack([r["kind"], r["relative"]], justify="start")])
+                      for r in field_rows],
+                    extra_fields, parameter_choice,
+                ]),
+            )
+    elif _kind == "table":
+        _body = mo.md("A table of descriptors has no fields: its columns are the description.")
+    elif known_fields:
+        _body = mo.md("  \n".join(f"**{f.name}**: {f.kind}" for f in known_fields))
     else:
-        _sections["System"] = mo.vstack([source_kind, table_path, table_parameters, table_label, table_prefix])
-    if _kind != "table":
-        _sections["Frame"] = mo.vstack([crop_input, dx_target_input, max_shift_input, min_wavelengths_input,
-                                        periodic_input])
+        _body = mo.md("Give the TOML file above.")
+    card("2 · Fields", _body)
+    return
+
+
+@app.cell
+def _(
+    block_inputs,
+    combined_input,
+    device_input,
+    epochs_input,
+    hand_input,
+    learned_input,
+    network_inputs,
+    nn_seeds_input,
+    known_fields,
+    plugin_encoder_inputs,
+    source_kind,
+):
+    # 3. Encoders: from a snapshot to a vector h.
+    if source_kind.value == "table":
+        _body = mo.md("The table already holds the description.")
+    else:
+        _hand = mo.vstack([mo.md("**Hand-made**"), hand_input,
+                           *([mo.md("Blocks of observables per field (a box only where the block fits the kind "
+                                    "of the field; hover a name for its definition):"),
+                              block_grid(block_inputs, known_fields)] if len(block_inputs) else [])])
         _nn = [] if HAS_TORCH else [mo.md("*PyTorch is not installed: `pip install -e \".[nn]\"`*")]
-        _blocks = [mo.md("Blocks of observables per field:"), *block_inputs.values()] if len(block_inputs) else []
+        _learned = mo.vstack([mo.md("**Learned** (convolutional network)"), learned_input, combined_input, *_nn,
+                              mo.accordion({"training and network shape": mo.vstack(
+                                  [epochs_input, nn_seeds_input, device_input, *network_inputs.values()])})])
         _plugins = [mo.vstack([v["use"], v["settings"]]) for v in plugin_encoder_inputs.values()]
-        _sections["Encoders"] = mo.vstack([
-            hand_input, *_blocks, mo.md("---"), learned_input, combined_input, *_nn,
-            mo.accordion({"training and network": mo.vstack([epochs_input, nn_seeds_input, device_input,
-                                                             *network_inputs.values()])}),
-            *([mo.md("---"), *_plugins] if _plugins else []),
-        ])
+        _body = mo.vstack([_hand, mo.md("---"), columns(_learned, *(
+            [mo.vstack([mo.md("**Registered by other packages**"), *_plugins])] if _plugins else []))], gap=1)
+    card("3 · Encoders", _body)
+    return
+
+
+@app.cell
+def _(
+    alpha_input,
+    curve_input,
+    hdbscan_input,
+    kmeans_input,
+    merge_input,
+    min_phase_input,
+    mixture_input,
+    plugin_method_inputs,
+    probe_input,
+    ratio_input,
+    robustness_input,
+    tree_input,
+    tree_inputs,
+    walls_input,
+):
+    # 4. Methods: from h to phases; and the checks, which may use labels only to score.
     _sk = [] if HAS_SKLEARN else [mo.md("*scikit-learn is not installed: `pip install -e \".[baselines]\"`*")]
-    _plugin_m = [mo.vstack([v["use"], v["settings"]]) for v in plugin_method_inputs.values()]
-    _sections["Methods"] = mo.vstack([
-        walls_input, alpha_input, ratio_input, min_phase_input, merge_input, robustness_input, mo.md("---"),
-        tree_input, mo.accordion({"tree settings": mo.vstack(list(tree_inputs.values()))}), mo.md("---"),
-        *_sk, mixture_input, kmeans_input, hdbscan_input, *([mo.md("---"), *_plugin_m] if _plugin_m else []),
-        mo.md("---"), mo.md("**Checks**"), probe_input, curve_input,
-    ])
-    _sections["Execution"] = mo.vstack([workers_input, cache_input])
-    mo.sidebar(
-        mo.vstack([mo.md("### Settings"), mo.accordion(_sections, multiple=True, expanded=["System"]),
-                   status, run_button]),
-        width="28rem",
-    )
+    _plugins = [mo.vstack([v["use"], v["settings"]]) for v in plugin_method_inputs.values()]
+    card("4 · Methods", columns(
+        mo.vstack([mo.md("**On the parameter grid**"), walls_input, alpha_input, ratio_input, min_phase_input,
+                   merge_input, robustness_input]),
+        mo.vstack([mo.md("**Threshold tree**"), tree_input,
+                   mo.accordion({"tree settings": mo.vstack(list(tree_inputs.values()))})]),
+        mo.vstack([mo.md("**Blind grouping**"), *_sk, mixture_input, kmeans_input,
+                   mo.hstack([mo.md("HDBSCAN, minimum sizes"), *hdbscan_input.values()], justify="start"),
+                   *([mo.md("**Registered by other packages**"), *_plugins] if _plugins else [])]),
+        mo.vstack([mo.md("**Checks** (labels only to score)"), probe_input, curve_input]),
+    ))
+    return
+
+
+@app.cell
+def _(
+    cache_input,
+    crop_input,
+    dx_target_input,
+    max_shift_input,
+    min_wavelengths_input,
+    periodic_input,
+    run_button,
+    source_kind,
+    status,
+    workers_input,
+):
+    # 5. Frame and execution (rarely changed, folded), then the run bar: estimate or problems, Run.
+    _frame = [] if source_kind.value == "table" else [mo.vstack([
+        mo.md("**Frame** (empty: as the ensemble)"), crop_input, dx_target_input, max_shift_input,
+        min_wavelengths_input, periodic_input])]
+    mo.vstack([
+        card("5 · Frame and execution", mo.accordion({"show": columns(
+            *_frame, mo.vstack([mo.md("**Execution**"), workers_input, cache_input]))})),
+        card("Run", columns(status, mo.vstack([run_button]))),
+    ], gap=1.2)
     return
 
 
@@ -908,12 +999,13 @@ def _(run_button, set_results, settings):
 @app.cell
 def _(get_results, settings):
     results = get_results()
-    mo.stop(results is None, mo.callout(mo.md("Choose the settings on the left and press **Run**."), kind="info"))
+    mo.stop(results is None, mo.callout(mo.md("Choose the settings above and press **Run**."), kind="info"))
     res = results["res"]
     _stale = settings is not None and results["settings"] != settings
     _n_runs = len(res.runs)
     _n_points = len(res.runs[res.parameters].drop_duplicates())
     _head = mo.md(
+        "## Results\n\n"
         f"**{_n_runs} runs** at **{_n_points} parameter points** ({', '.join(res.parameters)}); "
         f"descriptions: {', '.join(res.tables)}; computed in {seconds_text(results['seconds'])}."
     )
@@ -998,11 +1090,18 @@ def _(description, map_method, res, snapshot_field):
     def _rules():
         if _tree is None:
             return mo.md("The tree was not run (tick it under Methods).")
+        _fields = res.ensemble.fields if res.ensemble is not None else None
+        _splits = _tree.splits.round(4)
+        _used = list(dict.fromkeys(_splits.loc[_splits.accepted, "column"])) if len(_splits) else []
+        if len(_splits):
+            _splits.insert(2, "meaning", [explain(c, _fields) for c in _splits.column])
         parts = [mo.md(f"**{_tree.n_phases} phase{'' if _tree.n_phases == 1 else 's'}** ({_tree.halves_by} halves). Each phase is the set of "
                        "points that satisfy its rule; thresholds are in the units of the descriptor."),
                  mo.md("```\n" + rules_text(_tree) + "\n```"),
+                 *([mo.md("**The descriptors in the rules:**\n\n" + "\n".join(
+                     f"- `{c}`: {explain(c, _fields)}" for c in _used))] if _used else []),
                  mo.md("Splits tried (**both_halves**: share of points the two halves put on the same sides):"),
-                 mo.ui.table(_tree.splits.round(4), selection=None, pagination=False)]
+                 mo.ui.table(_splits, selection=None, pagination=False)]
         if len(_tree.merges):
             parts += [mo.md("Separated leaves compared (joined when the gap between their cores is below RATIO "
                             "times their spread):"), mo.ui.table(_tree.merges.round(4), selection=None)]

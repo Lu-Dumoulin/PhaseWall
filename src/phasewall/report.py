@@ -67,7 +67,7 @@ def summary(w: Walls, curve: pd.DataFrame | None = None, notes: str = "") -> str
     walls_per_param = w.edges[w.edges.wall].groupby("param").size()
     mixed = w.nodes[w.nodes.mixed]
     parts = [
-        "# phasewall result",
+        "# PhaseWall result",
         "",
         (f"{w.n_phases} phases on {len(w.nodes)} parameter points ({', '.join(w.parameters)}), "
          f"{int(w.nodes.runs.sum())} runs, {int(w.nodes.snapshots.sum())} snapshots, "

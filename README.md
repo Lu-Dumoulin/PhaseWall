@@ -1,8 +1,8 @@
-# phasewall
+# PhaseWall
 
 Work in progress.
 
-phasewall finds the phases of a simulated system from an ensemble of runs that were already
+PhaseWall finds the phases of a simulated system from an ensemble of runs that were already
 computed on a grid of parameters. Each snapshot is described by generic numbers computed from
 its fields (density, velocity, polarity, nematic order, ...). Neighbouring parameter points are
 compared, and a wall is placed wherever the description changes more than it varies within one
@@ -32,7 +32,7 @@ One snapshot from the middle of each phase found, on a common colour scale:
 The phase map. Left: how much the description changes across each link of the parameter grid.
 Middle: the three regions found and the walls between them; the ring marks a point whose runs
 disagree with each other. Right: the state of each point measured directly (spot or stripe
-symmetry from the skewness, amplitude), which phasewall never sees.
+symmetry from the skewness, amplitude), which PhaseWall never sees.
 
 ![Phase map of the demo](docs/figures/phase_map.png)
 
@@ -313,10 +313,10 @@ that also opens as a dashboard ([apps/explore.py](apps/explore.py)):
 ```
 
 The script makes the environment `.venv` the first time (Python 3.11 or newer) and installs
-phasewall with the extra `[app]` (marimo, PyTorch, scikit-learn), then starts at once; nothing has
+PhaseWall with the extra `[app]` (marimo, PyTorch, scikit-learn), then starts at once; nothing has
 to be activated. By hand: `pip install -e ".[app]"`, then `marimo run apps/explore.py`.
 
-A side panel follows the order of an analysis:
+The page follows the order of an analysis, one section per step:
 
 1. **System**: an example (its grid and numerical settings), your own runs (a CSV table of runs,
    one column `path` and one per parameter, with their HDF5 or JLD2 snapshot files), an ensemble
@@ -325,8 +325,9 @@ A side panel follows the order of an analysis:
    suggested from the names (components saved apart, such as `vx` and `vy`, grouped into one
    velocity) and you confirm the kind of each: scalar, velocity, polarity, vector or nematic. The
    app writes the TOML configuration itself.
-3. **Encoders**: hand-made, with the blocks of observables of each field (those that fit its kind
-   are offered); learned, with the shape of the network, checked against the frame before
+3. **Encoders**: hand-made, with the blocks of observables of each field in a grid of checkboxes
+   (a box only where the block fits the kind of the field, the definition of each block shown);
+   learned, with the shape of the network, checked against the frame before
    training; combined; and any encoder registered by another package.
 4. **Methods**: walls (and the joining of separated phases), the unsupervised threshold tree,
    Gaussian mixture, k-means, HDBSCAN, any registered method; **checks**: robustness, probe
@@ -336,8 +337,10 @@ The controls of the tree, of the network and of registered entries are built fro
 (`registry.settings_spec`), so a new entry needs no interface code. An estimate of the cost is
 shown before the run, and every step is cached. Tabs show the phase map (of the walls or of the
 tree), the comparison of descriptions and methods, snapshots of each phase, the rules of the tree,
-the details of the walls, the training curves, and export the tables and figures. The page only
-calls the package; details in [apps/README.md](apps/README.md).
+the details of the walls, the training curves, and export the tables and figures; the rules of the
+tree come with the meaning of each descriptor (`describe.explain`). The look is set by a small
+stylesheet, [apps/explore.css](apps/explore.css). The page only calls the package; details in
+[apps/README.md](apps/README.md).
 
 ### Adding an encoder or a method
 
@@ -370,7 +373,7 @@ register theirs through the entry points `phasewall.encoders` and `phasewall.met
 
 ## Tests
 
-`pytest` runs 192 tests on small synthetic fields with known answers, in about a minute:
+`pytest` runs 195 tests on small synthetic fields with known answers, in about a minute:
 the symmetry rules of vector and nematic fields against the gradient of a scalar and the
 tensor of a director field; velocity and polarity turning as vectors; file round trips in Julia
 layout; fields assembled from component datasets, components refused as scalars, and the
@@ -398,7 +401,7 @@ This section is for development and will be revised before any public release.
 | Step | Content | Status |
 | --- | --- | --- |
 | 1 | Package: fields and their symmetries, descriptors, parameter graph, walls method, Swift-Hohenberg demo | done |
-| 2 | Tests on synthetic data with known answers (192), continuous integration (ruff, pytest) | done |
+| 2 | Tests on synthetic data with known answers (195), continuous integration (ruff, pytest) | done |
 | 2b | Frames: crops, coarsening, per-run grid spacing, non-periodic boxes; errors for unknown settings | done |
 | 3 | Command-line tool `phasewall inspect \| toy \| describe \| learn \| walls \| demo`, report (summary, tables, figures) | done |
 | 4 | Documentation: method, mathematics, physics parallels, tests ([PDF](docs/documentation.pdf)) | done |
@@ -417,6 +420,8 @@ This section is for development and will be revised before any public release.
 | 12 | Registries of encoders and methods with one interface (`registry.py`; built-ins in `builtins.py`), settings that describe their own controls and are checked, Python entry points for other packages, contract tests run on every registered entry (`tests/test_contracts.py`); the pipeline runs everything through them (same results) and gained `Methods(tree=..., others=...)`, `Describers(others=...)` | done (2026-11-18) |
 | 13 | Tunable CNN (`nn/architecture.py`, no PyTorch needed to check): blocks, width, $\dim h$, head (hidden, projection) and temperature, checked against the frame before training (last map of at least 2 points per side, channels never decreasing, projection no larger than $h$ or the hidden layer), with receptive field, weights and a rough memory estimate; `Describers(network=...)`, `phasewall learn --blocks --width --dim-h ...`; shapes compared by label-free diagnostics (`scripts/compare_networks.py`) | done (2026-11-18) |
 | 14 | Interface on top of steps 10 to 13 ([apps/explore.py](apps/explore.py)): your own runs with the field inspector (kinds confirmed, TOML written by `io.write_config`), blocks per field, network shape checked before training, the tree and registered entries with controls built from their settings, tree phase map and rules; checked in a browser | done (2026-11-18) |
+| 15 | Interface layout (Ludo, 2026-11-18): no sidebar, which holds too much to read; the settings on the main page as clear sections in the order of an analysis (System, Fields, Encoders, Methods, then frame and execution folded), controls side by side in columns, a run bar (estimate, Run), the results below; more style (a stylesheet loaded with `marimo.App(css_file=...)`) | done (2026-11-18) |
+| 16 | Clearer selections and definitions (Ludo, 2026-11-18): blocks of observables as a grid of checkboxes (one row per field, one column per block, a box only where the block fits the kind) instead of the multi-select; HDBSCAN sizes as a row of checkboxes; a one-line definition of every block (package side, shown under the grid and on hover) and an explanation of every descriptor column (for example `u.topo.below-1`: domains per unit area where u is below its mean minus one standard deviation), shown next to the rules of the tree and in the tables of results | done (2026-11-18) |
 
 ### Finished package (target)
 
