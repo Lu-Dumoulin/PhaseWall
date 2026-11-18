@@ -16,6 +16,12 @@ For every field (arrays [x, y] or [x, y, component], grid spacing dx):
          cores. Minkowski functionals of the same kind are used for patterns and in cosmology.
 - flow:  vectors: log10 of the mean square divergence and curl, and the share of the curl:
          splay against bend, asters against vortices.
+- vortex: velocities: vortex cores by the Okubo-Weiss parameter W = s_n^2 + s_s^2 - omega^2
+         (normal and shear strain against vorticity): the share of the area where
+         W < -OW_LEVEL std(W) (rotation dominates) and the number of such cores per unit area.
+- defects: polarities and nematics: topological defects counted by their winding number, the
+         turn of the angle of the field around each 2 x 2 plaquette of grid points (+-1 for a
+         polarity, +-1/2 for a nematic), per unit area: `plus` and `minus`.
 - dyn:   for a pair of snapshots a time pair_dt apart: the correlation C of the fluctuations
          at the same place (still) and after the best shift (moving), given as the
          decorrelation log10(1 - C + DECOR_FLOOR). A frozen pattern has both at the floor; a
@@ -42,7 +48,10 @@ for the moving correlation. A frame that is not periodic (a crop, or a non-perio
   largest is `moving`; `still` is the one at zero shift. A pattern that moves by more than
   max_shift during pair_dt looks as if it changed.
 
-Column names are field.block.name, for example rho.shape.k07; walls.py weights the blocks.
+Which blocks are computed for a field is set by Field.blocks, by default the blocks of its kind
+(fields.DEFAULT_BLOCKS: the common ones for every kind, vortex for a velocity, defects for a
+polarity or a nematic). Column names are field.block.name, for example rho.shape.k07;
+walls.py weights the blocks.
 """
 
 import numpy as np
@@ -62,6 +71,8 @@ DECOR_FLOOR = 1e-3    # correlations above 1 - DECOR_FLOOR count as frozen (a ch
 LEVELS = (-1.0, 0.0, 1.0)   # topo: levels in standard deviations from the mean (a choice)
 TUKEY_ALPHA = 0.5     # non-periodic S(k): tapered share of the window (a choice: 4x less leakage
                       # than no window on Swift-Hohenberg crops, 2026-11-17)
+OW_LEVEL = 0.2        # vortex cores: W < -0.2 std(W), the usual threshold of the Okubo-Weiss criterion
+                      # (Isern-Fontanet et al. 2003; a choice)
 
 
 # ---------------------------------------------------------------- spectra
@@ -107,21 +118,84 @@ def structure_factor(a: np.ndarray, dx: float, edges: np.ndarray, periodic: bool
     return dx**2 / (nx * ny) * total / np.maximum(count, 1)
 
 
-def div_curl(a: np.ndarray, dx: float, periodic: bool = True) -> tuple[np.ndarray, np.ndarray]:
-    """Divergence and curl of a vector field: spectral derivatives in a periodic frame,
-    second-order centred differences on the interior points otherwise."""
+def gradients(a: np.ndarray, dx: float, periodic: bool = True) -> tuple[np.ndarray, ...]:
+    """(d_x a_x, d_y a_x, d_x a_y, d_y a_y) of a vector field: spectral derivatives in a periodic
+    frame, second-order centred differences on the interior points otherwise."""
+    ax, ay = a[..., 0], a[..., 1]
     if not periodic:
-        ax, ay = a[..., 0], a[..., 1]
-        dxax = (ax[2:, 1:-1] - ax[:-2, 1:-1]) / (2 * dx)
-        dyay = (ay[1:-1, 2:] - ay[1:-1, :-2]) / (2 * dx)
-        dxay = (ay[2:, 1:-1] - ay[:-2, 1:-1]) / (2 * dx)
-        dyax = (ax[1:-1, 2:] - ax[1:-1, :-2]) / (2 * dx)
-        return dxax + dyay, dxay - dyax
+        def ddx(f):
+            return (f[2:, 1:-1] - f[:-2, 1:-1]) / (2 * dx)
+
+        def ddy(f):
+            return (f[1:-1, 2:] - f[1:-1, :-2]) / (2 * dx)
+        return ddx(ax), ddy(ax), ddx(ay), ddy(ay)
     nx, ny = a.shape[:2]
     kx = 2j * np.pi * np.fft.fftfreq(nx, dx)[:, None]
     ky = 2j * np.pi * np.fft.fftfreq(ny, dx)[None, :]
-    ax, ay = np.fft.fft2(a[..., 0]), np.fft.fft2(a[..., 1])
-    return np.fft.ifft2(kx * ax + ky * ay).real, np.fft.ifft2(kx * ay - ky * ax).real
+    fx, fy = np.fft.fft2(ax), np.fft.fft2(ay)
+    return tuple(np.fft.ifft2(k * f).real for k, f in ((kx, fx), (ky, fx), (kx, fy), (ky, fy)))
+
+
+def div_curl(a: np.ndarray, dx: float, periodic: bool = True) -> tuple[np.ndarray, np.ndarray]:
+    """Divergence and curl of a vector field (derivatives as in gradients)."""
+    dxax, dyax, dxay, dyay = gradients(a, dx, periodic)
+    return dxax + dyay, dxay - dyax
+
+
+def okubo_weiss(a: np.ndarray, dx: float, periodic: bool = True) -> np.ndarray:
+    """W = s_n^2 + s_s^2 - omega^2, with s_n = d_x v_x - d_y v_y, s_s = d_x v_y + d_y v_x,
+    omega = d_x v_y - d_y v_x: negative where rotation dominates strain (vortex cores),
+    positive where strain dominates. Unchanged by rotations and mirrors of the frame."""
+    dxax, dyax, dxay, dyay = gradients(a, dx, periodic)
+    return (dxax - dyay) ** 2 + (dxay + dyax) ** 2 - (dxay - dyax) ** 2
+
+
+def vortex_cores(a: np.ndarray, dx: float, periodic: bool = True) -> dict[str, float]:
+    """vortex block: share of the area with W < -OW_LEVEL std(W), and those cores per unit area
+    (0 and 0 when W does not vary: no flow, or a uniform one)."""
+    w = okubo_weiss(a, dx, periodic)
+    sd = w.std()
+    if sd < FLAT**2:
+        return {"share": 0.0, "cores": 0.0}
+    core = w < -OW_LEVEL * sd
+    return {"share": float(core.mean()), "cores": count_domains(core, periodic) / (core.size * dx**2)}
+
+
+def wrapped(d: np.ndarray, period: float) -> np.ndarray:
+    """Smallest signed angle difference for angles defined modulo `period`."""
+    return d - period * np.round(d / period)
+
+
+def winding_charges(a: np.ndarray, symmetry: str, periodic: bool = True) -> np.ndarray:
+    """Winding number of every 2 x 2 plaquette of grid points: the turn of the angle of the field
+    around it over 2 pi. A polarity (angle atan2(a_y, a_x), period 2 pi) gives +-1, a nematic
+    (director angle atan2(Q_xy, Q_xx) / 2, period pi) gives +-1/2; most plaquettes give 0.
+    Adapted from hfml (defects.plaquette_charge, same author)."""
+    if symmetry == "nematic":
+        theta, period = 0.5 * np.arctan2(a[..., 1], a[..., 0]), np.pi
+    else:
+        theta, period = np.arctan2(a[..., 1], a[..., 0]), 2 * np.pi
+    if periodic:
+        t00, t10 = theta, np.roll(theta, -1, axis=0)
+        t01, t11 = np.roll(theta, -1, axis=1), np.roll(t10, -1, axis=1)
+    else:                                       # the plaquettes inside the frame only
+        t00, t10, t01, t11 = theta[:-1, :-1], theta[1:, :-1], theta[:-1, 1:], theta[1:, 1:]
+    turn = (wrapped(t10 - t00, period) + wrapped(t11 - t10, period)
+            + wrapped(t01 - t11, period) + wrapped(t00 - t01, period))
+    return turn / (2 * np.pi)
+
+
+def defect_counts(a: np.ndarray, symmetry: str, dx: float, periodic: bool = True) -> dict[str, float]:
+    """defects block: positive and negative defects per unit area (charge above half of the
+    unit charge in size; 0 and 0 for a flat field, whose angle is not defined). Every plaquette
+    counts, wherever |a| is small (a choice: in a disordered region the count measures the
+    disorder)."""
+    if np.sqrt(np.mean(np.sum(a**2, axis=-1))) < FLAT:
+        return {"plus": 0.0, "minus": 0.0}
+    q = winding_charges(a, symmetry, periodic)
+    unit = 0.5 if symmetry == "nematic" else 1.0
+    area = q.size * dx**2
+    return {"plus": float(np.sum(q > unit / 2)) / area, "minus": float(np.sum(q < -unit / 2)) / area}
 
 
 def moments(v: np.ndarray) -> tuple[float, float, float, float]:
@@ -188,37 +262,48 @@ def prepared(a: np.ndarray, f: Field) -> np.ndarray:
 
 def field_descriptors(a: np.ndarray, f: Field, dx: float, edges: np.ndarray,
                       periodic: bool = True) -> dict[str, float]:
-    """Descriptors of one field of one snapshot (see the module docstring)."""
+    """Descriptors of one field of one snapshot: the blocks in f.selected except dyn (see the
+    module docstring)."""
+    use = set(f.selected)
     a = prepared(a, f)
     c = _components(a)
     variance = float(np.sum(c.var(axis=(0, 1))))
     flat = np.sqrt(variance) < FLAT
-    out = {f"{f.name}.amp.log10var": _log10(variance)}
-    S = np.zeros(len(edges) - 1) if flat else structure_factor(a, dx, edges, periodic)
-    shape = S / S.sum() if S.sum() > 0 else S
-    out |= {f"{f.name}.shape.k{j:02d}": float(s) for j, s in enumerate(shape)}
+    out = {}
+    if "amp" in use:
+        out[f"{f.name}.amp.log10var"] = _log10(variance)
+    if "shape" in use:
+        S = np.zeros(len(edges) - 1) if flat else structure_factor(a, dx, edges, periodic)
+        shape = S / S.sum() if S.sum() > 0 else S
+        out |= {f"{f.name}.shape.k{j:02d}": float(s) for j, s in enumerate(shape)}
     if f.symmetry == "scalar":
         values = a
     else:
         size = np.hypot(c[..., 0], c[..., 1])
         values = 2 * size if f.symmetry == "nematic" else size
-    mean, std, skew, kurt = moments(values)
-    area = values.shape[0] * values.shape[1] * dx**2
-    out |= {f"{f.name}.topo.{k}": v for k, v in domain_counts(values, area, periodic).items()}
-    if not f.relative:
-        out[f"{f.name}.mom.mean"] = mean
-    out |= {f"{f.name}.mom.std": std, f"{f.name}.mom.skew": skew, f"{f.name}.mom.kurt": kurt}
-    if f.symmetry != "scalar":
+    if "topo" in use:
+        area = values.shape[0] * values.shape[1] * dx**2
+        out |= {f"{f.name}.topo.{k}": v for k, v in domain_counts(values, area, periodic).items()}
+    if "mom" in use:
+        mean, std, skew, kurt = moments(values)
+        if not f.relative:
+            out[f"{f.name}.mom.mean"] = mean
+        out |= {f"{f.name}.mom.std": std, f"{f.name}.mom.skew": skew, f"{f.name}.mom.kurt": kurt}
+    if "order" in use:
         size_mean = float(np.hypot(c[..., 0], c[..., 1]).mean())
         mean_vec = float(np.hypot(c[..., 0].mean(), c[..., 1].mean()))
         out[f"{f.name}.order.global"] = mean_vec / size_mean if size_mean > FLAT else 0.0
-    if f.symmetry == "vector":
+    if "flow" in use:
         d, w = div_curl(a, dx, periodic)
         d2, w2 = float(np.mean(d**2)), float(np.mean(w**2))
         out[f"{f.name}.flow.log10div2"] = _log10(d2)
         out[f"{f.name}.flow.log10curl2"] = _log10(w2)
         # 0.5 when neither is present (a choice): no preference for splay or bend
         out[f"{f.name}.flow.curl_share"] = w2 / (d2 + w2) if d2 + w2 > FLAT**2 else 0.5
+    if "vortex" in use:
+        out |= {f"{f.name}.vortex.{k}": v for k, v in vortex_cores(a, dx, periodic).items()}
+    if "defects" in use:
+        out |= {f"{f.name}.defects.{k}": v for k, v in defect_counts(a, f.symmetry, dx, periodic).items()}
     return out
 
 
@@ -279,7 +364,7 @@ def describe_snapshot(snapshot: dict[str, np.ndarray], fields: list[Field], dx: 
     out = {}
     for f in fields:
         out |= field_descriptors(snapshot[f.name], f, dx, edges, periodic)
-        if before is not None:
+        if before is not None and "dyn" in f.selected:
             out |= pair_descriptors(before[f.name], snapshot[f.name], f, None if periodic else shift)
     return out
 

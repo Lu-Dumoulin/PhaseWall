@@ -11,6 +11,8 @@
 \usepackage{amsmath,amssymb,mathtools,bm}
 \usepackage{booktabs}
 \usepackage{array}
+\usepackage{multirow}
+\usepackage{colortbl}
 \usepackage{enumitem}
 \usepackage{xcolor}
 \usepackage{graphicx}
@@ -306,23 +308,27 @@ whatever their size, and do not know which encoder made the table.
 
 \begin{table}[H]
 \centering\small
-\begin{tabular}{@{}l>{\raggedright}p{6.1cm}ccc@{}}
+\begin{tabular}{@{}l>{\raggedright}p{5.6cm}ccccc@{}}
 \toprule
-Block & Observables (columns) & scalar & vector & nematic \\
+Block & Observables (columns) & scalar & vector & velocity & polarity & nematic \\
 \midrule
-\code{amp}   & $\log_{10}$ of the variance (summed over components) & \yes & \yes & \yes \\
-\code{shape} & $S(k)$ on shells of $|\mathbf k|$, divided by its sum (\code{k00}, \code{k01}, \ldots) & \yes & \yes & \yes \\
-\code{mom}   & mean (unless relative), std, skewness, kurtosis of $v$ & \yes & \yes & \yes \\
-\code{topo}  & domains per unit area above and below $\bar v+z\sigma$, $z=-1,0,1$ & \yes & \yes & \yes \\
-\code{order} & global order $|\avg{\mathbf a}|/\avg{|\mathbf a|}$ & & \yes & \yes \\
-\code{flow}  & $\log_{10}\avg{(\nabla\cdot\mathbf a)^2}$, $\log_{10}\avg{(\nabla\times\mathbf a)^2}$, curl share & & \yes & \\
-\code{dyn}   & decorrelation over $\Delta t$ at the same place (\code{still}) and after the best shift (\code{moving}) & \yes & \yes & \yes \\
+\code{amp}   & $\log_{10}$ of the variance (summed over components) & \yes & \yes & \yes & \yes & \yes \\
+\code{shape} & $S(k)$ on shells of $|\mathbf k|$, divided by its sum (\code{k00}, \code{k01}, \ldots) & \yes & \yes & \yes & \yes & \yes \\
+\code{mom}   & mean (unless relative), std, skewness, kurtosis of $v$ & \yes & \yes & \yes & \yes & \yes \\
+\code{topo}  & domains per unit area above and below $\bar v+z\sigma$, $z=-1,0,1$ & \yes & \yes & \yes & \yes & \yes \\
+\code{order} & global order $|\avg{\mathbf a}|/\avg{|\mathbf a|}$ & & \yes & \yes & \yes & \yes \\
+\code{flow}  & $\log_{10}\avg{(\nabla\cdot\mathbf a)^2}$, $\log_{10}\avg{(\nabla\times\mathbf a)^2}$, curl share & & \yes & \yes & \yes & \\
+\code{vortex} & Okubo-Weiss vortex cores: area share, cores per unit area & & $\circ$ & \yes & & \\
+\code{defects} & winding-number defects per unit area: \code{plus}, \code{minus} ($\pm1$, nematic $\pm\frac12$) & & $\circ$ & & \yes & \yes \\
+\code{dyn}   & decorrelation over $\Delta t$ at the same place (\code{still}) and after the best shift (\code{moving}) & \yes & \yes & \yes & \yes & \yes \\
 \bottomrule
 \end{tabular}
-\caption{Observables of the hand-made encoder, per kind of field (vector: velocity, polarity or role not given). $v$ is the value of a scalar,
-$|\mathbf a|$ for a vector and $S=2|\mathsf Q|$ for a nematic. A scalar field gives 28 columns
-in the Swift-Hohenberg example (15 shells of $S(k)$), a vector field 4 more. All blocks are computed for every
-field; choosing blocks per field is planned.}\label{tab:observables}
+\caption{Observables of the hand-made encoder per kind of field: \yes{} computed by default,
+$\circ$ allowed if asked for. A field may choose its own blocks (\code{blocks = ["amp", "defects"]}
+in the configuration, or \code{Describers(blocks={"p": ("amp", "defects")})} in the pipeline);
+a block that does not apply to the kind is an error. $v$ is the value of a scalar, $|\mathbf a|$
+for a vector and $S=2|\mathsf Q|$ for a nematic. A scalar field gives 28 columns in the
+Swift-Hohenberg example (15 shells of $S(k)$).}\label{tab:observables}
 \end{table}
 
 \begin{figure}[H]
@@ -389,14 +395,15 @@ $\log_{10}$ variance at the floor $-12$, against $-0.4$ for stripes and $-0.7$ f
 \centering
 \input{figs/fig_kinds}
 \caption{What the vector and nematic blocks see (invented fields). (a) The flow block separates
-sources and sinks from vortices. (b) The domains of low $|\mathbf p|$ are defect cores, and the
-order block measures global alignment. (c) A nematic is described through $S=2|\mathsf Q|$; a
+sources and sinks from vortices; the vortex block finds the core. (b) The domains of low $|\mathbf p|$
+are defect cores, the defects block counts the aster as $+1$, and the order block measures global
+alignment. (c) A nematic is described through $S=2|\mathsf Q|$; a
 director has no head, so it is stored as $\mathsf Q$.}\label{fig:kinds}
 \end{figure}
 
 \begin{tech}
 A vector field $\mathbf a=(a_x,a_y)$ gets the blocks of a scalar computed on rotation invariants,
-plus two of its own (Fig.~\ref{fig:kinds}a,b):
+plus two of its own, and one more for each role (Figs.~\ref{fig:kinds} and~\ref{fig:winding}):
 
 \textbf{amp, shape:} variance and $S(k)$ summed over the two components,
 $\sum_c|\hat a_c(\mathbf k)|^2$, which a global rotation of the vectors leaves unchanged.
@@ -413,18 +420,47 @@ when both vanish.
 
 \textbf{dyn:} correlations summed over the components.
 
+\textbf{vortex} (velocity). The Okubo-Weiss parameter
+\[
+W=s_n^2+s_s^2-\omega^2,\qquad s_n=\partial_xv_x-\partial_yv_y,\quad s_s=\partial_xv_y+\partial_yv_x,\quad
+\omega=\partial_xv_y-\partial_yv_x,
+\]
+compares strain with rotation; it is unchanged by rotations and mirrors ($s_n$, $s_s$ turn as the
+components of a nematic tensor, $\omega$ only changes sign). Where $W<-0.2\,\std W$ rotation dominates:
+these are the vortex cores (Fig.~\ref{fig:winding}d; the threshold is the usual one of the
+criterion, a choice). Columns: the share of the area in cores and the number of connected cores per
+unit area.
+
+\textbf{defects} (polarity). The angle $\theta=\mathrm{atan2}(p_y,p_x)$ is followed around every
+$2\times2$ plaquette of grid points, each step taken as the smallest turn; the total over $2\pi$ is the
+winding number of the plaquette, $+1$ for an aster or a vortex, $-1$ for a saddle, 0 elsewhere
+(Fig.~\ref{fig:winding}a,b). Columns: positive and negative defects per unit area. Every plaquette
+counts, also where $|\mathbf p|$ is small, so in a disordered region the count measures the disorder
+(a choice). A flat field has no defect.
+
 \textbf{Reading the same columns for a velocity and for a polarity.} For a velocity $\mathbf v$,
 $\avg{|\mathbf v|^2}$ (from \code{amp} and \code{mom}) is the kinetic energy, $S(k)$ its spectrum,
 the divergence measures compressibility and the curl the vorticity (\code{curl_share} near 1:
 vortex-dominated flow). For a polarity $\mathbf p$, the mean of $|\mathbf p|$ is the degree of
 polar order, the low domains of $|\mathbf p|$ (\code{topo.below-1}) are the cores of topological
 defects, and divergence and curl are the splay and bend of the polarity: asters against vortices.
-The role is read from the declaration; observables specific to each role are planned: enstrophy and the kinetic energy spectrum for a
-velocity; defects counted by their winding number ($\pm1$) for a polarity.
+A field of unknown role (\code{vector}) gets neither \code{vortex} nor \code{defects} unless it asks.
 
 \emph{Physics parallel.} Divergence and curl are the two halves of the Helmholtz decomposition;
-in a polar liquid crystal they are the splay and bend terms of the Frank elastic energy.
+in a polar liquid crystal they are the splay and bend terms of the Frank elastic energy. The
+Okubo-Weiss criterion separates eddies from strain in two-dimensional turbulence and in ocean
+currents; the winding number is the topological charge of a defect, the vortex number of the XY
+model.
 \end{tech}
+
+\begin{figure}[H]
+\centering
+\input{figs/fig_winding}
+\caption{(a)--(c) The winding number of a plaquette: the turns between neighbouring corners add up
+to 0 away from a defect, to $360^\circ$ around a $+1$ polar defect and to $180^\circ$ around a
+$+\frac12$ nematic defect, whose rods have no head. (d) The Okubo-Weiss parameter of a vortex: negative
+in the core, positive in the ring of strain around it.}\label{fig:winding}
+\end{figure}
 
 \subsubsection{Nematic fields}\label{sec:nematic}
 
@@ -433,9 +469,10 @@ A nematic field $\mathsf Q$ (Fig.~\ref{fig:kinds}c) gets \textbf{amp}, \textbf{s
 \textbf{dyn} from its two components, as a vector does, and \textbf{mom}, \textbf{topo} on the
 scalar order parameter $S=2|\mathsf Q|=2\sqrt{Q_{xx}^2+Q_{xy}^2}$; the low-$S$ domains are defect
 cores. \textbf{order} is $|\avg{\mathsf Q}|/\avg{|\mathsf Q|}$, the alignment of the directors over the
-frame. There is no flow block: the divergence of $\mathsf Q$ is a vector, not a rotation-invariant
-number. Defects counted by their winding number ($\pm\tfrac12$) and splay and bend of the director
-are planned.
+frame. \textbf{defects}: as for a polarity, with the director angle $\theta=\tfrac12\mathrm{atan2}(Q_{xy},Q_{xx})$
+defined modulo $\pi$, so steps are the smallest turns modulo $\pi$ and the charges are $\pm\frac12$
+(Fig.~\ref{fig:winding}c). There is no flow block: the divergence of $\mathsf Q$ is a vector, not a
+rotation-invariant number; splay and bend of the director are not computed yet.
 \end{tech}
 
 \subsubsection{Non-periodic frames}\label{sec:nonperiodic}
@@ -500,8 +537,11 @@ interrogation windows.
   \If{flat ($\std<10^{-6}$)} \State \code{shape} $\gets 0$ \Else \State \code{shape} $\gets S(k)/\sum S$ (window first if not periodic) \EndIf
   \State $v\gets a$ (scalar), $|\mathbf a|$ (vector) or $2|\mathsf Q|$ (nematic)
   \State \code{mom} $\gets$ moments of $v$; \code{topo} $\gets$ domain counts of $v$ at $z=-1,0,1$
+  \State \textbf{only the blocks selected for the field} (its own, or the defaults of its kind):
   \If{vector or nematic} \State \code{order} $\gets|\avg{\mathbf a}|/\avg{|\mathbf a|}$ \EndIf
   \If{vector} \State \code{flow} $\gets$ divergence and curl (spectral, or finite differences) \EndIf
+  \If{velocity} \State \code{vortex} $\gets$ cores of $W<-0.2\,\std W$: area share, count per area \EndIf
+  \If{polarity or nematic} \State \code{defects} $\gets$ plaquettes of winding $\ge\frac12$ unit, $\le-\frac12$ unit, per area \EndIf
   \If{the snapshot at $t-\Delta t$ exists} \State \code{dyn} $\gets\log_{10}(1-C+10^{-3})$ for $C_{\rm still}$ and $C_{\rm moving}$ \EndIf
 \EndFor
 \Ensure one row: \code{field.block.name} $\to$ value
@@ -510,9 +550,11 @@ interrogation windows.
 
 \begin{codebox}
 \textbf{Files.} \srcref{src/phasewall/describe.py} (\code{field_descriptors},
-\code{structure_factor}, \code{window}, \code{div_curl}, \code{domain_counts}, \code{correlations},
-\code{describe_snapshot}, \code{describe_ensemble}); tests \srcref{tests/test_describe.py},
-\srcref{tests/test_frames.py}. \code{describe_ensemble(ens, workers)} returns one row per snapshot
+\code{structure_factor}, \code{window}, \code{gradients}, \code{div_curl}, \code{okubo_weiss},
+\code{vortex_cores}, \code{winding_charges}, \code{defect_counts}, \code{domain_counts},
+\code{correlations}, \code{describe_snapshot}, \code{describe_ensemble}),
+\srcref{src/phasewall/fields.py} (\code{BLOCKS}, \code{DEFAULT_BLOCKS}, \code{Field.selected});
+tests \srcref{tests/test_describe.py}, \srcref{tests/test_frames.py}, \srcref{tests/test_blocks.py}. \code{describe_ensemble(ens, workers)} returns one row per snapshot
 (the last \code{last} snapshots of each run), plus the runs that could not be read, using
 \code{concurrent.futures.ProcessPoolExecutor}; keep 2 or 3 workers over a network share. Domains
 are labelled with \code{scipy.ndimage.label} and joined across the periodic edges by a union-find;
@@ -522,7 +564,11 @@ the windowed correlation uses \code{scipy.signal.fftconvolve}.
 two-valued fields give the exact skewness $2/\sqrt3$ and kurtosis $-2/3$; $\cos kx+\cos ky$ gives
 $m^2$ domains and $\cos kx$ gives $m$; a gradient has curl share 0 and its rotation by $90^\circ$
 curl share 1; a frozen pattern gives both correlations at the floor, a shifted one only
-$C_{\rm moving}$; every descriptor of random scalar, vector and nematic fields is unchanged under
+$C_{\rm moving}$; the vortex block counts one and two Gaussian vortices and the four cells of a
+cellular flow, and no core in a shear flow; the defects block finds the $+1$ and $-1$ defects of a
+polarity and the $\pm\frac12$ defects of a nematic, and none in a uniform field; each kind computes
+its default blocks, a field only its own, and a block that does not fit the kind is refused; every
+descriptor of random scalar, vector, velocity, polarity and nematic fields is unchanged under
 all 8 elements of $D_4$ and periodic shifts. Non-periodic frames: $S(k)$ of crops within 6\% of
 the exact one from $L_c/3$ to $L_c/11$; finite against spectral derivatives; a frame moved by
 $(3,-2)$ points gives $C_{\rm moving}$ at the floor and a move of 9 points with $s=5$ does not; the
@@ -1297,6 +1343,18 @@ longer holds exactly.}\label{fig:amplitude}
 Right: reference labels, never seen by \pw{}.}\label{fig:phasemap}
 \end{figure}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{../examples/swift-hohenberg/states.png}
+\caption{Swift-Hohenberg: one run of each reference state (at the point where most runs carry it).}\label{fig:shstates}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{../examples/swift-hohenberg/mistakes.png}
+\caption{The 5 points whose reference label is not that of their phase, with the labels of their 8 runs: all hexagon points (5 or 6 runs of 8) placed with stripes. A run labelled hexagons is shown: patches of spots and stripes side by side, the pinned mixed states described below.}\label{fig:shmistakes}
+\end{figure}
+
 \begin{tech}
 \textbf{Agreement} (Fig.~\ref{fig:phasemap}). Five cuts are tried and two are kept
 (Figs.~\ref{fig:testsdata} and~\ref{fig:cuttree}): 3 phases; 235 of 240 points carry the most
@@ -1573,6 +1631,24 @@ to the median spread; middle: phases found (circles: mixed points); right: refer
 the walls found in grey.}\label{fig:gsmap}
 \end{figure}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{../examples/gray-scott/states.png}
+\caption{Gray-Scott: one run of each reference state, field $v$.}\label{fig:gsstates}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{../examples/gray-scott/phases.png}
+\caption{Gray-Scott: one run at the central point of each phase found, field $v$.}\label{fig:gsphases}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{../examples/gray-scott/mistakes.png}
+\caption{Gray-Scott: 10 of the 43 points whose reference label is not that of their region, taken in turn from each kind of mistake. Several are at the thresholds of the reference labeller (spots mixed with short stripes, spots against isolated spots), others at the edge of the moving region; the frame colour is the phase found. All 43: \code{docs/examples/gray-scott/mistakes.csv}.}\label{fig:gsmistakes}
+\end{figure}
+
 \begin{tech}
 \textbf{Results} (hand-made description unless stated).
 \begin{itemize}[leftmargin=1.2em, itemsep=1pt]
@@ -1625,6 +1701,18 @@ states keep moving, as they should.
 \includegraphics[width=\textwidth]{../examples/fitzhugh-nagumo/phase_map_hand.png}
 \caption{FitzHugh-Nagumo, walls on the hand-made description (axes linear, grid logarithmic):
 one phase, and the reference labels, which change from run to run at many points.}\label{fig:fhnmap}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{../examples/fitzhugh-nagumo/states.png}
+\caption{FitzHugh-Nagumo: one run of each reference state. The pattern labels (stripes, holes, fronts) are close to each other at large $\delta$.}\label{fig:fhnstates}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{../examples/fitzhugh-nagumo/mistakes.png}
+\caption{FitzHugh-Nagumo: 10 of the 66 points whose reference label is not that of the single phase found (dynamic): uniform points at $u>0$ and $u<0$, fronts, stripes and holes; at many points the runs do not end in the same state.}\label{fig:fhnmistakes}
 \end{figure}
 
 \begin{tech}
@@ -1685,10 +1773,23 @@ the 24 continued runs changed up to $t=16\,000$.
 states.}\label{fig:barkleymap}
 \end{figure}
 
+
 \begin{figure}[H]
 \centering
-\includegraphics[width=0.6\textwidth]{../examples/barkley/snapshots_hand.png}
-\caption{Barkley: one snapshot of $u$ from the central point of each phase found.}
+\includegraphics[width=0.8\textwidth]{../examples/barkley/states.png}
+\caption{Barkley: one run of each reference state, field $u$.}\label{fig:barkleystates}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{../examples/barkley/phases.png}
+\caption{Barkley: one run at the central point of each phase found.}\label{fig:barkleyphases}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{../examples/barkley/mistakes.png}
+\caption{Barkley: 10 of the 33 points whose reference label is not that of their phase. All 33 are plane-wave points: 30 are placed with the spirals (at many of them 1 of the 4 runs ends with spirals), 3 with rest (a run comes to rest).}\label{fig:barkleymistakes}
 \end{figure}
 
 \begin{tech}
@@ -1739,6 +1840,18 @@ continued runs changed, and the field changed by less than $10^{-4}$.
 localised and extended.}\label{fig:shlocmap}
 \end{figure}
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{../examples/sh-localized/states.png}
+\caption{Localised Swift-Hohenberg: one run of each reference state.}\label{fig:shlocstates}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{../examples/sh-localized/mistakes.png}
+\caption{Localised Swift-Hohenberg: the 2 points whose reference label is not that of their phase, both at the edge of the pinning range ($a=-0.1575$): 3 of 4 runs invade the box, 1 stays localised, and the walls place the point with the localised states.}\label{fig:shlocmistakes}
+\end{figure}
+
 \begin{tech}
 \textbf{Results.} Walls: 3 phases, 103 of 105 points agree, ARI 0.96. Tree: 3 phases, 104 points,
 ARI 0.98 both ways, with \code{u.amp.log10var} alone (flat, small for a patch, large for stripes
@@ -1759,42 +1872,59 @@ labels are used only for the scores. All numbers: \code{docs/examples/overview.m
 
 \begin{table}[H]
 \centering\small
-\begin{tabular}{@{}>{\raggedright}p{2.6cm}lrrr>{\raggedright}p{4.0cm}r@{}}
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{@{}>{\raggedright}p{2.5cm}lrrr>{\raggedright}p{5.0cm}r@{}}
 \toprule
-example (points $\times$ seeds) & description & phases & agree & ARI & closest blind method (ARI, pieces) & probe \\
+example & description & phases & agree & ARI & closest blind method (ARI, pieces, noise) & probe \\
 \midrule
-Swift-Hohenberg ($240\times8$) & hand-made & 3 & 235 & 0.93 & HDBSCAN 20 (0.78, 10) & 1.00 \\
-                               & learned   & 2 & 171 & 0.36 & HDBSCAN 20 (0.37, 2) & 0.98 \\
-                               & combined  & 2 & 171 & 0.36 & k-means (0.36, 2) & 1.00 \\
-                               & tree      & 4 / 3 & 235 / 237 & 0.90 / 0.96 & & \\
-\addlinespace
-Gray-Scott ($525\times4$)      & hand-made & 10 & 482 & 0.80 & k-means, $k=7$ (0.99, 23) & 0.96 \\
-                               & learned   & 1 & 207 & 0 & HDBSCAN 20 (0.86, 8; 32\% noise) & 0.92 \\
-                               & combined  & 8 & 503 & 0.86 & HDBSCAN 20 (0.82, 30) & 0.97 \\
-                               & tree      & 16 / 21 & 499 / 492 & 0.84 / 0.82 & & \\
-\addlinespace
-FitzHugh-Nagumo ($99\times4$)  & hand-made & 1 & 33 & 0 & HDBSCAN 20 (0.71, 16; 23\% noise) & 0.77 \\
-                               & learned   & 1 & 33 & 0 & HDBSCAN 10 (0.71, 15; 35\% noise) & 0.70 \\
-                               & combined  & 1 & 33 & 0 & HDBSCAN 20 (0.74, 16; 20\% noise) & 0.79 \\
-                               & tree      & 1 / 1 & 33 / 33 & 0 / 0 & & \\
-\addlinespace
-Barkley ($165\times4$)         & hand-made & 2 & 132 & 0.59 & HDBSCAN 20 (0.84, 20; 14\% noise) & 0.99 \\
-                               & learned   & 1 & 90 & 0 & HDBSCAN 10 (0.96, 6; 25\% noise) & 0.96 \\
-                               & combined  & 2 & 132 & 0.59 & HDBSCAN 20 (0.86, 13; 21\% noise) & 0.99 \\
-                               & tree      & 2 / 2 & 132 / 131 & 0.58 / 0.58 & & \\
-\addlinespace
-localised SH ($105\times4$)    & hand-made & 3 & 103 & 0.96 & HDBSCAN 10 (1.00, 3; 13\% noise) & 1.00 \\
-                               & learned   & 1 & 51 & 0 & HDBSCAN 20 (1.00, 2; 41\% noise) & 1.00 \\
-                               & combined  & 1 & 51 & 0 & HDBSCAN 10 (1.00, 4; 17\% noise) & 1.00 \\
-                               & tree      & 3 / 3 & 104 / 104 & 0.98 / 0.98 & & \\
+\multirow{4}{=}{\textbf{Swift-Hohenberg}\\ 240 points $\times$ 8 runs} & hand-made & 3 & 235 & 0.93 & HDBSCAN 20 (0.78, 10) & 1.00 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & learned & 2 & 171 & 0.36 & HDBSCAN 20 (0.37, 2) & 0.98 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & combined & 2 & 171 & 0.36 & k-means (0.36, 2) & 1.00 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & tree & 4 / 3 & 235 / 237 & 0.90 / 0.96 &  &  \\
+\midrule
+\multirow{4}{=}{\textbf{Gray-Scott}\\ 525 points $\times$ 4 runs} & hand-made & 10 & 482 & 0.80 & k-means, $k=7$ (0.99, 23) & 0.96 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & learned & 1 & 207 & 0 & HDBSCAN 20 (0.86, 8; 32\%) & 0.92 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & combined & 8 & 503 & 0.86 & HDBSCAN 20 (0.82, 30) & 0.97 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & tree & 16 / 21 & 499 / 492 & 0.84 / 0.82 &  &  \\
+\midrule
+\multirow{4}{=}{\textbf{FitzHugh-Nagumo}\\ 99 points $\times$ 4 runs} & hand-made & 1 & 33 & 0 & HDBSCAN 20 (0.71, 16; 23\%) & 0.77 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & learned & 1 & 33 & 0 & HDBSCAN 10 (0.71, 15; 35\%) & 0.70 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & combined & 1 & 33 & 0 & HDBSCAN 20 (0.74, 16; 20\%) & 0.79 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & tree & 1 / 1 & 33 / 33 & 0 / 0 &  &  \\
+\midrule
+\multirow{4}{=}{\textbf{Barkley}\\ 165 points $\times$ 4 runs} & hand-made & 2 & 132 & 0.59 & HDBSCAN 20 (0.84, 20; 14\%) & 0.99 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & learned & 1 & 90 & 0 & HDBSCAN 10 (0.96, 6; 25\%) & 0.96 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & combined & 2 & 132 & 0.59 & HDBSCAN 20 (0.86, 13; 21\%) & 0.99 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & tree & 2 / 2 & 132 / 131 & 0.58 / 0.58 &  &  \\
+\midrule
+\multirow{4}{=}{\textbf{localised SH}\\ 105 points $\times$ 4 runs} & hand-made & 3 & 103 & 0.96 & HDBSCAN 10 (1.00, 3; 13\%) & 1.00 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & learned & 1 & 51 & 0 & HDBSCAN 20 (1.00, 2; 41\%) & 1.00 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & combined & 1 & 51 & 0 & HDBSCAN 10 (1.00, 4; 17\%) & 1.00 \\
+\arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
+ & tree & 3 / 3 & 104 / 104 & 0.98 / 0.98 &  &  \\
 \bottomrule
 \end{tabular}
 \caption{The examples. Agree: points whose phase carries their most common reference label;
 ARI: adjusted Rand index with the reference labels of the points (noise left out for HDBSCAN);
 pieces: connected pieces of the groups on the grid (the reference labels form 3 pieces for
 Swift-Hohenberg and localised SH, 20 for Gray-Scott); probe: balanced accuracy of a logistic
-regression of the labels on held-out points (a ceiling, it sees the labels). Tree: hand-made
-description, halves as given / swapped.}
+regression of the labels on held-out points (a ceiling, it sees the labels). Phases, agree and
+ARI: walls on the description, except the last row of each example: the threshold tree on the
+hand-made description, halves as given / swapped. Noise: share of the runs HDBSCAN leaves out.}
 \label{tab:examples}
 \end{table}
 
@@ -1835,6 +1965,8 @@ Constant (file) & Value & Role and reason \\
 \code{SHELL_RATIO} (describe) & 1.2 & width ratio of successive $|\mathbf k|$ shells (log spacing, no empty shell) \\
 \code{DECOR_FLOOR} (describe) & $10^{-3}$ & floor of $1-C$: round-off of a frozen pattern is not motion \\
 \code{LEVELS} (describe) & $-1,0,1$ & levels $z$ of the domain counts, in standard deviations \\
+\code{DEFAULT_BLOCKS} (fields) & by kind & blocks computed when a field does not choose; role-specific blocks on for their role only \\
+\code{OW_LEVEL} (describe) & 0.2 & vortex cores where $W<-0.2\,\std W$, the usual Okubo-Weiss threshold \\
 \code{TUKEY_ALPHA} (describe) & 0.5 & tapered share of the window of non-periodic frames (4 times less leakage than none) \\
 \code{MIN_WAVELENGTHS} (io) & 3 & non-periodic frames: $S(k)$ only for wavelengths up to $L_c/3$ \\
 \code{MAX_SHIFT_FRACTION} (frames) & 0.2 & default \code{max_shift}: a fifth of the box side \\
@@ -1866,7 +1998,7 @@ choices too (documented in their docstrings).}
 \section{Tests}\label{sec:tests}
 %======================================================================
 
-\code{pytest} runs 141 tests in about a minute, all on small synthetic data with known
+\code{pytest} runs 150 tests in about a minute, all on small synthetic data with known
 answers (no data from any laboratory is in the repository). On every push, the
 continuous-integration workflow \srcref{.github/workflows/tests.yml} runs \code{ruff} and
 \code{pytest}.
@@ -1883,6 +2015,7 @@ File & What is checked, against which known answer \\
 \code{test_frames.py} & crops, coarsening and their errors; $S(k)$ of crops against the exact one; finite against spectral derivatives; windowed moving correlation; rotation and mirror invariance; $\Delta x$ against $\Delta x/2$; mixed grids \\
 \code{test_describe.py} & shells cover the grid; $S(k)$ of one wave; exact moments; periodic domain counts; spots $m^2$ against stripes $m$; flat fields; flows; global order; dynamics; invariance of every descriptor under $D_4$ and shifts; tables and error list \\
 \code{test_nn.py} & augmentations against the field rules; shift invariance of a periodic encoder; loss at collapse and for perfect pairs; a short training separates stripes from spots; saving and loading; \code{learn} and \code{describe --encoder} (skipped without PyTorch) \\
+\code{test_blocks.py} & default blocks of every kind; a field's own blocks; blocks that do not fit refused; blocks from the configuration; vortex cores of Gaussian vortices, a cellular and a shear flow; $\pm1$ and $\pm\frac12$ winding defects; no defect in a uniform field \\
 \code{test_graph.py} & nodes merge rounding errors; links of a full grid, of a refined line, of one parameter; numbering of regions \\
 \code{test_walls.py} & energy distance; halves; feature matrix; cut of a chain; no wall in noise (5 seeds) or a smooth drift; two and three phases with the exact walls; mixed point; count against \code{RATIO} \\
 \code{test_trees.py} & no split in noise or under drifts; two and three phases with the right rules; halves swapped; principal components \\
@@ -1922,11 +2055,12 @@ File & What is checked, against which known answer \\
 \item \textbf{Learned description.} It carries the states but without a jump at their boundaries
   (Secs.~\ref{sec:comparison} and~\ref{sec:examples-results}); why it dominates the combined table
   is open.
+\item \textbf{One phase in two places.} A phase split by another phase between its parts (the
+  uniform state of Gray-Scott) is counted twice; comparing the phases that do not touch, and
+  merging those whose points are as close as points inside one phase, is planned.
 \item \textbf{Tree.} A stopping rule that does not over-split (Gray-Scott) and works with one run
   per point.
-\item \textbf{Planned for the package.} Observables specific to each role
-  (vorticity and kinetic energy spectrum, winding-number defects $\pm1$ and $\pm\tfrac12$, splay and
-  bend), switched on or off per field; registries of encoders and methods with one common
+\item \textbf{Planned for the package.} Registries of encoders and methods with one common
   interface and shared contract tests, so that a new one is added in one file; a network whose
   depth, widths and $\dim h$ are chosen within checked constraints.
 \end{itemize}
@@ -1941,7 +2075,7 @@ File & What is checked, against which known answer \\
 \toprule
 File & Content & Section \\
 \midrule
-\srcref{src/phasewall/fields.py} & field kinds, symmetries of the box & \ref{sec:fields} \\
+\srcref{src/phasewall/fields.py} & field kinds, symmetries of the box, blocks per kind & \ref{sec:fields}, \ref{sec:describe} \\
 \srcref{src/phasewall/io.py} & TOML configuration, reading and writing snapshots, external tables & \ref{sec:fields}, \ref{sec:combined} \\
 \srcref{src/phasewall/frames.py} & crops, coarsening, non-periodic frames & \ref{sec:frames} \\
 \srcref{src/phasewall/describe.py} & hand-made encoder; combined tables & \ref{sec:describe}, \ref{sec:combined} \\
@@ -1965,7 +2099,7 @@ File & Content & Section \\
 \srcref{scripts/compare_describers.py} & encoders and methods compared on Swift-Hohenberg & \ref{sec:comparison}, \ref{sec:sh-blind} \\
 \srcref{scripts/run_examples.py} & all examples: steady-state check, descriptions, methods & \ref{sec:steady}, \ref{sec:examples-results} \\
 \srcref{scripts/tree_examples.py} & the tree on all examples & \ref{sec:examples-results} \\
-\srcref{tests/} & 141 tests & \ref{sec:tests} \\
+\srcref{tests/} & 150 tests & \ref{sec:tests} \\
 \bottomrule
 \end{tabular}
 \end{table}

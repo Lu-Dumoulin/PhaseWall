@@ -1,0 +1,56 @@
+% Winding number on a 2x2 plaquette (defects block) and the Okubo-Weiss parameter of a vortex
+% (vortex block). Panels (a)-(c) adapted from the hfml plan (same author).
+% Corners are visited counterclockwise: bottom-left, bottom-right, top-right, top-left.
+\begin{tikzpicture}[fig]
+\def\a{1.5}
+% (a) far from a defect: small wiggles, total 0
+\begin{scope}
+  \draw[black!40] (0,0) rectangle (\a,\a);
+  \draw[->, black!30] (\a/2,\a/2) ++(-70:0.3) arc (-70:250:0.3);
+  \foreach \x/\y/\t in {0/0/10, \a/0/25, \a/\a/20, 0/\a/5}
+    \draw[->, thick, cP0] (\x,\y) ++(\t+180:0.3) -- ++(\t:0.6);
+  \node[small] at (\a/2,-0.32) {$+15^\circ$};
+  \node[small, right] at (\a+0.12,\a/2) {$-5^\circ$};
+  \node[small] at (\a/2,\a+0.32) {$-15^\circ$};
+  \node[small, left] at (-0.12,\a/2) {$+5^\circ$};
+  \node[lab] at (\a/2,\a+0.9) {(a) no defect};
+  \node[note] at (\a/2,-1.0) {sum $= 0^\circ$\\$q = 0$};
+\end{scope}
+% (b) around a +1 polar defect: a full turn
+\begin{scope}[xshift=4.2cm]
+  \draw[black!40] (0,0) rectangle (\a,\a);
+  \draw[->, black!30] (\a/2,\a/2) ++(-70:0.3) arc (-70:250:0.3);
+  \foreach \x/\y/\t in {0/0/225, \a/0/315, \a/\a/45, 0/\a/135}
+    \draw[->, thick, cP0] (\x,\y) ++(\t+180:0.3) -- ++(\t:0.6);
+  \node[small] at (\a/2,-0.32) {$+90^\circ$};
+  \node[small, right] at (\a+0.12,\a/2) {$+90^\circ$};
+  \node[small] at (\a/2,\a+0.32) {$+90^\circ$};
+  \node[small, left] at (-0.12,\a/2) {$+90^\circ$};
+  \node[lab] at (\a/2,\a+0.9) {(b) polar defect};
+  \node[note] at (\a/2,-1.0) {sum $= 360^\circ$\\$q = +1$};
+\end{scope}
+% (c) around a +1/2 nematic defect: rods have no head, angles are defined modulo 180
+\begin{scope}[xshift=8.4cm]
+  \draw[black!40] (0,0) rectangle (\a,\a);
+  \draw[->, black!30] (\a/2,\a/2) ++(-70:0.3) arc (-70:250:0.3);
+  \foreach \x/\y/\t in {0/0/0, \a/0/45, \a/\a/90, 0/\a/135}
+    \draw[line width=1.6pt, cP1, line cap=round] (\x,\y) ++(\t+180:0.3) -- ++(\t:0.6);
+  \node[small] at (\a/2,-0.32) {$+45^\circ$};
+  \node[small, right] at (\a+0.12,\a/2) {$+45^\circ$};
+  \node[small] at (\a/2,\a+0.32) {$+45^\circ$};
+  \node[small, left] at (-0.12,\a/2) {$+45^\circ$};
+  \node[lab] at (\a/2,\a+0.9) {(c) nematic defect};
+  \node[note] at (\a/2,-1.0) {sum $= 180^\circ$\\$q = +\frac12$};
+\end{scope}
+% (d) Okubo-Weiss: a vortex core (rotation dominates, W < 0) in a ring of strain (W > 0)
+\begin{scope}[xshift=13.2cm, yshift=0.75cm]
+  \fill[cP1!25] (0,0) circle (1.05);
+  \fill[white] (0,0) circle (0.62);
+  \fill[cP0!35] (0,0) circle (0.5);
+  \foreach \r in {0.25, 0.42} \draw[->, cInk2] (0:\r) arc (0:300:\r);
+  \node[small] at (0,-0.78) {$W>0$};
+  \node[small, fill=white, inner sep=1pt] at (0,0) {$W<0$};
+  \node[lab] at (0,1.55) {(d) vortex core};
+  \node[note, text width=3.6cm] at (0,-1.75) {$W=s_n^2+s_s^2-\omega^2$\\ core: $W<-0.2\,\std W$};
+\end{scope}
+\end{tikzpicture}

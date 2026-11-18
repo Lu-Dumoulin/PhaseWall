@@ -160,11 +160,15 @@ def test_dynamics_of_frozen_travelling_and_changing_patterns():
 
 
 def test_every_descriptor_is_unchanged_by_the_symmetries_of_the_box():
-    fields = [Field("rho", ("rho",), relative=True), P, Q]
-    snap = {"rho": 1 + 0.2 * smooth_noise(6), "p": smooth_noise(7, (N, N, 2)), "Q": smooth_noise(8, (N, N, 2))}
-    before = {"rho": 1 + 0.2 * smooth_noise(9), "p": smooth_noise(10, (N, N, 2)), "Q": smooth_noise(11, (N, N, 2))}
+    fields = [Field("rho", ("rho",), relative=True), P, Q, Field("v", ("v",), "velocity"),
+              Field("q", ("q",), "polarity")]
+    snap = {"rho": 1 + 0.2 * smooth_noise(6), "p": smooth_noise(7, (N, N, 2)), "Q": smooth_noise(8, (N, N, 2)),
+            "v": smooth_noise(12, (N, N, 2)), "q": smooth_noise(13, (N, N, 2))}
+    before = {"rho": 1 + 0.2 * smooth_noise(9), "p": smooth_noise(10, (N, N, 2)), "Q": smooth_noise(11, (N, N, 2)),
+              "v": smooth_noise(14, (N, N, 2)), "q": smooth_noise(15, (N, N, 2))}
     ref = d.describe_snapshot(snap, fields, DX, before)
-    assert len(ref) > 50
+    assert len(ref) > 100
+    assert ref["v.vortex.cores"] > 0 and ref["q.defects.plus"] > 0 and ref["Q.defects.minus"] > 0
     for turns in range(4):
         for mirror in (False, True):
             for shift in [(0, 0), (7, 19)]:

@@ -30,6 +30,7 @@ read by Python's standard `tomllib`), for example:
     name = "p"
     kind = "polarity"
     components = ["px", "py"]      # two scalar datasets, stacked as (x, y); or keys = ["P"]
+    blocks = ["amp", "shape", "defects"]   # optional: observables to compute (default: by kind)
 
 `phasewall inspect FILE` lists the datasets of a snapshot file and suggests these blocks
 (inspect_snapshot, suggest_fields, fields_toml below). A scalar field whose name looks like a
@@ -56,7 +57,7 @@ import pandas as pd
 from .fields import KINDS, Field, component_of
 
 MIN_WAVELENGTHS = 3.0      # non-periodic frames: S(k) only for wavelengths up to side / 3 (a choice)
-FIELD_KEYS = {"name", "keys", "kind", "relative", "components", "single_component"}
+FIELD_KEYS = {"name", "keys", "kind", "relative", "components", "single_component", "blocks"}
 
 @dataclass
 class Ensemble:
@@ -116,7 +117,7 @@ def load_ensemble(path: str | Path) -> Ensemble:
         raise ValueError(f"{path}: `periodic` must be true or false")
     fields = [Field(f["name"], tuple(f.get("keys", [f["name"]])), f.get("kind", "scalar"),
                     bool(f.get("relative", False)), tuple(f.get("components", ())),
-                    bool(f.get("single_component", False))) for f in cfg["fields"]]
+                    bool(f.get("single_component", False)), tuple(f.get("blocks", ()))) for f in cfg["fields"]]
     for f in fields:
         check_not_component(f, path)
     return Ensemble(runs=runs, parameters=parameters, fields=fields, **e)

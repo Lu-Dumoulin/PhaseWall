@@ -250,6 +250,7 @@ relative = true                # describe (rho - <rho>) / <rho>
 name = "p"
 keys = ["P"]                   # one dataset with both components
 kind = "polarity"
+blocks = ["amp", "shape", "defects"]   # optional: the observables to compute (default: by kind)
 
 [[fields]]
 name = "v"
@@ -259,7 +260,9 @@ kind = "velocity"
 
 Unknown keys are errors. A scalar field whose name looks like one component (`vx`, `p_y`,
 `Qxx`) is refused, because a component alone is not invariant under rotations; add
-`single_component = true` if it really is a scalar of its own. The grid spacing can also be given per run, as a column `dx` of
+`single_component = true` if it really is a scalar of its own. Each kind has default blocks of
+observables (velocity: vortex cores by the Okubo-Weiss criterion; polarity: winding-number
+defects $\pm1$; nematic: defects $\pm\frac12$; see the documentation); `blocks` replaces them. The grid spacing can also be given per run, as a column `dx` of
 the table of runs. A whole periodic box is described with FFTs and periodic shifts. A crop,
 or a non-periodic box ($L$ its side, $s$ = `max_shift`, by default $L/5$), is described with
 rules that need no periodicity: $S(k)$ of the field times a Tukey window, for wavelengths up
@@ -308,11 +311,12 @@ details in [apps/README.md](apps/README.md).
 
 ## Tests
 
-`pytest` runs 141 tests on small synthetic fields with known answers, in about a minute:
+`pytest` runs 150 tests on small synthetic fields with known answers, in about a minute:
 the symmetry rules of vector and nematic fields against the gradient of a scalar and the
 tensor of a director field; velocity and polarity turning as vectors; file round trips in Julia
 layout; fields assembled from component datasets, components refused as scalars, and the
-suggestions of `phasewall inspect`; the structure factor of a single
+suggestions of `phasewall inspect`; vortex cores of Gaussian vortices and of a cellular flow, $\pm1$
+and $\pm\frac12$ winding defects, the blocks chosen per field; the structure factor of a single
 wave, domain counts of spots against stripes, curl-free and divergence-free flows, frozen,
 travelling and changing patterns, and the invariance of every descriptor under the eight
 symmetries of the square and periodic shifts; the links of a refined parameter grid; no wall in
@@ -335,7 +339,7 @@ This section is for development and will be revised before any public release.
 | Step | Content | Status |
 | --- | --- | --- |
 | 1 | Package: fields and their symmetries, descriptors, parameter graph, walls method, Swift-Hohenberg demo | done |
-| 2 | Tests on synthetic data with known answers (141), continuous integration (ruff, pytest) | done |
+| 2 | Tests on synthetic data with known answers (150), continuous integration (ruff, pytest) | done |
 | 2b | Frames: crops, coarsening, per-run grid spacing, non-periodic boxes; errors for unknown settings | done |
 | 3 | Command-line tool `phasewall inspect \| toy \| describe \| learn \| walls \| demo`, report (summary, tables, figures) | done |
 | 4 | Documentation: method, mathematics, physics parallels, tests ([PDF](docs/documentation.pdf)) | done |
@@ -343,13 +347,14 @@ This section is for development and will be revised before any public release.
 | 6 | Learned description (extra `[nn]`, PyTorch): contrastive encoder on snapshot pairs, with augmentations from the field symmetries; compared with the hand-made one on the demo (it finds 2 phases of 3) | done |
 | 6b | Comparison with blind grouping (Gaussian mixture, k-means, HDBSCAN) and a logistic probe, on both descriptions | done |
 | 6c | Unsupervised threshold tree (`phasewall.trees`): phases as leaves of a tree of single-descriptor thresholds, chosen and tested without any label (design below). On the demo: 3 phases with two physical rules (no amplitude; many low domains for hexagons), ARI 0.96 with the reference (walls 0.93); on the other examples as good as the walls, but it over-splits Gray-Scott | prototype; stopping rule open (over-splitting, single-run points) |
+| 6d | Phases in separate places: after the walls, compare every pair of phases that do not touch (energy distance between their points against the spread inside each) and merge those that are one phase split by a phase in between (the uniform state of Gray-Scott counts as two phases today); a merge never crosses a wall between neighbours, it only renames | planned |
 | 7 | README figures of the method itself (graph, jumps, cut, test) and of the encoder | planned |
 | 8 | More examples with known answers (below): Gray-Scott, FitzHugh-Nagumo, Barkley, localised (cubic-quintic) Swift-Hohenberg added; batch run of all examples with hand-made, learned and combined descriptions (`scripts/run_examples.py`, results in `docs/examples/` and [above](#further-examples)) | done (Barkley rerun to $t = 4000$) |
 | 8a | Gray-Scott demo (`phasewall demo --example gray-scott`), examples registry; package side of the interface: `phasewall.pipeline` (one call, cached steps), plot functions returning figures, progress callbacks, CSV tables as input, combined description, learning curve | done |
 | 8b | Interactive interface ([apps/explore.py](apps/explore.py), marimo notebook and dashboard): demos, ensembles or tables as source; grid, frame, descriptions (hand-made, learned, combined) and methods chosen in a side panel; phase maps, comparison, snapshots, walls, training curves and export in tabs; cached steps ([docs/plan_interface.md](docs/plan_interface.md)) | done |
 | 9 | Licence and public release, once step 5 shows that the method works on real data | planned |
 | 10 | Field roles: scalar, velocity, polarity, nematic; a vector or a tensor read from one dataset or assembled from several scalar datasets ($v_x$, $v_y$); an inspector that lists the datasets of a file and suggests roles that the user confirms (`phasewall inspect`) | done (2026-11-18; in the interface: step 14) |
-| 11 | Observables per role, each a named block that can be switched on or off per field; new blocks for velocity (vorticity, kinetic energy spectrum), polarity (winding defects $\pm1$, splay and bend) and nematic order (defects $\pm1/2$) | planned |
+| 11 | Observables per role, each a named block that can be switched on or off per field (`blocks` in the configuration, `Describers(blocks=...)` in the pipeline); new blocks: vortex cores for velocities (Okubo-Weiss), winding-number defects for polarities ($\pm1$) and nematics ($\pm1/2$) | done (2026-11-18; splay and bend of a director not yet) |
 | 12 | Registries of encoders and of methods with one common interface, so that a new encoder or method is added in one file (or by another package) and appears in the interface without changing it; shared contract tests for every registered entry | planned |
 | 13 | Tunable CNN: number of blocks, channels per block, dimension of $h$ and of the projection, checked against the constraints of the architecture and the frame | planned |
 | 14 | Interface on top of steps 10 to 13: the controls are built from the settings of each registered encoder and method | planned |

@@ -92,3 +92,15 @@ def test_estimate(tmp_path):
     e = pl.estimate(settings(tmp_path, describers=pl.Describers(learned=True)))
     assert set(e) == {"simulate", "describe", "train"} and all(v > 0 for v in e.values())
     assert pl.estimate(settings(tmp_path, source=pl.Source(example=None, table="x.csv", parameters=("a",)))) == {}
+
+
+def test_blocks_chosen_per_field(tmp_path):
+    s = settings(tmp_path, methods=pl.Methods(walls=False))
+    full = pl.run(s).tables["hand"]
+    s.describers.blocks = {"u": ("amp", "topo")}
+    few = pl.run(s).tables["hand"]
+    assert {c.split(".")[1] for c in few.columns if c.startswith("u.")} == {"amp", "topo"}
+    assert len(few.columns) < len(full.columns)
+    s.describers.blocks = {"u": ("flow",)}
+    with pytest.raises(ValueError, match="do not apply"):
+        pl.run(s)

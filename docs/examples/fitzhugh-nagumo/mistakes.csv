@@ -1,0 +1,67 @@
+eps,delta,reference,runs,phase,phase_label,run_shown
+0.005,0.3354,uniform,uniform 4,0,dynamic,12
+0.005,0.6325,uniform,"uniform 3, dynamic 1",0,dynamic,17
+0.005,1.1927,uniform,uniform 4,0,dynamic,20
+0.005,2.2494,uniform,uniform 4,0,dynamic,24
+0.005,4.242,uniform,"uniform 3, dynamic 1",0,dynamic,28
+0.005,8.0,fronts,fronts 4,0,dynamic,32
+0.0079,0.3354,uniform,"uniform 3, dynamic 1",0,dynamic,48
+0.0079,0.6325,uniform,uniform 4,0,dynamic,52
+0.0079,1.1927,uniform,uniform 4,0,dynamic,56
+0.0079,2.2494,uniform,uniform 4,0,dynamic,60
+0.0079,4.242,uniform,"uniform 2, stripes 1, dynamic 1",0,dynamic,65
+0.0079,8.0,fronts,"fronts 3, stripes 1",0,dynamic,68
+0.0126,0.3354,uniform,"uniform 2, dynamic 2",0,dynamic,84
+0.0126,0.6325,uniform,uniform 4,0,dynamic,88
+0.0126,1.1927,uniform,uniform 4,0,dynamic,92
+0.0126,2.2494,uniform,uniform 4,0,dynamic,96
+0.0126,4.242,fronts,"fronts 3, stripes 1",0,dynamic,100
+0.0126,8.0,fronts,"fronts 3, stripes 1",0,dynamic,104
+0.0199,1.1927,uniform,uniform 4,0,dynamic,128
+0.0199,2.2494,uniform,uniform 4,0,dynamic,132
+0.0199,4.242,stripes,"stripes 2, fronts 1, holes 1",0,dynamic,136
+0.0199,8.0,fronts,"fronts 2, stripes 2",0,dynamic,140
+0.0315,1.1927,uniform,uniform 4,0,dynamic,164
+0.0315,4.242,stripes,"stripes 2, holes 2",0,dynamic,172
+0.0315,8.0,stripes,stripes 4,0,dynamic,176
+0.05,1.1927,uniform,uniform 4,0,dynamic,200
+0.05,2.2494,stripes,stripes 4,0,dynamic,204
+0.05,4.242,stripes,stripes 4,0,dynamic,208
+0.05,8.0,stripes,"stripes 3, holes 1",0,dynamic,212
+0.0792,0.3354,stripes,"stripes 3, dynamic 1",0,dynamic,229
+0.0792,2.2494,stripes,stripes 4,0,dynamic,240
+0.0792,4.242,stripes,stripes 4,0,dynamic,244
+0.0792,8.0,stripes,stripes 4,0,dynamic,248
+0.1256,0.3354,uniform,uniform 4,0,dynamic,264
+0.1256,0.6325,uniform,uniform 4,0,dynamic,268
+0.1256,1.1927,stripes,stripes 4,0,dynamic,272
+0.1256,2.2494,stripes,stripes 4,0,dynamic,276
+0.1256,4.242,stripes,stripes 4,0,dynamic,280
+0.1256,8.0,stripes,stripes 4,0,dynamic,284
+0.1991,0.05,uniform,uniform 4,0,dynamic,288
+0.1991,0.0943,uniform,uniform 4,0,dynamic,292
+0.1991,0.1778,uniform,"uniform 3, dynamic 1",0,dynamic,296
+0.1991,0.3354,fronts,"fronts 2, uniform 2",0,dynamic,300
+0.1991,0.6325,fronts,"fronts 2, uniform 2",0,dynamic,304
+0.1991,1.1927,fronts,"fronts 2, uniform 2",0,dynamic,308
+0.1991,2.2494,holes,"holes 2, stripes 2",0,dynamic,312
+0.1991,4.242,stripes,stripes 4,0,dynamic,316
+0.1991,8.0,stripes,"stripes 3, holes 1",0,dynamic,320
+0.3155,0.05,fronts,"fronts 2, uniform 2",0,dynamic,324
+0.3155,0.0943,fronts,"fronts 2, uniform 2",0,dynamic,328
+0.3155,0.1778,fronts,"fronts 2, uniform 2",0,dynamic,332
+0.3155,0.3354,fronts,"fronts 2, uniform 2",0,dynamic,336
+0.3155,0.6325,fronts,"fronts 2, uniform 2",0,dynamic,340
+0.3155,1.1927,fronts,"fronts 2, uniform 2",0,dynamic,344
+0.3155,2.2494,uniform,"uniform 3, fronts 1",0,dynamic,348
+0.3155,4.242,stripes,stripes 4,0,dynamic,352
+0.3155,8.0,stripes,stripes 4,0,dynamic,356
+0.5,0.05,fronts,"fronts 2, uniform 2",0,dynamic,360
+0.5,0.0943,fronts,"fronts 2, uniform 2",0,dynamic,364
+0.5,0.1778,fronts,"fronts 2, uniform 2",0,dynamic,368
+0.5,0.3354,fronts,"fronts 2, uniform 2",0,dynamic,372
+0.5,0.6325,fronts,"fronts 2, uniform 2",0,dynamic,376
+0.5,1.1927,fronts,"fronts 2, uniform 2",0,dynamic,380
+0.5,2.2494,fronts,"fronts 2, uniform 2",0,dynamic,384
+0.5,4.242,fronts,"fronts 2, stripes 2",0,dynamic,388
+0.5,8.0,stripes,stripes 4,0,dynamic,392

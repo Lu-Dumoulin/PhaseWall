@@ -90,6 +90,7 @@ class Describers:
     epochs: int = 40
     seeds: tuple[int, ...] = (0,)
     device: str | None = None                   # "cpu", "mps", "cuda"; None: the fastest available
+    blocks: dict = field(default_factory=dict)  # hand-made: {field name: blocks}; others keep their own or default
 
 
 @dataclass
@@ -221,6 +222,16 @@ def framed(ens: Ensemble, f: FrameSettings) -> Ensemble:
                                periodic=ens.periodic if f.periodic is None else f.periodic)
 
 
+def with_blocks(ens: Ensemble, blocks: dict) -> Ensemble:
+    """The ensemble with the blocks of some fields replaced ({field name: blocks}; checked by
+    Field against the kind of each field)."""
+    unknown = sorted(set(blocks) - {f.name for f in ens.fields})
+    if unknown:
+        raise ValueError(f"blocks given for unknown fields {unknown}")
+    fields = [dataclasses.replace(f, blocks=tuple(blocks[f.name])) if f.name in blocks else f for f in ens.fields]
+    return dataclasses.replace(ens, fields=fields)
+
+
 # ---------------------------------------------------------------- estimate
 def estimate(settings: Settings) -> dict[str, float]:
     """Rough seconds of each step before running (demos only for the simulation; zero for a
@@ -259,11 +270,11 @@ def run(settings: Settings, progress: Progress | None = None) -> Results:
         res = Results(s, None, runs, labels, params, tables={"table": table})
     else:
         ens0, runs, labels, ek = ensemble_for(s.source, cache, w, progress)
-        ens = framed(ens0, s.frame)
+        ens = with_blocks(framed(ens0, s.frame), s.describers.blocks)
         res = Results(s, ens, runs, labels, list(ens.parameters))
         hand = None
         if s.describers.hand or s.describers.combined:
-            f = cache / f"hand-{key(ek, s.frame)}.pkl"
+            f = cache / f"hand-{key(ek, s.frame, *([s.describers.blocks] if s.describers.blocks else []))}.pkl"
             if f.exists():
                 hand = pd.read_pickle(f)
             else:

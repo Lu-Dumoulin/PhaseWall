@@ -38,6 +38,27 @@ SYMMETRY = {"scalar": "scalar", "vector": "vector", "velocity": "vector", "polar
 COMPONENT_NAME = re.compile(r"^(?P<stem>[A-Za-z]{1,3}?)_?(?P<comp>xx|xy|yy|x|y)$")
 
 
+# Blocks of observables of the hand-made encoder (describe.py) and the kinds they apply to.
+# DEFAULT_BLOCKS: what is computed when a field does not choose (a choice: the role-specific
+# blocks are on for their role; a "vector" of unknown role gets only the common ones).
+VECTORS = ("vector", "velocity", "polarity")
+BLOCKS = {
+    "amp": KINDS, "shape": KINDS, "mom": KINDS, "topo": KINDS, "dyn": KINDS,
+    "order": (*VECTORS, "nematic"),
+    "flow": VECTORS,                          # divergence and curl
+    "vortex": ("velocity", "vector"),         # Okubo-Weiss vortex cores
+    "defects": ("polarity", "vector", "nematic"),   # winding-number defects (+-1, or +-1/2 for nematics)
+}
+COMMON = ("amp", "shape", "mom", "topo")
+DEFAULT_BLOCKS = {
+    "scalar": (*COMMON, "dyn"),
+    "vector": (*COMMON, "order", "flow", "dyn"),
+    "velocity": (*COMMON, "order", "flow", "vortex", "dyn"),
+    "polarity": (*COMMON, "order", "flow", "defects", "dyn"),
+    "nematic": (*COMMON, "order", "defects", "dyn"),
+}
+
+
 def symmetry_of(kind: str) -> str:
     """How a field of this kind turns: "scalar", "vector" or "nematic"."""
     if kind not in SYMMETRY:
@@ -67,6 +88,8 @@ class Field:
     the order (x, y) or (xx, xy); used instead of `keys`.
     single_component: scalars only; the user confirms that a name such as "vx" is meant as a
     scalar of its own (see the module docstring).
+    blocks: the blocks of observables computed for this field by the hand-made encoder
+    (names of BLOCKS that apply to its kind); empty: DEFAULT_BLOCKS of its kind.
     """
 
     name: str
@@ -75,6 +98,7 @@ class Field:
     relative: bool = False
     components: tuple[str, ...] = ()
     single_component: bool = False
+    blocks: tuple[str, ...] = ()
 
     def __post_init__(self):
         if self.kind not in KINDS:
@@ -86,6 +110,16 @@ class Field:
                              f"nematic field")
         if self.single_component and self.kind != "scalar":
             raise ValueError(f"field {self.name}: 'single_component' is only for scalar fields")
+        wrong = [b for b in self.blocks if self.kind not in BLOCKS.get(b, ())]
+        if wrong:
+            allowed = [b for b, kinds in BLOCKS.items() if self.kind in kinds]
+            raise ValueError(f"field {self.name}: blocks {wrong} do not apply to a {self.kind} field; "
+                             f"blocks for this kind: {allowed}")
+
+    @property
+    def selected(self) -> tuple[str, ...]:
+        """The blocks computed for this field: its own choice, or the defaults of its kind."""
+        return self.blocks or DEFAULT_BLOCKS[self.kind]
 
     @property
     def symmetry(self) -> str:

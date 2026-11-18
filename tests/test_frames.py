@@ -125,12 +125,13 @@ def test_windowed_moving_correlation():
 
 
 def test_non_periodic_descriptors_are_unchanged_by_rotations_and_mirrors():
-    fields = [Field("rho", ("rho",), relative=True), P, Q]
+    fields = [Field("rho", ("rho",), relative=True), P, Q, Field("v", ("v",), "velocity"),
+              Field("q", ("q",), "polarity")]
     n = 72
     snap = {"rho": 1 + 0.2 * band_limited(n, 3, 1, 9), "p": band_limited(n, 4, 1, 9, 2),
-            "Q": band_limited(n, 5, 1, 9, 2)}
+            "Q": band_limited(n, 5, 1, 9, 2), "v": band_limited(n, 9, 1, 9, 2), "q": band_limited(n, 10, 1, 9, 2)}
     old = {"rho": 1 + 0.2 * band_limited(n, 6, 1, 9), "p": band_limited(n, 7, 1, 9, 2),
-           "Q": band_limited(n, 8, 1, 9, 2)}
+           "Q": band_limited(n, 8, 1, 9, 2), "v": band_limited(n, 11, 1, 9, 2), "q": band_limited(n, 12, 1, 9, 2)}
     frame = frame_for((n, n), 0.5, periodic=False, crop=20.0, max_shift=4.0)
 
     def describe(s, o):

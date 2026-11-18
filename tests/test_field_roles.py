@@ -67,11 +67,15 @@ def test_components_read_as_one_field(tmp_path, julia_order):
         read_snapshot(tmp_path / "s.h5", [Field("v", (), "velocity", components=("vx", "vz"))], julia_order)
 
 
-def test_descriptors_depend_on_the_symmetry_not_on_the_role():
+def test_roles_share_the_common_blocks_and_add_their_own():
     a = {"p": field(1)}
     base = describe_snapshot(a, [Field("p", ("P",), "vector")], 1.0, before=a)
-    for kind in ("velocity", "polarity"):
-        assert describe_snapshot(a, [Field("p", ("P",), kind)], 1.0, before=a) == base
+    vel = describe_snapshot(a, [Field("p", ("P",), "velocity")], 1.0, before=a)
+    pol = describe_snapshot(a, [Field("p", ("P",), "polarity")], 1.0, before=a)
+    assert set(vel) - set(base) == {"p.vortex.share", "p.vortex.cores"}
+    assert set(pol) - set(base) == {"p.defects.plus", "p.defects.minus"}
+    for c in base:
+        assert vel[c] == base[c] == pol[c]
 
 
 def test_a_component_alone_is_refused_unless_confirmed():
