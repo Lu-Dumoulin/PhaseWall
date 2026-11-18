@@ -188,6 +188,9 @@ def main():
             log(f"{name}: FAILED\n{traceback.format_exc()}")
     if all_scores:
         s = pd.concat(all_scores, ignore_index=True)
+        if (OUT / "scores.csv").exists():      # keep the examples not run this time (--only)
+            old = pd.read_csv(OUT / "scores.csv")
+            s = pd.concat([old[~old.example.isin(s.example)], s], ignore_index=True)
         s.to_csv(OUT / "scores.csv", index=False)
         cols = ["example", "describer", "method", "groups", "agree", "points", "ari", "ari_all", "pieces", "noise_runs", "probe"]
         (OUT / "overview.md").write_text("# All examples\n\n" + report._markdown(s[[c for c in cols if c in s]].round(3)) + "\n")

@@ -987,6 +987,86 @@ group in two pieces; the probe is above 0.95 for labels the description contains
 for random labels; no ARI when every run is noise.
 \end{codebox}
 
+\subsection{An unsupervised threshold tree}\label{sec:tree}
+
+\begin{tech}
+\textbf{Idea.} A phase boundary often shows as a jump of one descriptor, an order parameter: the
+amplitude at the uniform state, the skewness or the number of low domains between hexagons and
+stripes. The tree looks for such a descriptor and a threshold, splits the parameter points of a
+region in two, and repeats on each side. The leaves are the candidate phases, and each wall comes
+with a rule that can be read. No label and no number of phases is given: supervised trees, fitted
+to labels, are not part of \pw{}.
+
+\textbf{Values.} Every descriptor is standardised over all snapshots; the value of a point is the
+median over its snapshots, computed separately on the two halves of its runs ($v_1$ and $v_2$,
+as for the walls, Sec.~\ref{sec:compare}).
+
+\textbf{Splits} (on $v_1$). For a region $R$ and every descriptor, 32 candidate thresholds at
+quantiles of the point values split $R$ into $S$ (above) and $S'$, both with at least
+\code{MIN_PHASE} points. A candidate is scored by
+\[
+\eta^2=\frac{n_Sn_{S'}(m_S-m_{S'})^2}{n^2\,\mathrm{var}(v)},\qquad
+\mathrm{Ncut}=\frac{\cut(S,S')}{\vol(S)}+\frac{\cut(S,S')}{\vol(S')},\qquad
+\text{score}=\eta^2\left(1-\tfrac12\mathrm{Ncut}\right),
+\]
+with $\cut$ and $\vol$ counted on the grid links of $R$ (unit weights). $\eta^2$, the share of the
+variance between the sides (Otsu's criterion), is close to 1 for two tight clouds and small for a
+smooth drift; $\mathrm{Ncut}$ is small when the sides are two contiguous regions of the parameter
+plane and large for scattered points. The threshold is chosen anew in every region.
+
+\textbf{Test} (on $v_2$, which did not choose the split). Three conditions: (i) the values of the
+points on the two sides differ (Mann-Whitney between the points, $p<$ \code{ALPHA}), which pure
+noise fails; (ii) along each parameter, the median jump of the descriptor across the crossing
+links is compared with its median jump across the inner links along the same parameter, and the
+ratios, weighted by the number of crossing links, must average at least \code{RATIO}, which a
+smooth drift fails; (iii) the threshold puts at least 90\% of the points on the same side. In (ii),
+comparing along the same parameter matters: a straight cut through a drift crosses mostly links
+along the steep direction while the inner links mix steep and flat ones, which made the drift of
+the mean of $u$ along $\varepsilon$ pass as a jump in a first version. A Mann-Whitney test on the
+link jumps, as for the walls, had too little power for one noisy descriptor and a wall of a few
+links.
+
+\emph{Physics parallel.} Choosing the descriptor and the threshold is choosing an order parameter
+and the value that separates two phases (the middle of a bimodal distribution, as between the
+liquid and gas densities at coexistence); the normalised cut is the length of the interface
+between the two regions of the parameter plane relative to their sizes, an interfacial energy.
+\end{tech}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{data/tree_sh.pdf}
+\caption{The threshold tree on the demo, with the halves as planned and swapped, and the
+reference labels.}\label{fig:treesh}
+\end{figure}
+
+\begin{tech}
+\textbf{Result on the demo.} Both trees make the same first two splits:
+\code{u.amp.log10var} $\le-12$ (the uniform state: no amplitude) and \code{u.topo.below-1}
+above 0.022 or 0.025 per unit area (hexagons: many separate domains of low $u$, the gaps between
+spots). With the halves swapped these are the only accepted splits: 3 phases, 237 of 240 points
+agree with the reference, ARI 0.96 (walls: 0.93). With the halves as planned a third split,
+\code{u.shape.k00} (power at the longest wavelengths), cuts off 9 stripe points next to the
+hexagon-stripe boundary: 4 phases, 235 points, ARI 0.90. The two rules found without labels are
+the physical criteria behind the reference labels (amplitude, and a spot-like topology where the
+reference uses the skewness).
+
+\textbf{Limit.} When a point holds a single run, its two halves are snapshots of the same run,
+strongly correlated: condition (i) then no longer protects against splits that only sort runs,
+and on such data the tree splits far too much. Stopping rules for that case (only the splits found
+with both halves; a minimum $\eta^2$ and a maximum Ncut; fewer, coarser descriptors) are to try.
+\end{tech}
+
+\begin{codebox}
+\textbf{Files.} \srcref{src/phasewall/trees.py} (\code{point_values}, \code{best_split},
+\code{test_split}, \code{fit_tree}, \code{rules_text}, \code{components} for a learned
+description, \code{Tree.as_walls} for the plots); tests \srcref{tests/test_trees.py}.
+
+\textbf{Tests.} No split in pure noise, under a drift along both parameters, or under a strong
+drift along one parameter; two phases: the jumping descriptor and a threshold between its two
+levels; three phases: two nested rules on the two jumping descriptors; the same tree with the
+halves swapped; principal components (the number kept, the variance explained).
+\end{codebox}
+
 %======================================================================
 \section{Further examples}\label{sec:examples}
 %======================================================================
@@ -1023,6 +1103,119 @@ in $\varepsilon$ (pilot at $g=1$), and a patch started at small amplitude decays
 the patches start on the upper branch (amplitude 1.4).
 \end{tech}
 
+\subsection{Results}\label{sec:examples-results}
+
+Table~\ref{tab:examples} gives, for every example, the walls on the hand-made, the learned
+(seed 0; seed 1 gives the same phases) and the combined description, the blind method closest
+to the reference labels, the probe, and the unsupervised tree of Sec.~\ref{sec:tree} on the
+hand-made description. Every method uses its defaults; the reference labels are used only for
+the scores. All numbers: \code{docs/examples/overview.md} and \code{trees.csv}.
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}>{\raggedright}p{2.6cm}lrrr>{\raggedright}p{4.0cm}r@{}}
+\toprule
+example (points $\times$ seeds) & description & phases & agree & ARI & closest blind method (ARI, pieces) & probe \\
+\midrule
+Swift-Hohenberg ($240\times8$) & hand-made & 3 & 235 & 0.93 & HDBSCAN 20 (0.78, 10) & 1.00 \\
+                               & learned   & 2 & 171 & 0.36 & HDBSCAN 20 (0.37, 2) & 0.98 \\
+                               & combined  & 2 & 171 & 0.36 & k-means (0.36, 2) & 1.00 \\
+                               & tree      & 4 / 3 & 235 / 237 & 0.90 / 0.96 & & \\
+\addlinespace
+Gray-Scott ($525\times4$)      & hand-made & 10 & 482 & 0.80 & k-means, $k=7$ (0.99, 23) & 0.96 \\
+                               & learned   & 1 & 207 & 0 & HDBSCAN 20 (0.86, 8; 32\% noise) & 0.92 \\
+                               & combined  & 8 & 503 & 0.86 & HDBSCAN 20 (0.82, 30) & 0.97 \\
+                               & tree      & 16 / 21 & 499 / 492 & 0.84 / 0.82 & & \\
+\addlinespace
+localised SH ($105\times4$)    & hand-made & 3 & 103 & 0.96 & HDBSCAN 10 (1.00, 3; 13\% noise) & 1.00 \\
+                               & learned   & 1 & 51 & 0 & HDBSCAN 20 (1.00, 2; 41\% noise) & 1.00 \\
+                               & combined  & 1 & 51 & 0 & HDBSCAN 10 (1.00, 4; 17\% noise) & 1.00 \\
+                               & tree      & 3 / 3 & 104 / 104 & 0.98 / 0.98 & & \\
+\addlinespace
+FitzHugh-Nagumo ($99\times4$)  & hand-made & 1 & 33 & 0 & HDBSCAN 20 (0.71, 16; 23\% noise) & 0.77 \\
+                               & learned   & 1 & 33 & 0 & HDBSCAN 10 (0.71, 15; 35\% noise) & 0.70 \\
+                               & combined  & 1 & 33 & 0 & HDBSCAN 20 (0.74, 16; 20\% noise) & 0.79 \\
+                               & tree      & 1 / 1 & 33 / 33 & 0 / 0 & & \\
+\addlinespace
+Barkley ($165\times4$)         & hand-made & 2 & 132 & 0.59 & HDBSCAN 20 (0.84, 20; 14\% noise) & 0.99 \\
+                               & learned   & 1 & 90 & 0 & HDBSCAN 10 (0.96, 6; 25\% noise) & 0.96 \\
+                               & combined  & 2 & 132 & 0.59 & HDBSCAN 20 (0.86, 13; 21\% noise) & 0.99 \\
+                               & tree      & 2 / 2 & 132 / 131 & 0.58 / 0.58 & & \\
+\bottomrule
+\end{tabular}
+\caption{The examples. Agree: points whose phase carries their most common reference label;
+ARI: adjusted Rand index with the reference labels of the points (noise left out for HDBSCAN);
+pieces: connected pieces of the groups on the grid (the reference labels form 3 pieces for
+Swift-Hohenberg and localised SH, 20 for Gray-Scott, whose boundaries are ragged); probe:
+balanced accuracy of a logistic regression of the labels on held-out points (a ceiling, it sees
+the labels). Tree: halves as given / swapped.}
+\label{tab:examples}
+\end{table}
+
+\textbf{Steady state.} In Swift-Hohenberg and localised SH, the label of none of the 24 continued
+runs changed, and the field changed by less than $10^{-4}$. In Gray-Scott the label of 2 to 3 of 24 runs changed, mostly with a field that
+barely moved (the reference labeller near its thresholds between holes, stripes and spots), but
+two runs next to the moving region started to move after $t=40\,000$. In FitzHugh-Nagumo no label
+changed; the moving states keep moving, as they should. In Barkley, at $t=500$, 6 of 24 runs
+went from spirals to plane waves by $t=2000$ (spiral pairs annihilate slowly), so Barkley was
+rerun to $t=4000$; then no label of the 24 continued runs changed up to $t=16\,000$.
+
+\textbf{One state per point: the walls and the tree work.} With the hand-made description, the
+walls agree with the reference on 92 to 98\% of the points of Swift-Hohenberg, Gray-Scott and
+localised SH (Fig.~\ref{fig:examples}). In Gray-Scott the ten phases follow the reference regions:
+the two uniform states, the moving region, stripes, spots and isolated spots; the uniform state
+lies in two places and counts as two phases. Most of the stripe band is flagged as mixed, although
+only 19 of the 525 points have runs that end with different labels: the flag reflects the spread
+of labyrinths there, not coexisting states. The tree reads its phases as rules: in localised SH,
+\code{u.amp.log10var} alone (flat, small for a patch, large for stripes everywhere); in
+Gray-Scott, flat or not, then moving or not (\code{u.dyn.moving}), then the shape of $S(k)$. It
+over-splits Gray-Scott (16 and 21 leaves, 13 to 18 points in leaves below \code{MIN_PHASE}).
+
+\textbf{Blind grouping is sometimes closer.} On Gray-Scott, k-means with $k=7$ matches the reference
+labels better than the walls (ARI 0.99 against 0.80); its 23 pieces are close to the 20 of the
+reference itself. On localised SH, HDBSCAN finds the three states exactly but leaves 13 to 41\% of
+the runs as noise. Only on Swift-Hohenberg, where the hexagon and stripe clouds touch and drift,
+are the walls clearly ahead.
+
+\textbf{The learned description has no jump.} Alone, it gives one phase on Gray-Scott, localised SH,
+FitzHugh-Nagumo and Barkley, and two on Swift-Hohenberg, while the probe still recognises the states (0.70
+to 1.00): as on the demo (Sec.~\ref{sec:comparison}), the states are in $h$ but $h$ changes smoothly
+across their boundaries. Combined with the hand-made description it helps on Gray-Scott (ARI 0.80
+to 0.86) and removes walls on Swift-Hohenberg and localised SH, where the walls of the combined
+table follow those of the learned one. Why the learned block dominates although it is weighted as
+one block among the hand-made ones has not been looked into yet.
+
+\textbf{Barkley: rest against activity only.} The walls and the tree find one wall, between
+rest and the active states, within one grid step of the reference; plane waves and spirals form
+one phase (ARI 0.59). At 52 of the 165 points the four runs do not end in the same state (26
+points rest and spirals, 22 plane waves and spirals, 4 rest and plane waves): whether a spiral
+pair survives depends on the initial condition. This is the second cause of the failure on
+FitzHugh-Nagumo below. HDBSCAN on the learned description separates the three states best
+(ARI 0.96) but leaves a quarter of the runs as noise.
+
+\textbf{FitzHugh-Nagumo: the method's assumptions fail.} No method finds the states well (walls: one
+phase; best ARI 0.74 with 20\% noise; probe below 0.8). Two causes were measured. (i) The model is
+symmetric under $(u,v)\to(-u,-v)$ at $a_0=0$, but the description is not: the uniform runs end at
+$u\approx-0.71$ (79 runs) or $+0.71$ (55), at random, and 22 points have both, which
+\code{u.mom.mean} and \code{u.mom.skew} see as two states. (ii) 48 of the 99 points have runs
+that end in different states (bistability between uniform states, fronts, patterns and motion).
+The walls assume one state per point: here the spread of a point is as large as the jumps between
+points (the first cut has crossing jumps 0.86 times the inner ones). A field rule for odd fields
+(descriptors made even in $u$) would remove (i); (ii) needs a description of each point as a
+mixture of states rather than one state.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{../examples/gray-scott/phase_map_hand.png}\\[2mm]
+\includegraphics[width=\textwidth]{../examples/sh-localized/phase_map_hand.png}
+\caption{Walls on the hand-made description. Top: Gray-Scott, $F$ from 0.010 to 0.070 and $k$ from
+0.045 to 0.070 (steps 0.0025 and 0.00125), 4 runs per point to $t=40\,000$. Bottom: localised
+Swift-Hohenberg, $a=\varepsilon/b^2$ from $-0.19$ to $-0.14$ and $b$ from 1.8 to 2.2, 4 runs per
+point to $t=15\,000$. Left: jump across each link relative to the median spread; middle: phases
+found (circles: mixed points); right: reference labels with the walls found in grey.}
+\label{fig:examples}
+\end{figure}
+
 %======================================================================
 \section{Choices}\label{sec:choices}
 %======================================================================
@@ -1032,7 +1225,7 @@ in the code saying it is a choice.
 
 \begin{table}[H]
 \centering\small
-\begin{tabular}{@{}l>{\raggedright}p{1.8cm}>{\raggedright\arraybackslash}p{9.0cm}@{}}
+\begin{tabular}{@{}>{\raggedright}p{4.2cm}>{\raggedright}p{1.8cm}>{\raggedright\arraybackslash}p{8.0cm}@{}}
 \toprule
 Constant (file) & Value & Role and reason \\
 \midrule
@@ -1068,7 +1261,7 @@ choices too (documented in their docstrings).}
 \section{Tests}\label{sec:tests}
 %======================================================================
 
-\code{pytest} runs 94 tests in about 15 seconds, all on small synthetic data with known
+\code{pytest} runs 129 tests in about a minute, all on small synthetic data with known
 answers (no data from any laboratory is in the repository). On every push, the
 continuous-integration workflow \srcref{.github/workflows/tests.yml} runs \code{ruff} and
 \code{pytest}.
@@ -1114,14 +1307,14 @@ File & What is checked, against which known answer \\
   samples would need another graph, for example nearest neighbours.
 \item \textbf{Learned description.} On the demo it carries the state but without a jump at the
   hexagon-stripe boundary (Sec.~\ref{sec:comparison}), so the walls method finds two phases of three.
-\item \textbf{Next.} A check on real simulation data; a training objective for the learned
-  description that rewards differences between phases; more examples with known answers:
-  Gray-Scott reaction-diffusion (spots, stripes, labyrinths, self-replicating spots, localised
-  spots, travelling waves and chaos in the $(F,k)$ plane, with published maps), an excitable
-  medium (Barkley or FitzHugh-Nagumo: travelling waves, rotating spirals, spiral break-up; a test
-  of the dynamics block, since a rotation is not a translation), and localised
-  Swift-Hohenberg states from localised initial conditions (homoclinic snaking in the bistable
-  range $\varepsilon_A<\varepsilon<0$).
+\item \textbf{One state per point.} Where many points have runs that end in different states
+  (FitzHugh-Nagumo; plane waves and spirals in Barkley; Sec.~\ref{sec:examples-results}), the spread of a point is as large as the
+  jumps and no wall is found. A description of each point as a mixture of states is needed there.
+\item \textbf{Odd fields.} A symmetry $u\to-u$ of the equations is not used by the description
+  (the mean and the skewness change sign); a field rule for odd fields would make them even.
+\item \textbf{Next.} A training objective for the learned description that rewards differences
+  between phases; why the learned block dominates the combined table; a stopping rule for the
+  tree that does not over-split (Gray-Scott) and works with one run per point.
 \end{itemize}
 
 %======================================================================
@@ -1140,14 +1333,24 @@ File & Content & Section \\
 \srcref{src/phasewall/frames.py} & crops, coarsening, non-periodic frames & \ref{sec:frames} \\
 \srcref{src/phasewall/nn/} & learned description: data, model, loss, training & \ref{sec:learned} \\
 \srcref{src/phasewall/baselines.py} & blind grouping and logistic probe, for comparison & \ref{sec:methods} \\
+\srcref{src/phasewall/trees.py} & unsupervised threshold tree & \ref{sec:tree} \\
 \srcref{src/phasewall/graph.py} & nodes and links of the scan, regions & \ref{sec:compare} \\
 \srcref{src/phasewall/walls.py} & features, distances, cuts, tests, mixed points & \ref{sec:compare}--\ref{sec:mixed} \\
 \srcref{src/phasewall/toy.py} & Swift-Hohenberg demo & \ref{sec:demo} \\
+\srcref{src/phasewall/gray_scott.py} & Gray-Scott example: simulation, reference labels & \ref{sec:examples} \\
+\srcref{src/phasewall/fitzhugh_nagumo.py} & FitzHugh-Nagumo example & \ref{sec:examples} \\
+\srcref{src/phasewall/barkley.py} & Barkley example, spiral tips & \ref{sec:examples} \\
+\srcref{src/phasewall/sh_localized.py} & localised Swift-Hohenberg example & \ref{sec:examples} \\
+\srcref{src/phasewall/examples.py} & registry of the examples & \ref{sec:examples} \\
+\srcref{src/phasewall/pipeline.py} & whole analysis in one call, cached steps (used by the interface and the scripts) & \ref{sec:examples} \\
+\srcref{src/phasewall/scores.py} & agreement, ARI, pieces on the grid & \ref{sec:methods} \\
 \srcref{src/phasewall/report.py} & summary, tables, figures & \ref{sec:demo} \\
 \srcref{src/phasewall/cli.py} & command-line tool & \ref{sec:overview} \\
 \srcref{scripts/doc_figures.py} & data figures of this document & all \\
 \srcref{scripts/compare_describers.py} & descriptions and methods compared on the demo & \ref{sec:comparison}, \ref{sec:methods} \\
-\srcref{tests/} & 94 tests & \ref{sec:tests} \\
+\srcref{scripts/run_examples.py} & all examples: steady-state check, descriptions, methods & \ref{sec:examples-results} \\
+\srcref{scripts/tree_examples.py} & the tree on all examples & \ref{sec:examples-results} \\
+\srcref{tests/} & 129 tests & \ref{sec:tests} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -1158,6 +1361,10 @@ M.~C.~Cross and P.~C.~Hohenberg, Rev.\ Mod.\ Phys.\ \textbf{65}, 851 (1993).
 R.~Hoyle, \emph{Pattern Formation} (Cambridge University Press, 2006), hexagons and stripes.
 G.~J.~Sz\'ekely and M.~L.~Rizzo, J.\ Stat.\ Plann.\ Inference \textbf{143}, 1249 (2013), energy statistics.
 J.~Shi and J.~Malik, IEEE Trans.\ PAMI \textbf{22}, 888 (2000), normalised cuts.
+J.~E.~Pearson, Science \textbf{261}, 189 (1993), Gray-Scott patterns.
+A.~Hagberg and E.~Meron, Phys.\ Rev.\ Lett.\ \textbf{72}, 2494 (1994), FitzHugh-Nagumo fronts.
+D.~Barkley, Physica D \textbf{49}, 61 (1991), excitable media.
+J.~Burke and E.~Knobloch, Phys.\ Rev.\ E \textbf{73}, 056211 (2006), localised states.
 U.~von Luxburg, Stat.\ Comput.\ \textbf{17}, 395 (2007), spectral clustering.
 H.~B.~Mann and D.~R.~Whitney, Ann.\ Math.\ Stat.\ \textbf{18}, 50 (1947).
 

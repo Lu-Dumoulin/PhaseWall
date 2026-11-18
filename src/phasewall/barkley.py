@@ -34,7 +34,7 @@ from .parallel import run_jobs
 
 EPS = 0.02              # time-scale ratio (Barkley 1994)
 N, DX, DT = 128, 0.4, 0.02    # box 51.2; D dt / dx^2 = 0.125 (a choice, stable)
-T_RELAX = 500.0         # many spiral rotations
+T_RELAX = 4000.0        # a choice: at 500 the long-run check found spiral pairs still annihilating into plane waves
 EVERY, N_SAVE = 2.0, 6  # a fraction of a rotation period: rotating spirals decorrelate
 A = np.round(np.arange(0.30, 1.001, 0.05), 3)
 B = np.round(np.arange(0.0, 0.1001, 0.01), 3)

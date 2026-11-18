@@ -1,0 +1,17 @@
+# Unsupervised threshold tree: fitzhugh-nagumo
+
+## halves as given: 1 phases, ARI 0.000
+
+phase 0 (99 points): (all points)
+
+| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | accepted |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 99 | v.dyn.still | -1.25 | 30 | 69 | 0.944 | 0.304 | 0.8 | 0.879 | 0 | 9.75e+03 | False |
+
+## halves swapped: 1 phases, ARI 0.000
+
+phase 0 (99 points): (all points)
+
+| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | accepted |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 99 | v.dyn.still | -1.24 | 24 | 75 | 0.931 | 0.31 | 0.786 | 0.879 | 0 | 645 | False |

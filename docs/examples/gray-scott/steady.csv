@@ -1,0 +1,25 @@
+run,F,k,seed,at_boundary,label,label_x2,change_x2,label_x4,change_x4
+1244,0.045,0.06625,0,True,isolated spots,isolated spots,1.4518198077073663e-07,isolated spots,2.7318558082356503e-08
+1309,0.0475,0.06,1,True,holes,stripes,0.00011394381767970696,holes,0.0025087458794716966
+538,0.025,0.055,2,True,stripes,stripes,0.00015651911564174004,dynamic,0.298892326850982
+2067,0.07,0.06,3,True,uniform (high v),uniform (high v),3.995133858736288e-06,uniform (high v),3.828615697143434e-06
+556,0.025,0.06125,0,True,spots,spots,1.1115379183745944e-07,spots,1.8711924232306387e-09
+554,0.025,0.06,2,True,spots,dynamic,0.1586755609917323,dynamic,0.1282057379292073
+1587,0.055,0.0675,3,True,uniform,uniform,0.0,uniform,0.0
+1246,0.045,0.06625,2,True,isolated spots,isolated spots,9.674049450403288e-09,isolated spots,3.376721124936921e-10
+634,0.0275,0.05875,2,True,spots,spots,0.07260877342555194,spots,0.06147898380946881
+387,0.02,0.06,3,True,uniform,uniform,0.0,uniform,0.0
+735,0.03,0.06375,3,True,uniform,uniform,0.0,uniform,0.0
+1311,0.0475,0.06,3,True,stripes,stripes,1.0421894060863579e-05,stripes,2.6399939121790617e-05
+1777,0.0625,0.04875,1,False,uniform (high v),uniform (high v),3.0180213603459016e-05,uniform (high v),1.760502972147915e-05
+34,0.01,0.055,2,False,uniform,uniform,0.0,uniform,0.0
+1068,0.04,0.06375,0,False,stripes,stripes,0.0006082894061081312,spots,0.00010253251661063167
+1333,0.0475,0.0675,1,False,isolated spots,isolated spots,3.5530213282619627e-07,isolated spots,2.620118113583203e-07
+645,0.0275,0.0625,1,True,spots,spots,7.877576368997552e-11,spots,0.0
+365,0.02,0.05375,1,False,dynamic,dynamic,0.6335039624544674,dynamic,0.7543282276485644
+565,0.025,0.06375,1,False,uniform,uniform,0.0,uniform,0.0
+85,0.0125,0.045,1,False,uniform,uniform,0.0,uniform,0.0
+1365,0.05,0.05125,1,False,uniform (high v),uniform (high v),1.0898665818714903e-06,uniform (high v),2.1795656743872627e-06
+1707,0.06,0.0525,3,False,uniform (high v),uniform (high v),9.913943221251387e-06,uniform (high v),1.2393367235463693e-05
+1916,0.065,0.06625,0,False,uniform,uniform,0.0,uniform,0.0
+156,0.0125,0.0675,0,False,uniform,uniform,0.0,uniform,0.0

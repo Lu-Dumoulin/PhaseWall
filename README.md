@@ -170,6 +170,42 @@ contains the states. Blind
 grouping needs them to form separate clouds, which they do not here (the hexagon and stripe
 clouds touch and drift with the parameters); the walls only need a jump along the grid.
 
+## Further examples
+
+Four more models with known states, each run to steady state (checked by continuing 24 runs to
+2 and 4 times the run time), described in the three ways and compared with every method, all
+with their defaults (`scripts/run_examples.py`, `scripts/tree_examples.py`; results in
+[docs/examples/](docs/examples/overview.md)). The reference labels come from simple rules on the
+final snapshots and are used only for the scores. ARI: adjusted Rand index with the reference
+(points); tree: halves as given or swapped.
+
+| example | points x runs | walls, hand-made | tree, hand-made | walls, learned | walls, combined | closest blind method (hand-made) |
+| --- | --- | --- | --- | --- | --- | --- |
+| Swift-Hohenberg | 240 x 8 | 3 phases, ARI 0.93 | 4 or 3 phases, 0.90 or 0.96 | 2 phases, 0.36 | 2 phases, 0.36 | HDBSCAN 20: 0.78 (20% noise) |
+| Gray-Scott | 525 x 4 | 10 phases, 0.80 | 16 or 21 phases, 0.84 or 0.82 | 1 phase | 8 phases, 0.86 | k-means, $k$ = 7: 0.99 |
+| localised Swift-Hohenberg | 105 x 4 | 3 phases, 0.96 | 3 phases, 0.98 | 1 phase | 1 phase | HDBSCAN 10: 1.00 (13% noise) |
+| FitzHugh-Nagumo | 99 x 4 | 1 phase | 1 phase | 1 phase | 1 phase | HDBSCAN 20: 0.71 (23% noise) |
+| Barkley | 165 x 4 | 2 phases, 0.59 | 2 phases, 0.58 | 1 phase | 2 phases, 0.59 | HDBSCAN 20: 0.84 (14% noise) |
+
+![Gray-Scott: walls on the hand-made description](docs/examples/gray-scott/phase_map_hand.png)
+
+- Where each parameter point ends in one state, the walls and the tree find the states:
+  92-98% of the points agree with the reference. The tree states its phases as rules, for
+  example the variance of $u$ alone for localised Swift-Hohenberg (zero, small for a patch, large
+  for stripes everywhere), but over-splits Gray-Scott.
+- Blind grouping is sometimes closer: on Gray-Scott k-means matches the reference better than
+  the walls. The walls are clearly ahead only on Swift-Hohenberg.
+- The learned description contains the states (probe 0.70-1.00) but gives no jump at their
+  boundaries, on every example. Combined with the hand-made one, it helps on Gray-Scott and
+  removes walls elsewhere.
+- Barkley: the walls and the tree find rest against activity, but not plane waves against
+  spirals. At 52 of 165 points the runs end in different states (whether a spiral pair survives
+  depends on the initial condition).
+- FitzHugh-Nagumo breaks two assumptions: its equations are symmetric under $u \to -u$ but the
+  descriptors are not (the uniform runs end at $u \approx \pm 0.71$ at random, seen as two states),
+  and 48 of 99 points have runs that end in different states, so the spread of a point is as
+  large as the jumps between points.
+
 ## Usage
 
 ```
@@ -260,7 +296,7 @@ details in [apps/README.md](apps/README.md).
 
 ## Tests
 
-`pytest` runs 122 tests on small synthetic fields with known answers, in about a minute:
+`pytest` runs 129 tests on small synthetic fields with known answers, in about a minute:
 the symmetry rules of vector and nematic fields against the gradient of a scalar and the
 tensor of a director field; file round trips in Julia layout; the structure factor of a single
 wave, domain counts of spots against stripes, curl-free and divergence-free flows, frozen,
@@ -285,15 +321,16 @@ This section is for development and will be revised before any public release.
 | Step | Content | Status |
 | --- | --- | --- |
 | 1 | Package: fields and their symmetries, descriptors, parameter graph, walls method, Swift-Hohenberg demo | done |
-| 2 | Tests on synthetic data with known answers (122), continuous integration (ruff, pytest) | done |
+| 2 | Tests on synthetic data with known answers (129), continuous integration (ruff, pytest) | done |
 | 2b | Frames: crops, coarsening, per-run grid spacing, non-periodic boxes; errors for unknown settings | done |
 | 3 | Command-line tool `phasewall toy \| describe \| walls \| demo`, report (summary, tables, figures) | done |
 | 4 | Documentation: method, mathematics, physics parallels, tests ([PDF](docs/documentation.pdf)) | done |
 | 5 | Check on real simulations of an active fluid, from their descriptors and from a learned description; compare the phases found with published phase diagrams. The data stay outside this repository. | next |
 | 6 | Learned description (extra `[nn]`, PyTorch): contrastive encoder on snapshot pairs, with augmentations from the field symmetries; compared with the hand-made one on the demo (it finds 2 phases of 3) | done |
 | 6b | Comparison with blind grouping (Gaussian mixture, k-means, HDBSCAN) and a logistic probe, on both descriptions | done |
+| 6c | Unsupervised threshold tree (`phasewall.trees`): phases as leaves of a tree of single-descriptor thresholds, chosen and tested without any label (design below). On the demo: 3 phases with two physical rules (no amplitude; many low domains for hexagons), ARI 0.96 with the reference (walls 0.93); on the other examples as good as the walls, but it over-splits Gray-Scott | prototype; stopping rule open (over-splitting, single-run points) |
 | 7 | README figures of the method itself (graph, jumps, cut, test) and of the encoder | planned |
-| 8 | More examples with known answers (below): Gray-Scott, FitzHugh-Nagumo, Barkley, localised (cubic-quintic) Swift-Hohenberg added; batch run of all examples with hand-made, learned and combined descriptions (`scripts/run_examples.py`, results in `docs/examples/`) | running |
+| 8 | More examples with known answers (below): Gray-Scott, FitzHugh-Nagumo, Barkley, localised (cubic-quintic) Swift-Hohenberg added; batch run of all examples with hand-made, learned and combined descriptions (`scripts/run_examples.py`, results in `docs/examples/` and [above](#further-examples)) | done (Barkley rerun to $t = 4000$) |
 | 8a | Gray-Scott demo (`phasewall demo --example gray-scott`), examples registry; package side of the interface: `phasewall.pipeline` (one call, cached steps), plot functions returning figures, progress callbacks, CSV tables as input, combined description, learning curve | done |
 | 8b | Interactive interface ([apps/explore.py](apps/explore.py), marimo notebook and dashboard): demos, ensembles or tables as source; grid, frame, descriptions (hand-made, learned, combined) and methods chosen in a side panel; phase maps, comparison, snapshots, walls, training curves and export in tabs; cached steps ([docs/plan_interface.md](docs/plan_interface.md)) | done |
 | 9 | Licence and public release, once step 5 shows that the method works on real data | planned |
@@ -306,11 +343,12 @@ and run time, and a steady-state check (a sample of runs continued to 2 and 4 ti
   states, spots, isolated spots, holes, stripes and labyrinths, moving states, as in Pearson
   (1993). On a grid of steps 0.005 and 0.0025, 5 phases are found (113 of 143 points agree): the
   uniform states and the moving region, but the pattern band, one to three points wide, is
-  merged with a uniform state. Rerun on a grid twice as fine, to $t = 40\,000$ (3 of 143 points
-  still changed between $t = 20\,000$ and $60\,000$).
+  merged with a uniform state. Rerun on a grid twice as fine, to $t = 40\,000$: 10 phases that
+  follow the reference regions ([above](#further-examples)).
 - **Hand-made and learned description combined** (implemented; compared with each alone on
   every example in the batch run): one table with both sets of columns as separate blocks, so
-  that the jumps of the hand-made descriptors and what the network learns are both used.
+  that the jumps of the hand-made descriptors and what the network learns are both used. It
+  helps on Gray-Scott only; elsewhere the walls follow the learned block, which has no jump.
   More training data is not expected to help on its own: on the demo, the learned description
   already separates the states (probe 0.95-0.98), but without a jump at the boundary.
 - **FitzHugh-Nagumo** (Hagberg-Meron form, symmetric bistable medium, parameters $\varepsilon$,
@@ -329,6 +367,31 @@ and run time, and a steady-state check (a sample of runs continued to 2 and 4 ti
   patch started at small amplitude decays whatever $\varepsilon$: the patches start on the upper
   branch.
 
+The unsupervised threshold tree (step 6c, implemented in `phasewall.trees`). Supervised trees (fitted to labels, as in
+hfml) are not used: the tree must find the phases without any input from the user.
+
+- **Idea.** A phase boundary often shows as a jump of one descriptor (an order parameter: the
+  skewness between hexagons and stripes, the amplitude at the uniform state). The tree looks for
+  such a descriptor and threshold, splits the parameter points in two, and repeats on each side;
+  the leaves are the phases, and each wall comes with a readable rule (for example "skewness above
+  0.31").
+- **Splits.** For a region of points and every descriptor, the value of a point is the median over
+  its snapshots. Candidate thresholds are the cuts between sorted point values; each candidate is
+  scored by (i) the separation of the two sides in that descriptor (the share of variance between
+  the sides, as in Otsu's threshold: large for a gap, small for a smooth drift) and (ii) the
+  coherence of the two sides on the parameter grid (the normalised cut of the grid links between
+  them, as for the walls: small when the sides are two contiguous regions, large for scattered
+  points). The threshold is adaptive: it is chosen anew in every region.
+- **Test.** As for the walls, the split is chosen on one half of each point's runs (or snapshots)
+  and tested on the other half: the values of the points on the two sides must differ (Mann-Whitney,
+  the walls' `ALPHA`), the median jump of the descriptor across the crossing links must be at least
+  `RATIO` times its median jump across the inner links (a jump, not a smooth drift), and the
+  threshold must put 90% of the points on the same side. The tree stops when no split passes.
+- **Checks.** Stability (the tree rebuilt with the two halves swapped); comparison with the walls
+  and the blind methods on every example; on real data, the rules of the hand-made descriptors read
+  as physical criteria. A learned description has no meaningful single directions, so the tree
+  runs on its principal components there.
+
 Open questions on the method:
 
 - Learned description: the contrastive training separates runs, and its $h$ changes smoothly
@@ -341,6 +404,10 @@ Open questions on the method:
   could use all runs.
 - Mixed points: a split of 7 runs against 1 at a boundary point is not flagged; a test per
   point (for example bimodality of its runs) could replace the robust threshold.
+- Points whose runs end in different states (FitzHugh-Nagumo, Barkley): describe each point as a mixture
+  of states instead of one state.
+- Odd fields: a field rule that makes the descriptors even when the equations are symmetric under
+  $u \to -u$ (the mean and the skewness change sign).
 - Scans that are not grids: links between nearest neighbours instead of grid neighbours.
 - Bistable regions that runs from one kind of initial condition never reach (Section 8 of the
   documentation): runs from several initial conditions per point.
