@@ -12,8 +12,8 @@
 \node[ds] (Qy) at (0,-2.75) {Qxy\quad (N, N)};
 \node[lab, anchor=west] at (5.0,0.3) {fields declared};
 \node[fl, fill=cP2!10] (frho) at (5.0,-0.2) {\textbf{rho}: scalar, relative};
-\node[fl, fill=cP0!10] (fv) at (5.0,-0.75) {\textbf{v}: vector (velocity)};
-\node[fl, fill=cP1!10] (fp) at (5.0,-1.52) {\textbf{p}: vector (polarity),\\ components px, py};
+\node[fl, fill=cP0!10] (fv) at (5.0,-0.75) {\textbf{v}: velocity};
+\node[fl, fill=cP1!10] (fp) at (5.0,-1.52) {\textbf{p}: polarity,\\ components px, py};
 \node[fl, fill=black!6] (fQ) at (5.0,-2.52) {\textbf{Q}: nematic,\\ components Qxx, Qxy};
 \draw[->] (C) -- (frho);
 \draw[->] (V) -- (fv);
@@ -25,6 +25,5 @@
   {\textbf{Why grouping matters.} A rotation by $90^\circ$ sends $(p_x,p_y)\to(-p_y,p_x)$: $p_x$ alone
    becomes another field, so its descriptors are not invariant, and the augmentations of the
    network would be wrong. A vector is one field with two components.\\[3pt]
-   Today: one dataset per field (\code{V}, \code{P}, \code{Q}); assembling \code{px}, \code{py}
-   is planned.};
+   \code{phasewall inspect} suggests these blocks; a component declared alone is refused.};
 \end{tikzpicture}

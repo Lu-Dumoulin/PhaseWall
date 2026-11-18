@@ -28,7 +28,7 @@ DRAWS = 4       # every run is drawn this many times per epoch (a choice)
 
 
 def channels_of(f: Field) -> int:
-    return 1 if f.kind == "scalar" else 2
+    return 1 if f.symmetry == "scalar" else 2
 
 
 def to_channels(frame: dict[str, np.ndarray], fields: list[Field]) -> np.ndarray:
@@ -36,7 +36,7 @@ def to_channels(frame: dict[str, np.ndarray], fields: list[Field]) -> np.ndarray
     out = []
     for f in fields:
         a = prepared(frame[f.name], f)
-        out.append(a[None] if f.kind == "scalar" else np.moveaxis(a, -1, 0))
+        out.append(a[None] if f.symmetry == "scalar" else np.moveaxis(a, -1, 0))
     return np.concatenate(out).astype(np.float32)
 
 
@@ -130,13 +130,13 @@ def augment(x: np.ndarray, fields: list[Field], rng: np.random.Generator, period
         k = start
         for f in fields:
             n = channels_of(f)
-            a = x[k] if f.kind == "scalar" else np.moveaxis(x[k:k + n], 0, -1)
+            a = x[k] if f.symmetry == "scalar" else np.moveaxis(x[k:k + n], 0, -1)
             for _ in range(turns):
                 a = rotate90(a, f.kind)
             if mirror:
                 a = mirror_x(a, f.kind)
             a = np.roll(a, shift, axis=(0, 1))
-            out.append(a[None] if f.kind == "scalar" else np.moveaxis(a, -1, 0))
+            out.append(a[None] if f.symmetry == "scalar" else np.moveaxis(a, -1, 0))
             k += n
     return np.ascontiguousarray(np.concatenate(out), dtype=np.float32)
 

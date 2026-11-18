@@ -279,10 +279,10 @@ def make_robustness(curve: pd.DataFrame, ratio: float | None = None) -> Figure:
 
 def _picture(a: np.ndarray, f: Field) -> np.ndarray:
     """What is shown of a field: the field (scalar), |a| (vector) or 2|Q| (nematic)."""
-    if f.kind == "scalar":
+    if f.symmetry == "scalar":
         return a
     size = np.hypot(a[..., 0], a[..., 1])
-    return 2 * size if f.kind == "nematic" else size
+    return 2 * size if f.symmetry == "nematic" else size
 
 
 def central_points(w: Walls) -> dict[int, int]:
@@ -318,7 +318,7 @@ def make_snapshots(w: Walls, ens: Ensemble, field: Field | None = None) -> Figur
         images[ph] = (values, _picture(read_snapshot(file, [f], ens.julia_order)[f.name], f))
     lo = min(img.min() for _, img in images.values()) if images else 0.0
     hi = max(img.max() for _, img in images.values()) if images else 1.0
-    if f.kind == "scalar" and lo < 0 < hi:
+    if f.symmetry == "scalar" and lo < 0 < hi:
         lim = max(-lo, hi)
         cmap, vmin, vmax = FIELD, -lim, lim
     else:
@@ -336,7 +336,7 @@ def make_snapshots(w: Walls, ens: Ensemble, field: Field | None = None) -> Figur
         _title(ax, f"phase {ph}\n{where}")
     if images:
         cb = fig.colorbar(im, ax=list(axes), location="right", fraction=0.04, aspect=25)
-        cb.set_label({"scalar": f.name, "vector": f"|{f.name}|", "nematic": f"2|{f.name}|"}[f.kind],
+        cb.set_label({"scalar": f.name, "vector": f"|{f.name}|", "nematic": f"2|{f.name}|"}[f.symmetry],
                      color=INK, fontsize=8)
         cb.ax.tick_params(colors=INK_2, labelsize=7)
         cb.outline.set_visible(False)

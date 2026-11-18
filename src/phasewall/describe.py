@@ -197,22 +197,22 @@ def field_descriptors(a: np.ndarray, f: Field, dx: float, edges: np.ndarray,
     S = np.zeros(len(edges) - 1) if flat else structure_factor(a, dx, edges, periodic)
     shape = S / S.sum() if S.sum() > 0 else S
     out |= {f"{f.name}.shape.k{j:02d}": float(s) for j, s in enumerate(shape)}
-    if f.kind == "scalar":
+    if f.symmetry == "scalar":
         values = a
     else:
         size = np.hypot(c[..., 0], c[..., 1])
-        values = 2 * size if f.kind == "nematic" else size
+        values = 2 * size if f.symmetry == "nematic" else size
     mean, std, skew, kurt = moments(values)
     area = values.shape[0] * values.shape[1] * dx**2
     out |= {f"{f.name}.topo.{k}": v for k, v in domain_counts(values, area, periodic).items()}
     if not f.relative:
         out[f"{f.name}.mom.mean"] = mean
     out |= {f"{f.name}.mom.std": std, f"{f.name}.mom.skew": skew, f"{f.name}.mom.kurt": kurt}
-    if f.kind != "scalar":
+    if f.symmetry != "scalar":
         size_mean = float(np.hypot(c[..., 0], c[..., 1]).mean())
         mean_vec = float(np.hypot(c[..., 0].mean(), c[..., 1].mean()))
         out[f"{f.name}.order.global"] = mean_vec / size_mean if size_mean > FLAT else 0.0
-    if f.kind == "vector":
+    if f.symmetry == "vector":
         d, w = div_curl(a, dx, periodic)
         d2, w2 = float(np.mean(d**2)), float(np.mean(w**2))
         out[f"{f.name}.flow.log10div2"] = _log10(d2)

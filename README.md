@@ -217,7 +217,12 @@ phasewall demo data/demo                 # the example above (about eight minute
 phasewall demo data/quick --quick        # a small version in a few seconds
 ```
 
-For your own runs, write a TOML file that describes the ensemble (see `src/phasewall/io.py`):
+For your own runs, start from one snapshot file: `phasewall inspect run0/Data/0000001000.jld2`
+lists its datasets (name, shape, type) and prints suggested `[[fields]]` blocks. Components
+saved as separate datasets (`vx`, `vy`; `Qxx`, `Qxy`) are grouped into one field, and names
+suggest a role (`v`: velocity, `p`: polarity, `Q`: nematic). Check every suggestion: nothing is
+applied without you. Then write a TOML file that describes the ensemble (see
+`src/phasewall/io.py`):
 
 ```toml
 [ensemble]
@@ -238,16 +243,23 @@ max_shift = 1.0                # moving correlation: shifts up to this in x and 
 [[fields]]
 name = "rho"
 keys = ["C", "rho"]            # names it may have in the files
-kind = "scalar"                # scalar, vector or nematic
+kind = "scalar"                # scalar, velocity, polarity, vector (role not given) or nematic
 relative = true                # describe (rho - <rho>) / <rho>
 
 [[fields]]
 name = "p"
-keys = ["P"]
-kind = "vector"
+keys = ["P"]                   # one dataset with both components
+kind = "polarity"
+
+[[fields]]
+name = "v"
+components = ["vx", "vy"]      # or two scalar datasets, stacked as (x, y)
+kind = "velocity"
 ```
 
-Unknown keys are errors. The grid spacing can also be given per run, as a column `dx` of
+Unknown keys are errors. A scalar field whose name looks like one component (`vx`, `p_y`,
+`Qxx`) is refused, because a component alone is not invariant under rotations; add
+`single_component = true` if it really is a scalar of its own. The grid spacing can also be given per run, as a column `dx` of
 the table of runs. A whole periodic box is described with FFTs and periodic shifts. A crop,
 or a non-periodic box ($L$ its side, $s$ = `max_shift`, by default $L/5$), is described with
 rules that need no periodicity: $S(k)$ of the field times a Tukey window, for wavelengths up
@@ -296,9 +308,11 @@ details in [apps/README.md](apps/README.md).
 
 ## Tests
 
-`pytest` runs 129 tests on small synthetic fields with known answers, in about a minute:
+`pytest` runs 141 tests on small synthetic fields with known answers, in about a minute:
 the symmetry rules of vector and nematic fields against the gradient of a scalar and the
-tensor of a director field; file round trips in Julia layout; the structure factor of a single
+tensor of a director field; velocity and polarity turning as vectors; file round trips in Julia
+layout; fields assembled from component datasets, components refused as scalars, and the
+suggestions of `phasewall inspect`; the structure factor of a single
 wave, domain counts of spots against stripes, curl-free and divergence-free flows, frozen,
 travelling and changing patterns, and the invariance of every descriptor under the eight
 symmetries of the square and periodic shifts; the links of a refined parameter grid; no wall in
@@ -321,9 +335,9 @@ This section is for development and will be revised before any public release.
 | Step | Content | Status |
 | --- | --- | --- |
 | 1 | Package: fields and their symmetries, descriptors, parameter graph, walls method, Swift-Hohenberg demo | done |
-| 2 | Tests on synthetic data with known answers (129), continuous integration (ruff, pytest) | done |
+| 2 | Tests on synthetic data with known answers (141), continuous integration (ruff, pytest) | done |
 | 2b | Frames: crops, coarsening, per-run grid spacing, non-periodic boxes; errors for unknown settings | done |
-| 3 | Command-line tool `phasewall toy \| describe \| walls \| demo`, report (summary, tables, figures) | done |
+| 3 | Command-line tool `phasewall inspect \| toy \| describe \| learn \| walls \| demo`, report (summary, tables, figures) | done |
 | 4 | Documentation: method, mathematics, physics parallels, tests ([PDF](docs/documentation.pdf)) | done |
 | 5 | Check on real simulations of an active fluid, from their descriptors and from a learned description; compare the phases found with published phase diagrams. The data stay outside this repository. | next |
 | 6 | Learned description (extra `[nn]`, PyTorch): contrastive encoder on snapshot pairs, with augmentations from the field symmetries; compared with the hand-made one on the demo (it finds 2 phases of 3) | done |
@@ -334,7 +348,7 @@ This section is for development and will be revised before any public release.
 | 8a | Gray-Scott demo (`phasewall demo --example gray-scott`), examples registry; package side of the interface: `phasewall.pipeline` (one call, cached steps), plot functions returning figures, progress callbacks, CSV tables as input, combined description, learning curve | done |
 | 8b | Interactive interface ([apps/explore.py](apps/explore.py), marimo notebook and dashboard): demos, ensembles or tables as source; grid, frame, descriptions (hand-made, learned, combined) and methods chosen in a side panel; phase maps, comparison, snapshots, walls, training curves and export in tabs; cached steps ([docs/plan_interface.md](docs/plan_interface.md)) | done |
 | 9 | Licence and public release, once step 5 shows that the method works on real data | planned |
-| 10 | Field roles: scalar, velocity, polarity, nematic; a vector or a tensor read from one dataset or assembled from several scalar datasets ($v_x$, $v_y$); an inspector that lists the datasets of a file and suggests roles that the user confirms | planned |
+| 10 | Field roles: scalar, velocity, polarity, nematic; a vector or a tensor read from one dataset or assembled from several scalar datasets ($v_x$, $v_y$); an inspector that lists the datasets of a file and suggests roles that the user confirms (`phasewall inspect`) | done (2026-11-18; in the interface: step 14) |
 | 11 | Observables per role, each a named block that can be switched on or off per field; new blocks for velocity (vorticity, kinetic energy spectrum), polarity (winding defects $\pm1$, splay and bend) and nematic order (defects $\pm1/2$) | planned |
 | 12 | Registries of encoders and of methods with one common interface, so that a new encoder or method is added in one file (or by another package) and appears in the interface without changing it; shared contract tests for every registered entry | planned |
 | 13 | Tunable CNN: number of blocks, channels per block, dimension of $h$ and of the projection, checked against the constraints of the architecture and the frame | planned |

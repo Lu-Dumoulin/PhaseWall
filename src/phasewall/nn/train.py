@@ -141,7 +141,7 @@ def save(out: str | Path, encoder: Encoder, frames: FrameSet, settings: Settings
     torch.save(encoder.state_dict(), out / "encoder.pt")
     log.to_csv(out / "log.csv", index=False)
     meta = {"settings": asdict(settings), "in_channels": frames.in_channels, "periodic": frames.periodic,
-            "scale": frames.scale.tolist(), "fields": [[f.name, list(f.keys), f.kind, f.relative] for f in frames.fields],
+            "scale": frames.scale.tolist(), "fields": [[f.name, list(f.keys), f.kind, f.relative, list(f.components)] for f in frames.fields],
             "weights_f": count_weights(encoder), "torch": torch.__version__}
     (out / "settings.json").write_text(json.dumps(meta, indent=1))
     return out
@@ -153,5 +153,6 @@ def load(out: str | Path) -> tuple[Encoder, dict]:
     meta = json.loads((out / "settings.json").read_text())
     enc = Encoder(meta["in_channels"], tuple(meta["settings"]["channels"]), meta["periodic"])
     enc.load_state_dict(torch.load(out / "encoder.pt", map_location="cpu", weights_only=True))
-    meta["fields"] = [Field(n, tuple(k), kind, rel) for n, k, kind, rel in meta["fields"]]
+    # fields saved before components existed have four entries
+    meta["fields"] = [Field(f[0], tuple(f[1]), f[2], f[3], tuple(f[4]) if len(f) > 4 else ()) for f in meta["fields"]]
     return enc.eval(), meta

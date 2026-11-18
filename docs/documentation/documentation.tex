@@ -145,7 +145,7 @@ linear probe & & balanced accuracy of a logistic regression of labels from $h$ (
 \begin{codebox}
 Package \code{phasewall} (Python $\ge$ 3.11, NumPy, SciPy, pandas, h5py, matplotlib; extras
 \code{[nn]} for PyTorch, \code{[baselines]} for scikit-learn, \code{[app]} for the marimo
-interface). Command-line tool: \code{phasewall toy | describe | learn | walls | demo}
+interface). Command-line tool: \code{phasewall inspect | toy | describe | learn | walls | demo}
 (\srcref{src/phasewall/cli.py}). Whole analysis in one call, with cached steps:
 \srcref{src/phasewall/pipeline.py} (\code{Settings} with \code{Source}, \code{FrameSettings},
 \code{Describers}, \code{Methods}, \code{Execution}; \code{run}, \code{estimate}); the
@@ -170,23 +170,32 @@ TOML file that says how to read them: file pattern, how the time is written in t
 name, grid spacing $\Delta x$ (or a column \code{dx}), periodic or not, the number of last
 snapshots described, the lag $\Delta t$ of the pairs, and the fields.
 
-\textbf{Fields} (Fig.~\ref{fig:components}). Each field is declared with a name, the names it
-may have in the files, and a kind:
+\textbf{Fields} (Fig.~\ref{fig:components}). Each field is declared with a name, the datasets
+that hold it, and a kind:
 \begin{itemize}[leftmargin=1.2em, itemsep=1pt]
 \item \emph{scalar}, array $[x,y]$: density, concentration, $u$ of a reaction-diffusion model.
   Optionally \emph{relative}: $(f-\avg f)/\avg f$ is described, so that a mean density that
   changes over the grid does not by itself separate the runs;
-\item \emph{vector}, array $[x,y,c]$ with $c\in\{x,y\}$: velocity or polarity;
+\item \emph{velocity} or \emph{polarity} (\emph{vector} when the role is not given), array $[x,y,c]$
+  with $c\in\{x,y\}$. The three turn alike; the role says which observables are worth reading
+  (Sec.~\ref{sec:vector});
 \item \emph{nematic}, array $[x,y,c]$: the two independent components $(Q_{xx},Q_{xy})$ of the
   traceless symmetric tensor $\mathsf Q$, $Q_{yy}=-Q_{xx}$.
 \end{itemize}
-Today a vector or a nematic field must be one dataset of shape $(2,N,N)$ (as Julia writes
-$(N,N,2)$). Components saved as separate scalar datasets (\code{vx}, \code{vy}) must not be
-declared as two scalar fields: a rotation by $90^\circ$ sends $v_x$ to $-v_y$, so $v_x$ alone is
-not invariant, and the network's augmentations (Sec.~\ref{sec:learned}) would turn it as a
-scalar. Grouping such components into one field is planned. Velocity and polarity have the same
-kind (they turn alike); they differ in which observables are worth reading
-(Sec.~\ref{sec:vector}).
+A vector or a nematic field is read from one dataset of shape $(2,N,N)$ (as Julia writes
+$(N,N,2)$), or from two scalar datasets given as \code{components} (\code{vx}, \code{vy};
+\code{Qxx}, \code{Qxy}), stacked in that order. Components must not be declared as two scalar
+fields: a rotation by $90^\circ$ sends $v_x$ to $-v_y$, so $v_x$ alone is not invariant, and the
+network's augmentations (Sec.~\ref{sec:learned}) would turn it as a scalar. A scalar field whose
+name looks like a component (a stem of 1 to 3 letters and a suffix \code{x}, \code{y}, \code{xx},
+\code{xy}) is therefore refused unless it says \code{single_component = true}.
+
+\textbf{Inspector.} \code{phasewall inspect FILE} lists the datasets of one snapshot file (name,
+shape as read, shape in the file, type) and prints suggested \code{[[fields]]} blocks: datasets
+with two components, pairs of component datasets grouped into one field, scalars (relative for
+density-like names), and the datasets it leaves out, each with its reason. Names suggest roles
+(\code{v}: velocity, \code{p}: polarity, \code{Q}: nematic; otherwise \code{vector}); a component
+whose partner is missing is not guessed. Suggestions are printed, never applied.
 
 \textbf{Symmetries.} The periodic square box has the symmetry group $D_4$ (four rotations by
 multiples of $90^\circ$, each with or without a mirror), times the periodic translations
@@ -220,15 +229,23 @@ so turning it by $90^\circ$ turns $2\theta$ by $180^\circ$: $\mathsf Q\to-\maths
 \textbf{Files.} \srcref{src/phasewall/fields.py}, \srcref{src/phasewall/io.py};
 tests \srcref{tests/test_fields.py}, \srcref{tests/test_io.py}.
 
-\code{Field(name, keys, kind, relative)}; \code{rotate90}, \code{mirror_x}, \code{transform},
-\code{random_transform}. \code{load_ensemble} reads the TOML file (unknown keys are errors);
-\code{read_snapshot} reads HDF5 (and JLD2) files with h5py and transposes arrays written by
-Julia (column-major), so that arrays are always indexed $[x, y]$ or $[x, y, \text{component}]$.
+\code{Field(name, keys, kind, relative, components, single_component)} with its \code{symmetry};
+\code{component_of}, \code{rotate90}, \code{mirror_x}, \code{transform}, \code{random_transform}.
+\code{load_ensemble} reads the TOML file (unknown keys are errors) and calls
+\code{check_not_component}; \code{read_snapshot} reads HDF5 (and JLD2) files with h5py, stacks
+component datasets, and transposes arrays written by Julia (column-major), so that arrays are
+always indexed $[x, y]$ or $[x, y, \text{component}]$. \code{inspect_snapshot},
+\code{suggest_fields}, \code{fields_toml}; command \code{phasewall inspect}.
 
 \textbf{Tests.} The vector rule is checked against an independent fact: the gradient of a
 rotated scalar equals the rotated gradient. The nematic rule is checked by building
 $\mathsf Q$ from a director field turned as a vector. Four turns and two mirrors give the
-identity, and $M R M = R^{-1}$. Files written in the Julia layout read back unchanged.
+identity, and $M R M = R^{-1}$. Files written in the Julia layout read back unchanged. Velocity
+and polarity turn as vectors and give the same descriptors; components read from two datasets
+equal the same field read from one, in both layouts; component names are recognised and a
+component declared as a scalar is refused; the inspector groups \code{vx}, \code{vy} and
+\code{Qxx}, \code{Qxy}, leaves out \code{Qyy} and a component without partner, and its TOML loads
+back.
 \end{codebox}
 
 \subsection{Frames: crops and coarsening}\label{sec:frames}
@@ -302,7 +319,7 @@ Block & Observables (columns) & scalar & vector & nematic \\
 \code{dyn}   & decorrelation over $\Delta t$ at the same place (\code{still}) and after the best shift (\code{moving}) & \yes & \yes & \yes \\
 \bottomrule
 \end{tabular}
-\caption{Observables of the hand-made encoder, per kind of field. $v$ is the value of a scalar,
+\caption{Observables of the hand-made encoder, per kind of field (vector: velocity, polarity or role not given). $v$ is the value of a scalar,
 $|\mathbf a|$ for a vector and $S=2|\mathsf Q|$ for a nematic. A scalar field gives 28 columns
 in the Swift-Hohenberg example (15 shells of $S(k)$), a vector field 4 more. All blocks are computed for every
 field; choosing blocks per field is planned.}\label{tab:observables}
@@ -402,7 +419,7 @@ the divergence measures compressibility and the curl the vorticity (\code{curl_s
 vortex-dominated flow). For a polarity $\mathbf p$, the mean of $|\mathbf p|$ is the degree of
 polar order, the low domains of $|\mathbf p|$ (\code{topo.below-1}) are the cores of topological
 defects, and divergence and curl are the splay and bend of the polarity: asters against vortices.
-Observables specific to each role are planned: enstrophy and the kinetic energy spectrum for a
+The role is read from the declaration; observables specific to each role are planned: enstrophy and the kinetic energy spectrum for a
 velocity; defects counted by their winding number ($\pm1$) for a polarity.
 
 \emph{Physics parallel.} Divergence and curl are the two halves of the Helmholtz decomposition;
@@ -1824,6 +1841,8 @@ Constant (file) & Value & Role and reason \\
 \code{CHANNELS}, \code{HIDDEN}, \code{OUT} (nn) & 32--256, 256, 64 & sizes of $f$ and $g$ (as in hfml Step 7) \\
 \code{T} (nn) & 0.2 & temperature of the InfoNCE loss \\
 \code{Settings} (nn) & 40 epochs, batch 128 & AdamW, $10^{-3}$, warm-up 3 epochs, cosine decay, 4 draws per run and epoch \\
+\code{COMPONENT_NAME} (fields) & stem of 1--3 letters & names taken for components (\code{vx}, \code{Qxy}); \code{rho}, \code{phi} are not \\
+role names (io) & \code{v}, \code{p}, \code{Q}, \ldots & names that suggest a role in the inspector (suggestions only) \\
 \code{DECIMALS} (graph) & 9 & parameter values rounded to identify a point \\
 \code{ALPHA} (walls) & $10^{-3}$ & Mann-Whitney threshold; strict because links are correlated \\
 \code{RATIO} (walls) & 1.5 & minimum ratio of median crossing to inner $J_2$ \\
@@ -1847,7 +1866,7 @@ choices too (documented in their docstrings).}
 \section{Tests}\label{sec:tests}
 %======================================================================
 
-\code{pytest} runs 129 tests in about a minute, all on small synthetic data with known
+\code{pytest} runs 141 tests in about a minute, all on small synthetic data with known
 answers (no data from any laboratory is in the repository). On every push, the
 continuous-integration workflow \srcref{.github/workflows/tests.yml} runs \code{ruff} and
 \code{pytest}.
@@ -1860,6 +1879,7 @@ File & What is checked, against which known answer \\
 \midrule
 \code{test_fields.py} & vector rule against the gradient of a rotated scalar; nematic rule against a turned director; group relations of $D_4$; shapes \\
 \code{test_io.py} & round trips with and without Julia layout; first key found; snapshot list sorted by time; TOML configuration and its errors \\
+\code{test_field_roles.py} & velocity and polarity turn as vectors; component names; fields from two component datasets in both layouts; same descriptors whatever the role; components refused as scalars; suggestions of the inspector and their TOML; \code{phasewall inspect} \\
 \code{test_frames.py} & crops, coarsening and their errors; $S(k)$ of crops against the exact one; finite against spectral derivatives; windowed moving correlation; rotation and mirror invariance; $\Delta x$ against $\Delta x/2$; mixed grids \\
 \code{test_describe.py} & shells cover the grid; $S(k)$ of one wave; exact moments; periodic domain counts; spots $m^2$ against stripes $m$; flat fields; flows; global order; dynamics; invariance of every descriptor under $D_4$ and shifts; tables and error list \\
 \code{test_nn.py} & augmentations against the field rules; shift invariance of a periodic encoder; loss at collapse and for perfect pairs; a short training separates stripes from spots; saving and loading; \code{learn} and \code{describe --encoder} (skipped without PyTorch) \\
@@ -1904,8 +1924,7 @@ File & What is checked, against which known answer \\
   is open.
 \item \textbf{Tree.} A stopping rule that does not over-split (Gray-Scott) and works with one run
   per point.
-\item \textbf{Planned for the package.} Fields assembled from separate component datasets
-  ($v_x$, $v_y$) and declared as velocity, polarity or nematic; observables specific to each role
+\item \textbf{Planned for the package.} Observables specific to each role
   (vorticity and kinetic energy spectrum, winding-number defects $\pm1$ and $\pm\tfrac12$, splay and
   bend), switched on or off per field; registries of encoders and methods with one common
   interface and shared contract tests, so that a new one is added in one file; a network whose
@@ -1946,7 +1965,7 @@ File & Content & Section \\
 \srcref{scripts/compare_describers.py} & encoders and methods compared on Swift-Hohenberg & \ref{sec:comparison}, \ref{sec:sh-blind} \\
 \srcref{scripts/run_examples.py} & all examples: steady-state check, descriptions, methods & \ref{sec:steady}, \ref{sec:examples-results} \\
 \srcref{scripts/tree_examples.py} & the tree on all examples & \ref{sec:examples-results} \\
-\srcref{tests/} & 129 tests & \ref{sec:tests} \\
+\srcref{tests/} & 141 tests & \ref{sec:tests} \\
 \bottomrule
 \end{tabular}
 \end{table}

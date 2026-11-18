@@ -23,8 +23,17 @@ read by Python's standard `tomllib`), for example:
     [[fields]]                     # one block per field
     name = "rho"
     keys = ["C", "rho"]            # names it may have in the files
-    kind = "scalar"
+    kind = "scalar"                # scalar, velocity, polarity, vector (role not given) or nematic
     relative = true
+
+    [[fields]]
+    name = "p"
+    kind = "polarity"
+    components = ["px", "py"]      # two scalar datasets, stacked as (x, y); or keys = ["P"]
+
+`phasewall inspect FILE` lists the datasets of a snapshot file and suggests these blocks
+(inspect_snapshot, suggest_fields, fields_toml below). A scalar field whose name looks like a
+component (vx, p_y, Qxx) is refused unless it says `single_component = true`.
 
 Snapshot files are HDF5 files, which includes JLD2 files written by Julia. Julia stores
 arrays in column-major order and HDF5 readers show their dimensions reversed, so with
@@ -44,10 +53,10 @@ import h5py
 import numpy as np
 import pandas as pd
 
-from .fields import KINDS, Field
+from .fields import KINDS, Field, component_of
 
 MIN_WAVELENGTHS = 3.0      # non-periodic frames: S(k) only for wavelengths up to side / 3 (a choice)
-FIELD_KEYS = {"name", "keys", "kind", "relative"}
+FIELD_KEYS = {"name", "keys", "kind", "relative", "components", "single_component"}
 
 @dataclass
 class Ensemble:
@@ -106,7 +115,10 @@ def load_ensemble(path: str | Path) -> Ensemble:
     if "periodic" in e and not isinstance(e["periodic"], bool):
         raise ValueError(f"{path}: `periodic` must be true or false")
     fields = [Field(f["name"], tuple(f.get("keys", [f["name"]])), f.get("kind", "scalar"),
-                    bool(f.get("relative", False))) for f in cfg["fields"]]
+                    bool(f.get("relative", False)), tuple(f.get("components", ())),
+                    bool(f.get("single_component", False))) for f in cfg["fields"]]
+    for f in fields:
+        check_not_component(f, path)
     return Ensemble(runs=runs, parameters=parameters, fields=fields, **e)
 
 
@@ -130,11 +142,18 @@ def read_snapshot(path: str | Path, fields: list[Field], julia_order: bool = Tru
     out = {}
     with h5py.File(path, "r") as f:
         for fl in fields:
-            key = next((k for k in fl.keys if k in f and isinstance(f[k], h5py.Dataset)), None)
-            if key is None:
-                raise KeyError(f"{path}: none of {list(fl.keys)} found (field {fl.name})")
-            a = np.asarray(f[key][...], dtype=float)
-            out[fl.name] = a.T if julia_order else a
+            if fl.components:
+                missing = [k for k in fl.components if not (k in f and isinstance(f[k], h5py.Dataset))]
+                if missing:
+                    raise KeyError(f"{path}: components {missing} not found (field {fl.name})")
+                parts = [np.asarray(f[k][...], dtype=float) for k in fl.components]
+                out[fl.name] = np.stack([p.T if julia_order else p for p in parts], axis=-1)
+            else:
+                key = next((k for k in fl.keys if k in f and isinstance(f[k], h5py.Dataset)), None)
+                if key is None:
+                    raise KeyError(f"{path}: none of {list(fl.keys)} found (field {fl.name})")
+                a = np.asarray(f[key][...], dtype=float)
+                out[fl.name] = a.T if julia_order else a
             fl.check(out[fl.name])
     return out
 
@@ -182,3 +201,118 @@ def load_table(path: str | Path, parameters: list[str], label: str | None = None
     if label:
         labels = t.groupby("run")[label].agg(lambda s: s.value_counts().idxmax())
     return t[["run", "time", *parameters, *named]], labels
+
+
+# ---------------------------------------------------------------- fields: checks and suggestions
+def check_not_component(f: Field, where: str | Path = "") -> None:
+    """ValueError for a scalar field whose name or keys look like one component of a vector or
+    tensor (vx, p_y, Qxx), unless it says single_component (see fields.py)."""
+    if f.kind != "scalar" or f.single_component:
+        return
+    for name in (f.name, *f.keys):
+        c = component_of(name)
+        if c:
+            stem, comp = c
+            pair = ("xx", "xy") if comp in ("xx", "xy", "yy") else ("x", "y")
+            names = [name[: len(name) - len(comp)] + q for q in pair]
+            raise ValueError(
+                f"{where}: field {f.name!r} looks like one component of {stem!r} ({name!r}). A component "
+                f"alone is not invariant under rotations; declare the whole field instead, for example "
+                f"components = {names} with kind = \"velocity\", \"polarity\", \"vector\" or \"nematic\". "
+                f"If {name!r} is really a scalar of its own, add single_component = true.")
+
+
+# names that suggest a role (a choice; suggestions are only shown, never applied)
+VELOCITY_NAMES = {"v", "vel", "velocity", "u_vel"}
+POLARITY_NAMES = {"p", "pol", "polarity"}
+NEMATIC_NAMES = {"q", "nematic"}
+DENSITY_NAMES = {"rho", "c", "density", "conc"}
+
+
+def inspect_snapshot(path: str | Path, julia_order: bool = True) -> pd.DataFrame:
+    """Every dataset of one snapshot file: name, shape as read by phasewall ([x, y] or
+    [x, y, component], transposed if julia_order), shape in the file, dtype."""
+    rows = []
+    with h5py.File(path, "r") as f:
+        def visit(name, obj):
+            if isinstance(obj, h5py.Dataset):
+                shape = tuple(obj.shape)
+                rows.append({"name": name, "shape": shape[::-1] if julia_order else shape,
+                             "file_shape": shape, "dtype": str(obj.dtype)})
+        f.visititems(visit)
+    return pd.DataFrame(rows, columns=["name", "shape", "file_shape", "dtype"])
+
+
+def _role(stem: str, two_components: str) -> tuple[str, str]:
+    s = stem.lower()
+    if two_components == "tensor" or s in NEMATIC_NAMES:
+        return "nematic", f"name {stem!r} suggests a nematic tensor"
+    if s in VELOCITY_NAMES:
+        return "velocity", f"name {stem!r} suggests a velocity"
+    if s in POLARITY_NAMES:
+        return "polarity", f"name {stem!r} suggests a polarity"
+    return "vector", "two components; role unknown (velocity or polarity?)"
+
+
+def suggest_fields(datasets: pd.DataFrame) -> list[dict]:
+    """Suggested [[fields]] blocks for the datasets listed by inspect_snapshot: whole vectors
+    (one dataset with a last dimension of 2), pairs of component datasets grouped into one
+    field (vx + vy, Qxx + Qxy), and scalars (relative for density-like names). Each suggestion
+    has a `reason`; datasets of other shapes are listed with kind None. Suggestions only: the
+    user confirms every role."""
+    numeric = datasets[datasets.dtype.str.startswith(("float", "int", "uint"))]
+    two_d = {r.name: r.shape for r in numeric.itertuples() if len(r.shape) == 2}
+    out, used = [], set()
+    for r in datasets.itertuples():
+        if r.name in used:
+            continue
+        shape = tuple(r.shape)
+        if r.name not in set(numeric.name):
+            out.append({"name": r.name, "kind": None, "reason": f"not numeric ({r.dtype})"})
+        elif len(shape) == 3 and shape[2] == 2:
+            kind, why = _role(r.name, "vector")
+            out.append({"name": r.name, "kind": kind, "keys": [r.name], "reason": f"one dataset with 2 components; {why}"})
+        elif len(shape) == 2:
+            c = component_of(r.name)
+            if c:
+                stem, comp = c
+                pair = ("xx", "xy") if comp in ("xx", "xy", "yy") else ("x", "y")
+                names = [r.name[: len(r.name) - len(comp)] + q for q in pair]
+                if comp == "yy" and any(n in used for n in names):
+                    out.append({"name": r.name, "kind": None, "reason": "Q_yy = -Q_xx, not needed"})
+                    continue
+                if all(n in two_d and two_d[n] == shape for n in names):
+                    kind, why = _role(stem.rstrip("_"), "tensor" if pair[0] == "xx" else "vector")
+                    out.append({"name": stem.rstrip("_"), "kind": kind, "components": names,
+                                "reason": f"components {names[0]}, {names[1]} grouped; {why}"})
+                    used.update(names)
+                    continue
+                out.append({"name": r.name, "kind": None,
+                            "reason": "looks like a component, but its partner is missing: declare it by hand"})
+                continue
+            relative = r.name.lower() in DENSITY_NAMES
+            out.append({"name": r.name, "kind": "scalar", "keys": [r.name], "relative": relative,
+                        "reason": "scalar" + ("; density-like name, described relative to its mean" if relative else "")})
+        else:
+            out.append({"name": r.name, "kind": None, "reason": f"shape {shape} is not a field"})
+        used.add(r.name)
+    return out
+
+
+def fields_toml(suggestions: list[dict]) -> str:
+    """The suggested fields as [[fields]] blocks of a TOML configuration, with the reason as a
+    comment; datasets that are not fields are listed as comments."""
+    lines = []
+    for s in suggestions:
+        if s["kind"] is None:
+            lines.append(f"# {s['name']}: not used ({s['reason']})")
+            continue
+        lines += ["", "[[fields]]", f"# {s['reason']}", f'name = "{s["name"]}"']
+        if "components" in s:
+            lines.append("components = [" + ", ".join(f'"{c}"' for c in s["components"]) + "]")
+        else:
+            lines.append("keys = [" + ", ".join(f'"{k}"' for k in s["keys"]) + "]")
+        lines.append(f'kind = "{s["kind"]}"')
+        if s.get("relative"):
+            lines.append("relative = true")
+    return "\n".join(lines).strip() + "\n"

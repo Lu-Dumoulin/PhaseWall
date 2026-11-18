@@ -2,7 +2,7 @@
 \begin{tikzpicture}[fig, node distance=0.45cm]
 \tikzset{col/.style={draw, rounded corners, align=left, font=\footnotesize, inner sep=4pt, fill=black!3, text width=#1},
          hd/.style={font=\footnotesize\bfseries, align=center}}
-\node[col=2.3cm] (runs) {\textbf{Runs}\\ one row per run:\\ parameters, path to HDF5 snapshots\\[2pt] \textbf{Fields}\\ scalar, vector, nematic};
+\node[col=2.3cm] (runs) {\textbf{Runs}\\ one row per run:\\ parameters, path to HDF5 snapshots\\[2pt] \textbf{Fields}\\ scalar, velocity, polarity, nematic};
 \node[col=3.0cm, right=of runs] (enc) {\textbf{Encoders} (Sec.~\ref{sec:encoders})\\[1pt]
   $\bullet$ hand-made: blocks of observables per field\\
   $\bullet$ learned: convolutional network\\

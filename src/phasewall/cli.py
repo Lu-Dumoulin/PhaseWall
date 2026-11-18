@@ -1,5 +1,6 @@
 """The command-line tool `phasewall` (installed by pip from pyproject.toml).
 
+    phasewall inspect SNAPSHOT.h5      list the datasets of a file and suggest the [[fields]] blocks
     phasewall toy FOLDER               write a demo ensemble (Swift-Hohenberg, or --example gray-scott)
     phasewall describe CONFIG.toml     descriptors of every snapshot -> descriptors.csv
     phasewall learn CONFIG.toml        train the learned description (CNN, extra [nn]) -> its table
@@ -22,7 +23,7 @@ import pandas as pd
 from . import report, toy
 from .describe import describe_ensemble
 from .examples import EXAMPLES, example
-from .io import load_ensemble
+from .io import fields_toml, inspect_snapshot, load_ensemble, suggest_fields
 from .walls import ALPHA, MIN_PHASE, RATIO, Walls, find_walls, phases_against_ratio
 
 QUICK_SEEDS = (0, 1)    # --quick: runs per point
@@ -36,6 +37,18 @@ def node_labels(w: Walls, runs: pd.DataFrame, column: str = "reference") -> pd.S
 def agreement(w: Walls, reference: pd.Series) -> tuple[pd.DataFrame, int]:
     """See report.agreement (kept here for existing scripts)."""
     return report.agreement(w, reference)
+
+
+def cmd_inspect(args) -> str:
+    """Datasets of one snapshot file and the suggested [[fields]] blocks (to check and copy
+    into the configuration; nothing is applied)."""
+    datasets = inspect_snapshot(args.file, julia_order=not args.not_julia)
+    print(f"{args.file}: {len(datasets)} datasets (shape as read by phasewall, indexed [x, y, component])")
+    print(datasets.to_string(index=False))
+    text = fields_toml(suggest_fields(datasets))
+    print("\nSuggested fields (check every kind before use):\n")
+    print(text)
+    return text
 
 
 def cmd_toy(args) -> pd.DataFrame:
@@ -158,6 +171,12 @@ def parser() -> argparse.ArgumentParser:
                             "4 for Gray-Scott)")
         s.add_argument("--quick", action="store_true",
                        help="small grid and box, seconds instead of minutes (too coarse for all states)")
+
+    s = sub.add_parser("inspect", help="list the datasets of a snapshot file and suggest the fields")
+    s.add_argument("file", help="one snapshot file (HDF5 or JLD2)")
+    s.add_argument("--not-julia", action="store_true",
+                   help="the arrays were not written by Julia (no transposition)")
+    s.set_defaults(func=cmd_inspect)
 
     s = sub.add_parser("toy", help="write a demo ensemble")
     toy_options(s)
