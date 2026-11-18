@@ -369,6 +369,31 @@ def merge_phases(phase: np.ndarray, points: np.ndarray, a: np.ndarray, b: np.nda
     return np.array([new.get(g, -1) for g in group]), pd.DataFrame(out)
 
 
+def merge_table_phases(table: pd.DataFrame, parameters: list[str], phase: np.ndarray,
+                       columns: list[str] | None = None, ratio: float = RATIO, seed: int = SEED
+                       ) -> tuple[np.ndarray, pd.DataFrame]:
+    """Step 4 for phases found by another method (the threshold tree): `phase` of every
+    parameter point, numbered as graph.parameter_nodes numbers them."""
+    X, _ = feature_matrix(table, columns)
+    node, points = parameter_nodes(table[parameters].to_numpy())
+    rng = np.random.default_rng(seed)
+    rows_of = []
+    for n in range(len(points)):
+        idx = np.flatnonzero(node == n)
+        rows_of.append(np.sort(rng.choice(idx, MAX_PER_NODE, replace=False)) if len(idx) > MAX_PER_NODE else idx)
+    run, time = table["run"].to_numpy(), table["time"].to_numpy(dtype=float)
+    spreads = []
+    for i in rows_of:
+        h = halves(run[i], time[i])
+        if h.any() and (~h).any():
+            spreads.append(energy_distance(X[i[h]], X[i[~h]]))
+    positive = np.array([x for x in spreads if x > 0])
+    floor = float(np.quantile(positive, FLOOR_QUANTILE)) if len(positive) else 1.0
+    edges = grid_edges(points)
+    return merge_phases(np.asarray(phase), points, edges["a"].to_numpy(), edges["b"].to_numpy(), X, rows_of,
+                        floor, ratio, rng)
+
+
 def find_walls(table: pd.DataFrame, parameters: list[str], columns: list[str] | None = None,
                alpha: float = ALPHA, ratio: float = RATIO, min_phase: int = MIN_PHASE,
                seed: int = SEED, merge: bool = MERGE) -> Walls:

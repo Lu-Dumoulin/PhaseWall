@@ -1,10 +1,11 @@
 """Tests of trees.py on the synthetic tables of test_walls (no label used): no split in noise or
 under a smooth drift, the jumping descriptor and its threshold for two phases, three phases with
-two rules, the same tree with the halves swapped, principal components."""
+two rules, the same tree with the halves swapped, principal components; splits found by both
+halves; one run per point (checkerboard halves); one phase in two places joined."""
 
 import numpy as np
 import pytest
-from test_walls import DIM, table
+from test_walls import DIM, bands, table
 
 from phasewall import trees
 
@@ -69,3 +70,41 @@ def test_components_explain_the_variance():
     assert trees.components(X, 0.95).shape[1] == 1          # variances 25, 1, 0.01: the first explains 96%
     assert trees.components(X, 0.99).shape[1] == 2
     assert np.var(trees.components(X, 0.999), axis=0).sum() == pytest.approx(np.var(X, axis=0).sum(), rel=1e-3)
+
+
+def one_run(t):
+    """The first of the two runs of every point: one run per point."""
+    return t[t.run % 2 == 0]
+
+
+def test_accepted_splits_are_found_by_both_halves():
+    t = trees.fit_tree(table(jump_at), ["a", "b"])
+    acc = t.splits[t.splits.accepted]
+    assert len(acc) and (acc.both_halves >= trees.AGREE).all()
+    assert t.halves_by == "runs"
+
+
+def test_one_run_per_point_uses_the_checkerboard():
+    for f in (lambda a, b: np.zeros(DIM), lambda a, b: np.full(DIM, 0.3 * a + 0.2 * b)):
+        t = trees.fit_tree(one_run(table(f, seed=5)), ["a", "b"])
+        assert t.halves_by == "grid" and t.n_phases == 1
+    t = trees.fit_tree(one_run(table(jump_at, seed=5)), ["a", "b"])
+    assert t.n_phases == 2
+    n = t.nodes[t.nodes.phase >= 0]                 # a single noisy point may stay a boundary region
+    assert len(n) >= len(t.nodes) - 2
+    left = n.a <= 5
+    assert n.loc[left, "phase"].nunique() == 1 and n.loc[~left, "phase"].nunique() == 1
+
+
+def test_checkerboard_colours_and_links():
+    pts = np.array([[x, y] for x in range(3) for y in range(3)], dtype=float)
+    colour, same = trees.checkerboard(pts)
+    assert colour.reshape(3, 3).tolist() == [[0, 1, 0], [1, 0, 1], [0, 1, 0]]
+    assert (colour[same.a] == colour[same.b]).all()
+    assert len(same) == 14                      # 3 two-step links along each axis, 2 diagonals in each of 4 squares
+
+
+def test_one_phase_in_two_places_is_one_phase_of_the_tree():
+    t = trees.fit_tree(table(bands((0.0, 8.0, 0.0)), noise=0.5, seed=3), ["a", "b"])
+    assert t.nodes.leaf.nunique() == 3 and t.n_phases == 2
+    assert t.nodes[t.nodes.a == 0].phase.iloc[0] == t.nodes[t.nodes.a == 9].phase.iloc[0]

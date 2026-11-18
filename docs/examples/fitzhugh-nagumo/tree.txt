@@ -1,17 +1,26 @@
 # Unsupervised threshold tree: fitzhugh-nagumo
 
-## halves as given: 1 phases, ARI 0.000
+## all runs: 1 phases (runs halves), ARI 0.000
 
 phase 0 (99 points): (all points)
 
-| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | accepted |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 99 | v.dyn.still | -1.25 | 30 | 69 | 0.944 | 0.304 | 0.8 | 0.879 | 0 | 9.75e+03 | False |
+Splits tried:
 
-## halves swapped: 1 phases, ARI 0.000
+| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | both_halves | accepted |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 99 | v.dyn.still | -1.25 | 30 | 69 | 0.944 | 0.304 | 0.8 | 0.879 | 0 | 9.75e+03 | nan | False |
 
-phase 0 (99 points): (all points)
+## one run per point: 2 phases (grid halves), ARI 0.375
 
-| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | accepted |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 99 | v.dyn.still | -1.24 | 24 | 75 | 0.931 | 0.31 | 0.786 | 0.879 | 0 | 645 | False |
+phase 0 (67 points): v.dyn.still <= -1.571
+phase 1 (30 points): v.dyn.still > -1.571
+phase -1 (1 points): v.dyn.still > -1.571
+phase -1 (1 points): v.dyn.still > -1.571
+
+Splits tried:
+
+| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | both_halves | accepted |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 99 | v.dyn.still | -1.57 | 32 | 67 | 0.941 | 0.51 | 0.701 | 0.957 | 0 | 1.5e+03 | 0.99 | True |
+| 67 | u.amp.log10var | -12 | 42 | 25 | 1 | 0.53 | 0.735 | 0.909 | 0 | 690 | 0.552 | False |
+| 30 | v.shape.k10 | 0 | 10 | 20 | 0.941 | 0.551 | 0.681 | 0.692 | 0.0755 | 1.91 | 0.6 | False |

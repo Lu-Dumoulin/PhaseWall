@@ -105,7 +105,18 @@ def cmd_learn(args) -> Path:
     frames = load_frames(ens, workers=args.workers)
     print(f"{len(frames.x)} pairs of {len(set(frames.run))} runs, {frames.in_channels} channels, "
           f"frame {frames.x.shape[2]} x {frames.x.shape[3]}, {'periodic' if frames.periodic else 'not periodic'}")
-    settings = Settings(epochs=args.epochs, seed=args.seed)
+    from .nn.architecture import Network, check, summary
+    net = Network(blocks=args.blocks, width=args.width, dim_h=args.dim_h, hidden=args.hidden,
+                  projection=args.projection, temperature=args.temperature)
+    try:
+        check(net, frames.x.shape[-1])
+    except ValueError as err:
+        sys.exit(f"phasewall: {err}")
+    info = summary(net, frames.x.shape[-1], frames.in_channels)
+    print(f"network: channels {info['channels']}, last map {info['last_map']} points, receptive field "
+          f"{info['receptive_field']} points, {info['weights_f']} weights in f, about {info['memory_gb_rough']:.1f} GB "
+          "per step (rough)")
+    settings = Settings.from_network(net, epochs=args.epochs, seed=args.seed)
     t0 = time.time()
     encoder, log = train(frames, settings)
     save(out, encoder, frames, settings, log)
@@ -196,6 +207,12 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--epochs", type=int, default=40, help="training epochs (default 40)")
     s.add_argument("--seed", type=int, default=0)
     s.add_argument("--workers", type=int, default=2, help="processes reading runs (default 2)")
+    s.add_argument("--blocks", type=int, default=4, help="convolution blocks, each halving the grid (default 4)")
+    s.add_argument("--width", type=int, default=32, help="channels of the first block (default 32)")
+    s.add_argument("--dim-h", type=int, default=256, help="dimension of h, channels of the last block (default 256)")
+    s.add_argument("--hidden", type=int, default=256, help="hidden layer of the head (default 256)")
+    s.add_argument("--projection", type=int, default=64, help="dimension of z (default 64)")
+    s.add_argument("--temperature", type=float, default=0.2, help="temperature of the loss (default 0.2)")
     s.set_defaults(func=cmd_learn)
 
     s = sub.add_parser("walls", help="walls and phases from a table of descriptors")

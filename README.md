@@ -177,13 +177,13 @@ Four more models with known states, each run to steady state (checked by continu
 with their defaults (`scripts/run_examples.py`, `scripts/tree_examples.py`; results in
 [docs/examples/](docs/examples/overview.md)). The reference labels come from simple rules on the
 final snapshots and are used only for the scores. ARI: adjusted Rand index with the reference
-(points); tree: halves as given or swapped.
+(points).
 
 | example | points x runs | walls, hand-made | tree, hand-made | walls, learned | walls, combined | closest blind method (hand-made) |
 | --- | --- | --- | --- | --- | --- | --- |
-| Swift-Hohenberg | 240 x 8 | 3 phases, ARI 0.93 | 4 or 3 phases, 0.90 or 0.96 | 2 phases, 0.36 | 2 phases, 0.36 | HDBSCAN 20: 0.78 (20% noise) |
-| Gray-Scott | 525 x 4 | 8 phases, 0.89 | 16 or 21 phases, 0.84 or 0.82 | 1 phase | 6 phases, 0.95 | k-means, $k$ = 7: 0.99 |
-| localised Swift-Hohenberg | 105 x 4 | 3 phases, 0.96 | 3 phases, 0.98 | 1 phase | 1 phase | HDBSCAN 10: 1.00 (13% noise) |
+| Swift-Hohenberg | 240 x 8 | 3 phases, ARI 0.93 | 3 phases, 0.94 | 2 phases, 0.36 | 2 phases, 0.36 | HDBSCAN 20: 0.78 (20% noise) |
+| Gray-Scott | 525 x 4 | 8 phases, 0.89 | 10 phases, 0.94 | 1 phase | 6 phases, 0.95 | k-means, $k$ = 7: 0.99 |
+| localised Swift-Hohenberg | 105 x 4 | 3 phases, 0.96 | 3 phases, 1.00 | 1 phase | 1 phase | HDBSCAN 10: 1.00 (13% noise) |
 | FitzHugh-Nagumo | 99 x 4 | 1 phase | 1 phase | 1 phase | 1 phase | HDBSCAN 20: 0.71 (23% noise) |
 | Barkley | 165 x 4 | 2 phases, 0.59 | 2 phases, 0.58 | 1 phase | 2 phases, 0.59 | HDBSCAN 20: 0.84 (14% noise) |
 
@@ -192,7 +192,10 @@ final snapshots and are used only for the scores. ARI: adjusted Rand index with 
 - Where each parameter point ends in one state, the walls and the tree find the states:
   92-98% of the points agree with the reference. The tree states its phases as rules, for
   example the variance of $u$ alone for localised Swift-Hohenberg (zero, small for a patch, large
-  for stripes everywhere), but over-splits Gray-Scott.
+  for stripes everywhere), and for Gray-Scott flat or not, which uniform state, moving or not, then
+  the shape of $S(k)$. A split is kept only if both halves of the runs find it, so exchanging the
+  halves gives the same tree. With one run per point the tree tests its splits on a checkerboard of
+  the points instead (3 phases on Swift-Hohenberg, ARI 0.90; 7 on Gray-Scott, 0.96).
 - A phase split in two places by another phase is joined when the cores of the two parts are as
   close as the two halves of one part: on Gray-Scott the three pieces of the uniform state become
   one phase (10 phases become 8, ARI 0.80 to 0.89); nothing changes on the other examples.
@@ -282,9 +285,16 @@ phasewall describe ensemble.toml --workers 4      # -> descriptors.csv, one row 
 phasewall walls descriptors.csv --config ensemble.toml
 
 phasewall learn ensemble.toml                     # learned description -> encoder/descriptors_cnn.csv
+phasewall learn ensemble.toml --blocks 3 --dim-h 128 --projection 32   # another shape, checked first
 phasewall walls encoder/descriptors_cnn.csv --config ensemble.toml
 phasewall describe other.toml --encoder encoder   # the trained encoder on another ensemble
 ```
+
+The shape of the learned encoder (blocks, width, $\dim h$, head, temperature) is checked against
+the frame before training. On Swift-Hohenberg, six shapes compared by their label-free diagnostics
+(`scripts/compare_networks.py`, results in [docs/networks/](docs/networks/swift-hohenberg/summary.md))
+all give the same two phases: what the learned description lacks is in its training objective, not
+in its size.
 
 `walls` writes a folder with `summary.md`, the tables `nodes.csv` (one row per parameter point,
 with its region and phase), `edges.csv` (one row per link, with its jump and whether it is a
@@ -303,18 +313,61 @@ marimo run apps/explore.py           # dashboard in the browser
 marimo edit apps/explore.py          # the same page as a notebook, code visible
 ```
 
-A side panel sets the source (a demo, an ensemble TOML file or a CSV table of descriptors), the
-parameter grid and numerical settings of a demo, the frame, the descriptions (hand-made,
-learned, combined) and the methods (walls, blind grouping, probe, robustness and learning
-curves), with an estimate of the cost before the run. Tabs show the phase map, the comparison
-of descriptions and methods, snapshots of each phase, the details of the walls, the training
-curves, and export the tables and figures. Every step is cached, so changing a method or a
-threshold re-runs in seconds. The page only calls `phasewall.pipeline` and `phasewall.report`;
-details in [apps/README.md](apps/README.md).
+A side panel follows the order of an analysis:
+
+1. **System**: an example (its grid and numerical settings), your own runs (a CSV table of runs,
+   one column `path` and one per parameter, with their HDF5 or JLD2 snapshot files), an ensemble
+   TOML file, or a CSV table of descriptors made elsewhere.
+2. **Fields** (your runs): the first snapshot is inspected and its datasets listed; fields are
+   suggested from the names (components saved apart, such as `vx` and `vy`, grouped into one
+   velocity) and you confirm the kind of each: scalar, velocity, polarity, vector or nematic. The
+   app writes the TOML configuration itself.
+3. **Encoders**: hand-made, with the blocks of observables of each field (those that fit its kind
+   are offered); learned, with the shape of the network, checked against the frame before
+   training; combined; and any encoder registered by another package.
+4. **Methods**: walls (and the joining of separated phases), the unsupervised threshold tree,
+   Gaussian mixture, k-means, HDBSCAN, any registered method; **checks**: robustness, probe
+   (labels only for scoring), learning curve.
+
+The controls of the tree, of the network and of registered entries are built from their settings
+(`registry.settings_spec`), so a new entry needs no interface code. An estimate of the cost is
+shown before the run, and every step is cached. Tabs show the phase map (of the walls or of the
+tree), the comparison of descriptions and methods, snapshots of each phase, the rules of the tree,
+the details of the walls, the training curves, and export the tables and figures. The page only
+calls the package; details in [apps/README.md](apps/README.md).
+
+### Adding an encoder or a method
+
+Every encoder and method, the built-in ones included, is registered with a settings dataclass
+and one function (`src/phasewall/registry.py`, built-ins in `src/phasewall/builtins.py`). A new
+one is added in one file and then runs in the pipeline, the scripts and the scores:
+
+```python
+from dataclasses import dataclass, field
+from phasewall import pipeline as pl, registry
+
+@dataclass
+class HalfSettings:
+    column: str = field(default="eps", metadata={"help": "parameter cut", "choices": ("eps", "g")})
+
+@registry.method("half", HalfSettings, help="lower and upper half of a parameter", uses_grid=True)
+def half(table, parameters, settings, context):
+    p = table.groupby("run")[settings.column].first()
+    return registry.MethodResult((p >= p.median()).astype(int))   # one group per run
+
+res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
+```
+
+An encoder is `run(ensemble, settings, context)` returning tables with one row per snapshot. The
+metadata of the settings (`help`, `choices`, `range`) describe the controls an interface needs
+(`registry.settings_spec`) and are checked before a run. `tests/test_contracts.py` checks every
+registered entry (format, one phase in noise and two on a step, invariance of the descriptions
+under rotations, mirrors and shifts), so a new entry is tested by registering it. Other packages
+register theirs through the entry points `phasewall.encoders` and `phasewall.methods`.
 
 ## Tests
 
-`pytest` runs 150 tests on small synthetic fields with known answers, in about a minute:
+`pytest` runs 192 tests on small synthetic fields with known answers, in about a minute:
 the symmetry rules of vector and nematic fields against the gradient of a scalar and the
 tensor of a director field; velocity and polarity turning as vectors; file round trips in Julia
 layout; fields assembled from component datasets, components refused as scalars, and the
@@ -342,14 +395,14 @@ This section is for development and will be revised before any public release.
 | Step | Content | Status |
 | --- | --- | --- |
 | 1 | Package: fields and their symmetries, descriptors, parameter graph, walls method, Swift-Hohenberg demo | done |
-| 2 | Tests on synthetic data with known answers (150), continuous integration (ruff, pytest) | done |
+| 2 | Tests on synthetic data with known answers (192), continuous integration (ruff, pytest) | done |
 | 2b | Frames: crops, coarsening, per-run grid spacing, non-periodic boxes; errors for unknown settings | done |
 | 3 | Command-line tool `phasewall inspect \| toy \| describe \| learn \| walls \| demo`, report (summary, tables, figures) | done |
 | 4 | Documentation: method, mathematics, physics parallels, tests ([PDF](docs/documentation.pdf)) | done |
 | 5 | Check on real simulations of an active fluid, from their descriptors and from a learned description; compare the phases found with published phase diagrams. The data stay outside this repository. | next |
 | 6 | Learned description (extra `[nn]`, PyTorch): contrastive encoder on snapshot pairs, with augmentations from the field symmetries; compared with the hand-made one on the demo (it finds 2 phases of 3) | done |
 | 6b | Comparison with blind grouping (Gaussian mixture, k-means, HDBSCAN) and a logistic probe, on both descriptions | done |
-| 6c | Unsupervised threshold tree (`phasewall.trees`): phases as leaves of a tree of single-descriptor thresholds, chosen and tested without any label (design below). On the demo: 3 phases with two physical rules (no amplitude; many low domains for hexagons), ARI 0.96 with the reference (walls 0.93); on the other examples as good as the walls, but it over-splits Gray-Scott | prototype; stopping rule open (over-splitting, single-run points) |
+| 6c | Unsupervised threshold tree (`phasewall.trees`): phases as leaves of a tree of single-descriptor thresholds, chosen and tested without any label (design below); splits found by both halves (one tree, whatever half comes first), checkerboard halves for one run per point, separated leaves joined; a method of the pipeline (`Methods(tree=True)`). Swift-Hohenberg 3 phases ARI 0.94, Gray-Scott 10 phases 0.94, localised SH 1.00 | done (2026-11-18) |
 | 6d | Phases in separate places: after the walls, every pair of phases that share no link is compared by their cores (points at least 2 grid steps from other phases); they are one phase when the gap between the cores is below `RATIO` times the spread between the two halves of a core. Gray-Scott: the three pieces of the uniform state are joined (10 to 8 phases, ARI 0.80 to 0.89); no change elsewhere | done (2026-11-18; on by default, `merge=False` to switch off) |
 | 7 | README figures of the method itself (graph, jumps, cut, test) and of the encoder | planned |
 | 8 | More examples with known answers (below): Gray-Scott, FitzHugh-Nagumo, Barkley, localised (cubic-quintic) Swift-Hohenberg added; batch run of all examples with hand-made, learned and combined descriptions (`scripts/run_examples.py`, results in `docs/examples/` and [above](#further-examples)) | done (Barkley rerun to $t = 4000$) |
@@ -358,9 +411,9 @@ This section is for development and will be revised before any public release.
 | 9 | Licence and public release, once step 5 shows that the method works on real data | planned |
 | 10 | Field roles: scalar, velocity, polarity, nematic; a vector or a tensor read from one dataset or assembled from several scalar datasets ($v_x$, $v_y$); an inspector that lists the datasets of a file and suggests roles that the user confirms (`phasewall inspect`) | done (2026-11-18; in the interface: step 14) |
 | 11 | Observables per role, each a named block that can be switched on or off per field (`blocks` in the configuration, `Describers(blocks=...)` in the pipeline); new blocks: vortex cores for velocities (Okubo-Weiss), winding-number defects for polarities ($\pm1$) and nematics ($\pm1/2$) | done (2026-11-18; splay and bend of a director not yet) |
-| 12 | Registries of encoders and of methods with one common interface, so that a new encoder or method is added in one file (or by another package) and appears in the interface without changing it; shared contract tests for every registered entry | planned |
-| 13 | Tunable CNN: number of blocks, channels per block, dimension of $h$ and of the projection, checked against the constraints of the architecture and the frame | planned |
-| 14 | Interface on top of steps 10 to 13: the controls are built from the settings of each registered encoder and method | planned |
+| 12 | Registries of encoders and methods with one interface (`registry.py`; built-ins in `builtins.py`), settings that describe their own controls and are checked, Python entry points for other packages, contract tests run on every registered entry (`tests/test_contracts.py`); the pipeline runs everything through them (same results) and gained `Methods(tree=..., others=...)`, `Describers(others=...)` | done (2026-11-18) |
+| 13 | Tunable CNN (`nn/architecture.py`, no PyTorch needed to check): blocks, width, $\dim h$, head (hidden, projection) and temperature, checked against the frame before training (last map of at least 2 points per side, channels never decreasing, projection no larger than $h$ or the hidden layer), with receptive field, weights and a rough memory estimate; `Describers(network=...)`, `phasewall learn --blocks --width --dim-h ...`; shapes compared by label-free diagnostics (`scripts/compare_networks.py`) | done (2026-11-18) |
+| 14 | Interface on top of steps 10 to 13 ([apps/explore.py](apps/explore.py)): your own runs with the field inspector (kinds confirmed, TOML written by `io.write_config`), blocks per field, network shape checked before training, the tree and registered entries with controls built from their settings, tree phase map and rules; checked in a browser | done (2026-11-18) |
 
 ### Finished package (target)
 
@@ -456,7 +509,7 @@ and run time, and a steady-state check (a sample of runs continued to 2 and 4 ti
   patch started at small amplitude decays whatever $\varepsilon$: the patches start on the upper
   branch.
 
-The unsupervised threshold tree (step 6c, implemented in `phasewall.trees`). Supervised trees (fitted to labels, as in
+The unsupervised threshold tree (step 6c, `phasewall.trees`). Supervised trees (fitted to labels, as in
 hfml) are not used: the tree must find the phases without any input from the user.
 
 - **Idea.** A phase boundary often shows as a jump of one descriptor (an order parameter: the
@@ -476,10 +529,19 @@ hfml) are not used: the tree must find the phases without any input from the use
   the walls' `ALPHA`), the median jump of the descriptor across the crossing links must be at least
   `RATIO` times its median jump across the inner links (a jump, not a smooth drift), and the
   threshold must put 90% of the points on the same side. The tree stops when no split passes.
-- **Checks.** Stability (the tree rebuilt with the two halves swapped); comparison with the walls
-  and the blind methods on every example; on real data, the rules of the hand-made descriptors read
-  as physical criteria. A learned description has no meaningful single directions, so the tree
-  runs on its principal components there.
+- **Both halves.** A split is kept only if the best split placed with each half passes the test
+  on the other and the two agree on 90% of the points; the better of the two rules on all
+  snapshots is kept, so exchanging the halves gives the same tree.
+- **One run per point.** The two halves in time of one run are not independent (a frozen pattern
+  gives the same values twice), and the tree over-split (11 phases instead of 3 on Swift-Hohenberg
+  with one run per point). The points are then coloured as a checkerboard: a split placed on one
+  colour is predicted for the other colour from its neighbours and tested there, then the colours
+  are exchanged. Chosen automatically when most points have one run.
+- **Separated leaves** that are one phase in two places are joined as for the walls (step 6d).
+- **Checks.** The tree rebuilt with the halves exchanged; comparison with the walls and the blind
+  methods on every example; on real data, the rules of the hand-made descriptors read as physical
+  criteria. A learned description has no meaningful single directions, so the tree runs on its
+  principal components there.
 
 Open questions on the method:
 

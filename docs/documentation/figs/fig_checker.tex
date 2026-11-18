@@ -1,0 +1,40 @@
+% Checkerboard halves of the tree for points with a single run (invented values).
+\begin{tikzpicture}[fig]
+% (a) placed on one colour
+\begin{scope}
+  \node[lab] at (1.1,2.7) {(a) placed on one colour};
+  \foreach \i in {0,...,5} \foreach \j in {0,...,4} {
+    \pgfmathtruncatemacro{\c}{mod(\i+\j,2)}
+    \pgfmathtruncatemacro{\up}{(\i>=3) ? 1 : 0}
+    \ifnum\up=1 \def\cc{cP1}\else\def\cc{cP0}\fi
+    \ifnum\c=0 \fill[\cc] (0.45*\i,0.45*\j) circle (0.11);
+    \else \draw[cGrid, thick] (0.45*\i,0.45*\j) circle (0.11); \fi
+  }
+  \draw[wall] (0.45*2.5,-0.25) -- (0.45*2.5,0.45*4+0.25);
+  \node[small, text width=3cm, anchor=north] at (1.1,-0.35) {threshold chosen on the filled points, with the links between them (diagonals)};
+\end{scope}
+% (b) predicted on the other colour
+\begin{scope}[xshift=4.3cm]
+  \node[lab] at (1.1,2.7) {(b) predicted for the other};
+  \foreach \i in {0,...,5} \foreach \j in {0,...,4} {
+    \pgfmathtruncatemacro{\c}{mod(\i+\j,2)}
+    \pgfmathtruncatemacro{\up}{(\i>=3) ? 1 : 0}
+    \ifnum\up=1 \def\cc{cP1}\else\def\cc{cP0}\fi
+    \ifnum\c=1 \draw[\cc, very thick] (0.45*\i,0.45*\j) circle (0.11);
+    \else \fill[\cc!35] (0.45*\i,0.45*\j) circle (0.11); \fi
+  }
+  \draw[->, cInk2] (0.45*2,0.45*2) -- (0.45*3-0.13,0.45*2);
+  \draw[->, cInk2] (0.45*3,0.45*3) -- (0.45*3,0.45*2+0.13);
+  \draw[->, cInk2] (0.45*4,0.45*2) -- (0.45*3+0.13,0.45*2);
+  \node[small, text width=3cm, anchor=north] at (1.1,-0.35) {each ring gets the side of the majority of its neighbours};
+\end{scope}
+% (c) test
+\begin{scope}[xshift=8.6cm]
+  \node[lab] at (1.4,2.7) {(c) tested on the rings};
+  \draw[->] (0,0) -- (2.9,0) node[below left, small] {value of the descriptor};
+  \foreach \x in {0.2,0.4,0.5,0.7,0.8,0.95} \draw[cP0, very thick] (\x,0.4) circle (0.07);
+  \foreach \x in {1.8,2.0,2.1,2.3,2.45,2.6} \draw[cP1, very thick] (\x,0.4) circle (0.07);
+  \draw[cAcc, dashed, thick] (1.35,0.1) -- (1.35,0.9) node[above, small] {threshold};
+  \node[small, text width=3.3cm, anchor=north] at (1.4,-0.35) {independent runs: the threshold must agree with the predicted sides, the sides must differ, and the descriptor must jump};
+\end{scope}
+\end{tikzpicture}

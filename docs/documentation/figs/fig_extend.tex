@@ -1,0 +1,39 @@
+% Layers of phasewall and the registries through which it is extended.
+\begin{tikzpicture}[fig, node distance=0.4cm]
+\tikzset{layer/.style={draw, rounded corners, align=center, font=\footnotesize, inner sep=4pt, fill=black!3,
+                       minimum height=0.9cm},
+         ent/.style={draw, rounded corners=2pt, font=\scriptsize\ttfamily, inner sep=2pt, fill=white}}
+% interface layer
+\node[layer, text width=12.4cm] (ui) {\textbf{Interface} (\code{apps/}, marimo): fills in settings, shows results;
+  each entry's settings describe their own controls (\code{registry.settings_spec})};
+\node[layer, text width=12.4cm, below=of ui] (pl) {\textbf{Pipeline} (\code{phasewall.pipeline}): \code{Settings}
+  $\to$ \code{run} $\to$ \code{Results}; cache; scores; also used by the command line and the scripts};
+% registries
+\node[layer, text width=5.9cm, minimum height=2.3cm, below=0.9cm of pl.south west, anchor=north west] (enc) {};
+\node[font=\footnotesize\bfseries, anchor=north] at (enc.north) {Encoders: snapshots $\to$ tables of $h$};
+\node[ent] at ($(enc.center)+(-1.9,-0.05)$) {hand};
+\node[ent] at ($(enc.center)+(-0.6,-0.05)$) {learned};
+\node[ent, dashed] at ($(enc.center)+(1.2,-0.05)$) {yours};
+\node[small, anchor=south] at (enc.south) {\code{run(ensemble, settings, context)}};
+\node[layer, text width=5.9cm, minimum height=2.3cm, below=0.9cm of pl.south east, anchor=north east] (met) {};
+\node[font=\footnotesize\bfseries, anchor=north] at (met.north) {Methods: table $\to$ groups of runs};
+\node[ent] at ($(met.center)+(-2.2,0.15)$) {walls};
+\node[ent] at ($(met.center)+(-1.15,0.15)$) {tree};
+\node[ent] at ($(met.center)+(0.0,0.15)$) {mixture};
+\node[ent] at ($(met.center)+(1.25,0.15)$) {kmeans};
+\node[ent] at ($(met.center)+(-1.5,-0.35)$) {hdbscan};
+\node[ent, dashed] at ($(met.center)+(0.0,-0.35)$) {yours};
+\node[small, anchor=south] at (met.south) {\code{run(table, parameters, settings, context)}};
+\draw[->, thick] (ui) -- (pl);
+\draw[->, thick] (pl.south -| enc.north) -- (enc.north);
+\draw[->, thick] (pl.south -| met.north) -- (met.north);
+% contract tests
+\node[layer, text width=12.4cm, below=0.5cm of enc.south west, anchor=north west, fill=white, dashed] (ct)
+  {\textbf{Contract tests} (\code{tests/test_contracts.py}), run on every registered entry: format; one phase in
+   noise and two on a step (grid methods); two far clouds apart (blind methods); invariance under the box
+   symmetries (encoders declared invariant)};
+\node[small, text width=12.4cm, below=0.25cm of ct] {Register with \code{@registry.encoder} or
+  \code{@registry.method} (or Python entry points \code{phasewall.encoders}, \code{phasewall.methods} from
+  another package); the core modules (\code{describe}, \code{nn}, \code{walls}, \code{trees}, \code{baselines})
+  stay usable on their own.};
+\end{tikzpicture}

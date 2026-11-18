@@ -137,3 +137,25 @@ def test_grid_spacing_per_run(tmp_path):
     (tmp_path / "ens.toml").write_text((tmp_path / "ens.toml").read_text().replace("dx = 0.5\n", ""))
     ens = load_ensemble(tmp_path / "ens.toml")
     assert ens.dx is None and ens.runs.dx.tolist() == [0.5, 0.25]
+
+
+def test_write_config_round_trip(tmp_path):
+    from phasewall.io import write_config
+    pd.DataFrame({"path": ["r0"], "a": [0.1], "b": [1]}).to_csv(tmp_path / "runs.csv", index=False)
+    fields = [Field("rho", ("C", "rho"), relative=True), Field("v", (), "velocity", components=("vx", "vy")),
+              Field("Q", ("Q",), "nematic", blocks=("amp", "defects"))]
+    path = write_config(tmp_path / "cfg" / "ens.toml", tmp_path / "runs.csv", ["a", "b"], fields,
+                        snapshots="Data/*.h5", time_regex=r"(\d+)\.h5$", dx=0.5, periodic=False, last=3,
+                        pair_dt=None, julia_order=True)
+    ens = load_ensemble(path)
+    assert ens.parameters == ["a", "b"] and ens.time_regex == r"(\d+)\.h5$" and ens.periodic is False
+    assert ens.pair_dt is None and ens.runs.path.iloc[0] == str((tmp_path / "r0").resolve())
+    assert [(f.name, f.kind, f.keys, f.components, f.relative, f.blocks) for f in ens.fields] == [
+        ("rho", "scalar", ("C", "rho"), (), True, ()), ("v", "velocity", ("v",), ("vx", "vy"), False, ()),
+        ("Q", "nematic", ("Q",), (), False, ("amp", "defects"))]
+    mtime = path.stat().st_mtime_ns
+    write_config(path, tmp_path / "runs.csv", ["a", "b"], fields, snapshots="Data/*.h5", time_regex=r"(\d+)\.h5$",
+                 dx=0.5, periodic=False, last=3, pair_dt=None, julia_order=True)
+    assert path.stat().st_mtime_ns == mtime                     # the same text: the file is not touched
+    with pytest.raises(ValueError, match="single_component"):
+        write_config(tmp_path / "bad.toml", tmp_path / "runs.csv", ["a", "b"], [Field("vx", ("vx",))], dx=0.5)

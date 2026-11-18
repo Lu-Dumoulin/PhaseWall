@@ -26,12 +26,14 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from . import registry, report
 from .describe import combine_tables, descriptor_columns
 from .examples import example as example_module
 from .io import MIN_WAVELENGTHS, Ensemble, load_ensemble, load_table
+from .nn.architecture import Network
 from .parallel import Progress
 from .scores import point_scores
 from .walls import ALPHA, MERGE, MIN_PHASE, RATIO, Walls, phases_against_ratio
@@ -89,6 +91,7 @@ class Describers:
     device: str | None = None                   # "cpu", "mps", "cuda"; None: the fastest available
     blocks: dict = field(default_factory=dict)  # hand-made: {field name: blocks}; others keep their own or default
     others: dict = field(default_factory=dict)  # other registered encoders: {name: settings} (registry.py)
+    network: Network = field(default_factory=Network)   # learned: shape of the encoder (nn/architecture.py)
 
 
 @dataclass
@@ -232,10 +235,56 @@ def ensemble_for(source: Source, cache: Path, workers: int = 1, progress: Progre
 
 
 def framed(ens: Ensemble, f: FrameSettings) -> Ensemble:
-    """The ensemble with the frame settings applied."""
-    return dataclasses.replace(ens, crop=f.crop, dx_target=f.dx_target, max_shift=f.max_shift,
-                               min_wavelengths=f.min_wavelengths,
-                               periodic=ens.periodic if f.periodic is None else f.periodic)
+    """The ensemble with the frame settings applied; a setting left None keeps the ensemble's
+    own value (from its TOML file)."""
+    def keep(new, old):
+        return old if new is None else new
+    return dataclasses.replace(ens, crop=keep(f.crop, ens.crop), dx_target=keep(f.dx_target, ens.dx_target),
+                               max_shift=keep(f.max_shift, ens.max_shift), min_wavelengths=f.min_wavelengths,
+                               periodic=keep(f.periodic, ens.periodic))
+
+
+def fields_for(source: Source) -> list:
+    """The fields of a source before anything is run: a demo's fields, those of a TOML file, or
+    none for a table of descriptors."""
+    kind = source.kind()
+    if kind == "example":
+        from .examples import fields_of
+        return fields_of(source.example)
+    if kind == "config":
+        return list(load_ensemble(source.config).fields)
+    return []
+
+
+def frame_side(settings: Settings) -> int | None:
+    """Points per side of the frame the encoders will see (after crop and coarsening), for checks
+    made before running (the shape of the learned encoder); None for a table, or when it cannot
+    be known (a file missing, a frame that does not fit: the run itself reports why)."""
+    from .frames import frame_for
+    s = settings
+    try:
+        if s.source.kind() == "example":
+            module, _, _, kw = _demo_arguments(s.source)
+            st = module.SETTINGS | kw
+            n = int(st["n"])
+            dx = float(st["dx"]) if "dx" in st else 2 * np.pi * st["waves"] / n
+            shape, periodic, own = (n, n), True, Ensemble(pd.DataFrame(), [], [], dx=dx)
+        elif s.source.kind() == "config":
+            from .io import read_snapshot, run_snapshots
+            own = load_ensemble(s.source.config)
+            first = read_snapshot(run_snapshots(own, own.runs.path.iloc[0])[-1][1], own.fields[:1], own.julia_order)
+            shape, periodic = first[own.fields[0].name].shape, own.periodic
+            dx = own.dx if own.dx is not None else float(own.runs["dx"].iloc[0])
+        else:
+            return None
+        f = s.frame
+        fr = frame_for(shape, dx, periodic if f.periodic is None else f.periodic,
+                       f.crop if f.crop is not None else own.crop,
+                       f.dx_target if f.dx_target is not None else own.dx_target,
+                       f.max_shift if f.max_shift is not None else own.max_shift)
+        return (min(shape[:2]) if fr.crop is None else fr.crop) // fr.factor
+    except (ValueError, KeyError, IndexError, FileNotFoundError, OSError):
+        return None
 
 
 def with_blocks(ens: Ensemble, blocks: dict) -> Ensemble:
@@ -316,7 +365,7 @@ def _learned(res: Results, ens: Ensemble, ctx: registry.Context, hand) -> None:
     from .nn.train import Settings as TrainSettings
 
     d = res.settings.describers
-    out = registry.encoders()["learned"].run(ens, LearnedSettings(d.epochs, tuple(d.seeds)), ctx)
+    out = registry.encoders()["learned"].run(ens, LearnedSettings(d.epochs, tuple(d.seeds), d.network), ctx)
     for name, table in out.tables.items():
         if d.learned:
             res.tables[name] = table
@@ -325,7 +374,8 @@ def _learned(res: Results, ens: Ensemble, ctx: registry.Context, hand) -> None:
     res.training = out.log
     m = res.settings.methods
     if m.learning_curve:
-        f = Path(ctx.cache) / f"curve-{key(ctx.key, res.settings.frame, d.epochs, d.seeds, m.learning_curve)}.pkl"
+        extra = [] if d.network == Network() else [d.network]
+        f = Path(ctx.cache) / f"curve-{key(ctx.key, res.settings.frame, d.epochs, d.seeds, m.learning_curve, *extra)}.pkl"
         if f.exists():
             res.learning_curve = pd.read_pickle(f)
         else:
@@ -333,7 +383,8 @@ def _learned(res: Results, ens: Ensemble, ctx: registry.Context, hand) -> None:
             from .nn.data import load_frames
             frames = load_frames(ens, ctx.workers, progress=ctx.progress)
             res.learning_curve = learning_curve(ens, frames, m.learning_curve, d.seeds,
-                                                TrainSettings(epochs=d.epochs), res.labels, d.device, ctx.progress)
+                                                TrainSettings.from_network(d.network, epochs=d.epochs), res.labels,
+                                                d.device, ctx.progress)
             res.learning_curve.to_pickle(f)
 
 

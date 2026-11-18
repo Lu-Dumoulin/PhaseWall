@@ -1,22 +1,26 @@
 # Unsupervised threshold tree: barkley
 
-## halves as given: 2 phases, ARI 0.581
-
-phase 0 (123 points): v.dyn.still > -3
-phase 1 (42 points): v.dyn.still <= -3
-
-| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | accepted |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 165 | v.dyn.still | -3 | 123 | 42 | 0.999 | 0.159 | 0.919 | 0.994 | 0 | 716 | True |
-| 123 | v.dyn.moving | -1.39 | 74 | 49 | 0.921 | 0.222 | 0.819 | 0.74 | 0 | 26.6 | False |
-
-## halves swapped: 2 phases, ARI 0.581
+## all runs: 2 phases (runs halves), ARI 0.581
 
 phase 0 (122 points): v.dyn.still > -3
 phase 1 (42 points): v.dyn.still <= -3
 phase -1 (1 points): v.dyn.still <= -3
 
-| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | accepted |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 165 | v.dyn.still | -3 | 122 | 43 | 0.999 | 0.175 | 0.912 | 0.994 | 0 | 729 | True |
-| 122 | u.topo.above-1 | 0.0002 | 96 | 26 | 0.955 | 0.252 | 0.835 | 0.762 | 0.0022 | 0 | False |
+Splits tried:
+
+| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | both_halves | accepted |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 165 | v.dyn.still | -3 | 123 | 42 | 0.999 | 0.159 | 0.919 | 0.994 | 0 | 716 | 0.994 | True |
+| 122 | v.dyn.moving | -1.36 | 74 | 48 | 0.92 | 0.205 | 0.826 | 0.738 | 0 | 27 | nan | False |
+
+## one run per point: 2 phases (grid halves), ARI 0.679
+
+phase 0 (120 points): u.amp.log10var > -12
+phase 1 (45 points): u.amp.log10var <= -12
+
+Splits tried:
+
+| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | both_halves | accepted |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 165 | u.amp.log10var | -12 | 120 | 45 | 0.999 | 0.257 | 0.87 | 0.974 | 0 | 215 | 1 | True |
+| 120 | v.topo.below+0 | 0.0004 | 75 | 45 | 0.891 | 0.37 | 0.726 | 0.87 | 0 | 1.34e+11 | 0.792 | False |

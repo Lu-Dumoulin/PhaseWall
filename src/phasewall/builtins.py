@@ -17,8 +17,9 @@ import pandas as pd
 
 from .describe import describe_ensemble
 from .graph import parameter_nodes
+from .nn.architecture import Network, check
 from .registry import Context, EncoderResult, MethodResult, cache_key, encoder, method
-from .trees import AGREE
+from .trees import AGREE, SYMMETRIC
 from .walls import ALPHA, MERGE, MIN_PHASE, RATIO, find_walls
 
 
@@ -51,6 +52,7 @@ def hand(ens, settings: HandSettings, context: Context) -> EncoderResult:
     ens = _with_blocks(ens, settings.blocks)
     f = None
     if context.cache:
+        Path(context.cache).mkdir(parents=True, exist_ok=True)
         f = Path(context.cache) / f"hand-{cache_key(context.key, context.frame, *([settings.blocks] if settings.blocks else []))}.pkl"
         if f.exists():
             return EncoderResult({"hand": pd.read_pickle(f)})
@@ -66,24 +68,32 @@ def hand(ens, settings: HandSettings, context: Context) -> EncoderResult:
 class LearnedSettings:
     epochs: int = field(default=40, metadata={"help": "training epochs", "range": (1, 1000)})
     seeds: tuple = field(default=(0,), metadata={"help": "one training per seed", "range": (0, 10_000)})
+    network: Network = field(default_factory=Network, metadata={
+        "help": "shape of the encoder and its head (nn/architecture.py), checked against the frame"})
 
 
 @encoder("learned", LearnedSettings, help="contrastive convolutional encoder trained on the ensemble (nn/)",
-         needs=("torch",), test_settings=LearnedSettings(epochs=1))
+         needs=("torch",), test_settings=LearnedSettings(epochs=1, network=Network(blocks=2, width=8, dim_h=32,
+                                                                                   hidden=32, projection=16)))
 def learned(ens, settings: LearnedSettings, context: Context) -> EncoderResult:
     from .nn.data import load_frames
     from .nn.train import Settings as TrainSettings
     from .nn.train import embed, h_table, save, train
 
+    net = settings.network
+    # the network is part of the cache name only when it is not the default, so that trainings
+    # made before the network could be chosen are still found
+    extra = [] if net == Network() else [net]
     frames, tables, logs = None, {}, []
     for seed in settings.seeds:
-        folder = Path(context.cache) / f"learned-{cache_key(context.key, context.frame, settings.epochs, seed)}" \
+        folder = Path(context.cache) / f"learned-{cache_key(context.key, context.frame, settings.epochs, seed, *extra)}" \
             if context.cache else None
         if folder is not None and (folder / "table.pkl").exists():
             table, log = pd.read_pickle(folder / "table.pkl"), pd.read_csv(folder / "log.csv")
         else:
             frames = frames or load_frames(ens, context.workers, progress=context.progress)
-            ts = TrainSettings(epochs=settings.epochs, seed=seed)
+            check(net, frames.x.shape[-1])
+            ts = TrainSettings.from_network(net, epochs=settings.epochs, seed=seed)
             enc, log = train(frames, ts, dev=context.device, verbose=False, progress=context.progress)
             table = h_table(frames, embed(enc, frames), ens)
             if folder is not None:
@@ -113,7 +123,12 @@ def walls(table, parameters, settings: WallsSettings, context: Context) -> Metho
 
 @dataclass
 class TreeSettings:
-    swap: bool = field(default=False, metadata={"help": "place the splits with the second halves, test with the first"})
+    halves_by: str = field(default="auto", metadata={
+        "help": "independent halves: of the runs of each point, or a checkerboard of the points (one run per "
+                "point); auto chooses", "choices": ("auto", "runs", "grid")})
+    symmetric: bool = field(default=SYMMETRIC, metadata={"help": "keep a split only if both halves find it"})
+    merge: bool = field(default=MERGE, metadata={"help": "join separated leaves that are one phase"})
+    swap: bool = field(default=False, metadata={"help": "show the rule found by the second half (stability check)"})
     components: bool = field(default=False, metadata={
         "help": "split on principal components (for a learned description) instead of single descriptors"})
     alpha: float = field(default=ALPHA, metadata={"help": "Mann-Whitney threshold of a split", "range": (1e-9, 0.5)})
@@ -128,7 +143,8 @@ class TreeSettings:
 def tree(table, parameters, settings: TreeSettings, context: Context) -> MethodResult:
     from .trees import fit_tree
     t = fit_tree(table, parameters, use_components=settings.components, swap=settings.swap, alpha=settings.alpha,
-                 ratio=settings.ratio, agree_min=settings.agree)
+                 ratio=settings.ratio, agree_min=settings.agree, symmetric=settings.symmetric, merge=settings.merge,
+                 halves_by=settings.halves_by)
     return MethodResult(_groups_of_points(table, parameters, t.nodes["phase"].to_numpy()), t)
 
 

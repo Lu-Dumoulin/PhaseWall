@@ -1,11 +1,21 @@
-example,swap,splits_tried,splits_accepted,groups,noise_points,agree,points,ari,ari_all,pieces,noise_runs
-swift-hohenberg,False,6,3,4,0,235,240,0.8985840653562073,0.8985840653562073,4,0.0
-swift-hohenberg,True,4,2,3,0,237,240,0.9560593608225203,0.9560593608225203,3,0.0
-gray-scott,False,25,12,16,13,499,525,0.8410846791332289,0.8273043116011219,16,0.024761904761904763
-gray-scott,True,34,18,21,18,492,525,0.8238950186228222,0.7936868709447755,21,0.03428571428571429
-fitzhugh-nagumo,False,1,0,1,0,33,99,0.0,0.0,1,0.0
-fitzhugh-nagumo,True,1,0,1,0,33,99,0.0,0.0,1,0.0
-sh-localized,False,4,2,3,0,104,105,0.9796132132416471,0.9796132132416471,3,0.0
-sh-localized,True,4,2,3,0,104,105,0.9753596904166232,0.9753596904166232,3,0.0
-barkley,False,2,1,2,0,132,165,0.5810442731175846,0.5810442731175846,2,0.0
-barkley,True,2,1,2,1,131,165,0.5806955921765987,0.5716508106935414,2,0.006060606060606061
+example,data,variant,halves_by,leaves,same_as_default,groups,noise_points,agree,points,ari,ari_all,pieces,noise_runs
+barkley,all runs,default,runs,3,True,2,1,131,165,0.5806955921765987,0.5716508106935414,2,0.006060606060606061
+barkley,all runs,halves swapped,runs,3,True,2,1,131,165,0.5806955921765987,0.5716508106935414,2,0.006060606060606061
+barkley,one run per point,default,grid,2,True,2,0,142,165,0.6785180366544924,0.6785180366544924,2,0.0
+barkley,one run per point,halves swapped,grid,2,True,2,0,142,165,0.6785180366544924,0.6785180366544924,2,0.0
+swift-hohenberg,all runs,default,runs,3,True,3,0,236,240,0.9418017333559484,0.9418017333559484,3,0.0
+swift-hohenberg,all runs,halves swapped,runs,3,True,3,0,236,240,0.9418017333559484,0.9418017333559484,3,0.0
+swift-hohenberg,one run per point,default,grid,3,True,3,0,233,240,0.9004767704795684,0.9004767704795684,3,0.0
+swift-hohenberg,one run per point,halves swapped,grid,3,True,3,0,233,240,0.9004767704795684,0.9004767704795684,3,0.0
+fitzhugh-nagumo,all runs,default,runs,1,True,1,0,33,99,0.0,0.0,1,0.0
+fitzhugh-nagumo,all runs,halves swapped,runs,1,True,1,0,33,99,0.0,0.0,1,0.0
+fitzhugh-nagumo,one run per point,default,grid,4,True,2,2,54,99,0.375214211767918,0.36384584609635623,2,0.020202020202020204
+fitzhugh-nagumo,one run per point,halves swapped,grid,4,True,2,2,54,99,0.375214211767918,0.36384584609635623,2,0.020202020202020204
+gray-scott,all runs,default,runs,21,True,10,10,499,525,0.9439764821660378,0.9253416303276516,12,0.01904761904761905
+gray-scott,all runs,halves swapped,runs,21,True,10,10,499,525,0.9439764821660378,0.9253416303276516,12,0.01904761904761905
+gray-scott,one run per point,default,grid,16,True,7,7,502,525,0.9552672719765616,0.9476669693315128,9,0.013333333333333334
+gray-scott,one run per point,halves swapped,grid,16,True,7,7,502,525,0.9552672719765616,0.9476669693315128,9,0.013333333333333334
+sh-localized,all runs,default,runs,3,True,3,0,105,105,1.0,1.0,3,0.0
+sh-localized,all runs,halves swapped,runs,3,True,3,0,105,105,1.0,1.0,3,0.0
+sh-localized,one run per point,default,grid,3,True,3,0,105,105,1.0,1.0,3,0.0
+sh-localized,one run per point,halves swapped,grid,3,True,3,0,105,105,1.0,1.0,3,0.0

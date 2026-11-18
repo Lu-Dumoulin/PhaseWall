@@ -24,9 +24,10 @@ from torch.utils.data import DataLoader
 
 from ..fields import Field
 from ..io import Ensemble
+from .architecture import Network
 from .data import DRAWS, FrameSet, PairViews
 from .loss import T, alignment, effective_rank, info_nce, uniformity
-from .model import CHANNELS, Encoder, ProjectionHead, count_weights
+from .model import CHANNELS, HIDDEN, OUT, Encoder, ProjectionHead, count_weights
 
 PREFIX = "cnn.h"     # columns of the learned description: cnn.h.d000, ...
 
@@ -45,6 +46,14 @@ class Settings:
     draws: int = DRAWS
     channels: tuple = CHANNELS
     seed: int = 0
+    hidden: int = HIDDEN      # head g: hidden layer
+    projection: int = OUT     # head g: dimension of z
+
+    @classmethod
+    def from_network(cls, network: Network, **kw) -> "Settings":
+        """Training settings for a network of architecture.py (channels, head, temperature)."""
+        return cls(channels=network.channels, hidden=network.hidden, projection=network.projection,
+                   temperature=network.temperature, **kw)
 
 
 def device() -> torch.device:
@@ -97,7 +106,7 @@ def train(frames: FrameSet, settings: Settings | None = None, dev: torch.device 
     s = settings or Settings()
     np.random.seed(s.seed)
     encoder = new_encoder(frames, s).to(dev)
-    head = ProjectionHead(encoder.dim).to(dev)
+    head = ProjectionHead(encoder.dim, s.hidden, s.projection).to(dev)
     dataset = PairViews(frames, draws=s.draws, seed=s.seed)
     batch = min(s.batch, len(dataset.rows))
     loader = DataLoader(dataset, batch_size=batch, shuffle=True, drop_last=True,

@@ -317,3 +317,44 @@ def fields_toml(suggestions: list[dict]) -> str:
         if s.get("relative"):
             lines.append("relative = true")
     return "\n".join(lines).strip() + "\n"
+
+
+def _toml_value(v) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    if isinstance(v, int | float):
+        return repr(v)
+    if isinstance(v, str):
+        return "'" + v + "'" if "\\" in v and "'" not in v else '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    if isinstance(v, list | tuple):
+        return "[" + ", ".join(_toml_value(x) for x in v) + "]"
+    raise TypeError(f"cannot write {v!r} in TOML")
+
+
+def write_config(path: str | Path, runs: str | Path, parameters: list[str], fields: list[Field], **ensemble) -> Path:
+    """Write the TOML configuration of an ensemble (the inverse of load_ensemble): `runs` is the
+    table of runs (written as an absolute path), `ensemble` the other keys of [ensemble] (None
+    values are left out). The file is read back with load_ensemble, so a mistake is reported here;
+    a file that already holds the same text is not rewritten."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["[ensemble]", f"runs = {_toml_value(str(Path(runs).resolve()))}",
+             f"parameters = {_toml_value(list(parameters))}"]
+    lines += [f"{k} = {_toml_value(v)}" for k, v in ensemble.items() if v is not None]
+    for f in fields:
+        lines += ["", "[[fields]]", f"name = {_toml_value(f.name)}", f"kind = {_toml_value(f.kind)}"]
+        if f.components:
+            lines.append(f"components = {_toml_value(list(f.components))}")
+        else:
+            lines.append(f"keys = {_toml_value(list(f.keys))}")
+        if f.relative:
+            lines.append("relative = true")
+        if f.single_component:
+            lines.append("single_component = true")
+        if f.blocks:
+            lines.append(f"blocks = {_toml_value(list(f.blocks))}")
+    text = "\n".join(lines) + "\n"
+    if not path.exists() or path.read_text() != text:   # an unchanged file is not touched: caches keyed
+        path.write_text(text)                            # on its modification time stay valid
+    load_ensemble(path)
+    return path

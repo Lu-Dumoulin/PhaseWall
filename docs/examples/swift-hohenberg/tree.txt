@@ -1,30 +1,31 @@
 # Unsupervised threshold tree: swift-hohenberg
 
-## halves as given: 4 phases, ARI 0.899
+## all runs: 3 phases (runs halves), ARI 0.942
 
-phase 0 (137 points): u.amp.log10var > -12 and u.topo.below-1 <= 0.02197 and u.shape.k00 <= 0.009894
-phase 1 (64 points): u.amp.log10var > -12 and u.topo.below-1 > 0.02197
-phase 2 (30 points): u.amp.log10var <= -12
-phase 3 (9 points): u.amp.log10var > -12 and u.topo.below-1 <= 0.02197 and u.shape.k00 > 0.009894
-
-| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | accepted |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 240 | u.amp.log10var | -12 | 210 | 30 | 0.994 | 0.167 | 0.91 | 1 | 0 | 268 | True |
-| 210 | u.topo.below-1 | 0.022 | 64 | 146 | 0.95 | 0.121 | 0.892 | 0.967 | 0 | 20.8 | True |
-| 64 | u.shape.k11 | 0 | 18 | 46 | 0.847 | 0.291 | 0.724 | 0.828 | 0 | 3.34e+07 | False |
-| 146 | u.shape.k00 | 0.0099 | 9 | 137 | 0.871 | 0.283 | 0.748 | 0.986 | 0 | 20 | True |
-| 9 | u.shape.k08 | 0.0027 | 6 | 3 | 0.87 | 0.629 | 0.596 | 0.778 | 0.0476 | 1.16 | False |
-| 137 | u.shape.k02 | 0.0038 | 54 | 83 | 0.796 | 0.112 | 0.751 | 0.854 | 0 | 1.44 | False |
-
-## halves swapped: 3 phases, ARI 0.956
-
-phase 0 (140 points): u.amp.log10var > -12 and u.topo.below-1 <= 0.02474
-phase 1 (70 points): u.amp.log10var > -12 and u.topo.below-1 > 0.02474
+phase 0 (143 points): u.amp.log10var > -12 and u.topo.below-1 <= 0.02474
+phase 1 (67 points): u.amp.log10var > -12 and u.topo.below-1 > 0.02474
 phase 2 (30 points): u.amp.log10var <= -12
 
-| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | accepted |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 240 | u.amp.log10var | -12 | 210 | 30 | 0.994 | 0.167 | 0.91 | 1 | 0 | 260 | True |
-| 210 | u.topo.below-1 | 0.0247 | 70 | 140 | 0.971 | 0.127 | 0.909 | 0.962 | 0 | 23.5 | True |
-| 70 | u.shape.k11 | 0 | 11 | 59 | 0.894 | 0.275 | 0.772 | 0.843 | 0 | 3.58 | False |
-| 140 | u.mom.mean | 0.204 | 47 | 93 | 0.766 | 0.0809 | 0.735 | 1 | 0 | 1.49 | False |
+Splits tried:
+
+| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | both_halves | accepted |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 240 | u.amp.log10var | -12 | 210 | 30 | 0.994 | 0.167 | 0.91 | 1 | 0 | 268 | 1 | True |
+| 210 | u.topo.below-1 | 0.0247 | 64 | 146 | 0.95 | 0.121 | 0.892 | 0.967 | 0 | 20.8 | 0.971 | True |
+| 67 | u.shape.k11 | 0 | 18 | 49 | 0.85 | 0.285 | 0.729 | 0.836 | 0 | 3.49e+07 | nan | False |
+| 143 | u.shape.k00 | 0.0106 | 9 | 134 | 0.871 | 0.283 | 0.748 | 0.979 | 0 | 19.9 | 0.699 | False |
+
+## one run per point: 3 phases (grid halves), ARI 0.900
+
+phase 0 (153 points): u.mom.kurt <= -0.9221
+phase 1 (57 points): u.mom.kurt > -0.9221 and u.topo.below+0 > 0
+phase 2 (30 points): u.mom.kurt > -0.9221 and u.topo.below+0 <= 0
+
+Splits tried:
+
+| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | both_halves | accepted |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 240 | u.mom.kurt | -0.922 | 87 | 153 | 0.892 | 0.175 | 0.814 | 0.991 | 0 | 25.5 | 0.988 | True |
+| 87 | u.topo.below+0 | 0 | 57 | 30 | 1 | 0.462 | 0.769 | 1 | 0 | 9.61e+11 | 1 | True |
+| 153 | u.shape.k00 | 0.0144 | 14 | 139 | 0.943 | 0.435 | 0.738 | 0.973 | 0.001 | 45.8 | 0.771 | False |
+| 57 | u.mom.mean | 0.104 | 21 | 36 | 0.744 | 0.263 | 0.646 | 0.963 | 0 | 1.6 | 0.895 | False |

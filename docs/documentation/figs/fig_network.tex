@@ -1,0 +1,33 @@
+% The shape of the learned encoder: blocks halving the grid, channels doubling up to dim_h, the
+% mean over the last map, the head; and the receptive field of the blocks.
+\begin{tikzpicture}[fig]
+% (a) blocks
+\node[lab, anchor=west] at (-0.2,2.25) {(a) a network of 4 blocks, width 32, $\dim h=256$};
+\foreach \k/\s/\c/\lab in {0/1.6/cP2!15/{input $n$}, 1/1.2/cP0!15/{$n/2$, 32}, 2/0.9/cP0!30/{$n/4$, 64},
+                         3/0.65/cP0!45/{$n/8$, 128}, 4/0.45/cP0!65/{$n/16$, 256}} {
+  \pgfmathsetmacro{\x}{2.0*\k}
+  \fill[\c, draw=cInk2] (\x,1.0-\s/2) rectangle ++(\s,\s);
+  \node[small] at ({\x+\s/2},-0.05) {\lab};
+}
+\foreach \k in {0,...,3} \draw[->] ({2.0*\k+1.65},1.0) -- ({2.0*\k+1.95},1.0);
+\node[small] at (4.3,-0.55) {each block: grid $/2$, channels $\times2$ up to $\dim h$};
+\draw[->] (8.5,1.0) -- (9.0,1.0) node[right, small] {mean};
+\node[draw, fill=cP1!20, minimum width=0.25cm, minimum height=1.1cm, label={[small]above:$h$}] (h) at (10.0,1.0) {};
+\draw[->] (10.15,1.0) -- (10.7,1.0);
+\node[draw, rounded corners, small, align=center] (g) at (11.6,1.0) {$g$: hidden,\\ projection};
+\draw[->] (g) -- (12.9,1.0) node[right, small] {$z$};
+\node[small, text width=3.1cm] at (11.6,-0.05) {training only; loss at temperature $T$};
+% (b) receptive field
+\begin{scope}[yshift=-3.0cm]
+  \node[lab, anchor=west] at (-0.2,1.9) {(b) receptive field and frame};
+  \foreach \r/\b in {0.13/1, 0.34/2, 0.77/3} \draw[cP0, thick] ({1.5-\r},{0.6-\r}) rectangle ({1.5+\r},{0.6+\r});
+  \node[small, anchor=west] at (3.0,1.4) {1 block: 7 points};
+  \node[small, anchor=west] at (3.0,0.9) {2 blocks: 19};
+  \node[small, anchor=west] at (3.0,0.4) {3 blocks: 43; 4 blocks: 91};
+  \node[note, text width=6.6cm, align=left, anchor=west] at (6.2,0.6)
+    {\textbf{Checked before training:} last map of at least 2 points per side (blocks $\le\log_2(n/2)$);
+     channels never decrease (width $\le\dim h$); projection $\le\dim h$ and $\le$ hidden; values in
+     their lists or ranges. Shown: receptive field against the frame side $n$, number of weights,
+     rough memory of a step.};
+\end{scope}
+\end{tikzpicture}

@@ -77,5 +77,7 @@ def test_quick_ensembles_are_readable(tmp_path, name):
     runs = m.make_ensemble(tmp_path, seeds=(0,), **grid, **quick, n_save=3)
     ens = load_ensemble(tmp_path / "phasewall.toml")
     assert len(runs) == 4 and ens.parameters == list(m.GRID) and len(ens.fields) == m.N_FIELDS
+    from phasewall.examples import fields_of
+    assert list(ens.fields) == fields_of(name)
     from phasewall.io import run_snapshots
     assert len(run_snapshots(ens, ens.runs.path[0])) == 3

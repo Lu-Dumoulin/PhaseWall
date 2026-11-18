@@ -1,11 +1,13 @@
-"""The unsupervised threshold tree (phasewall.trees) on the hand-made description of every
-example of scripts/run_examples.py, with the halves as given and swapped, scored like the other
-methods against the reference labels (used only for the score).
+"""The unsupervised threshold tree (phasewall.trees, default settings) on the hand-made description
+of every example of scripts/run_examples.py, scored like the other methods against the reference
+labels (used only for the score); the tree with the halves swapped as a stability check; and the
+same with one run per point (the first run of every point), where the tree uses checkerboard halves.
 
 Usage: python scripts/tree_examples.py [--only gray-scott ...] [--workers 8]
 
 Reads the cached ensembles and hand-made tables (data/cache; run scripts/run_examples.py first).
-Writes docs/examples/<name>/tree.txt (rules and tried splits) and docs/examples/trees.csv.
+Writes docs/examples/<name>/tree.txt (rules, splits tried, merges), phase_map_tree.png and
+docs/examples/trees.csv.
 """
 
 import argparse
@@ -25,6 +27,13 @@ from phasewall.scores import point_scores
 warnings.simplefilter("ignore", RuntimeWarning)
 
 
+def score(t, table, params, labels) -> dict:
+    point = pd.Series(t.nodes["phase"].to_numpy(), index=pd.MultiIndex.from_frame(t.nodes[params].round(9)))
+    groups = table[["run", *params]].drop_duplicates("run").reset_index(drop=True)
+    groups["tree"] = point.loc[pd.MultiIndex.from_frame(groups[params].round(9))].to_numpy()
+    return point_scores(groups, "tree", params, labels)
+
+
 def run_one(name: str, workers: int) -> list[dict]:
     settings = pl.Settings(source=JOBS[name],
                            describers=pl.Describers(hand=True, learned=False, combined=False),
@@ -33,18 +42,28 @@ def run_one(name: str, workers: int) -> list[dict]:
                            execution=pl.Execution(workers=workers, cache="data/cache"))
     res = pl.run(settings)
     table, params = res.tables["hand"], list(res.parameters)
-    labels = res.runs.set_index("run")["reference"]
+    labels = res.labels
+    first = table.groupby(params).run.transform("min")
     rows, text = [], []
-    for swap in (False, True):
-        t = trees.fit_tree(table, params, swap=swap)
-        point = pd.Series(t.nodes["phase"].to_numpy(), index=pd.MultiIndex.from_frame(t.nodes[params].round(9)))
-        groups = table[["run", *params]].drop_duplicates("run").reset_index(drop=True)
-        groups["tree"] = point.loc[pd.MultiIndex.from_frame(groups[params].round(9))].to_numpy()
-        s = point_scores(groups, "tree", params, labels)
-        rows.append({"example": name, "swap": swap, "splits_tried": len(t.splits),
-                     "splits_accepted": int(t.splits.accepted.sum()) if len(t.splits) else 0, **s})
-        text += [f"## halves {'swapped' if swap else 'as given'}: {t.n_phases} phases, ARI {s['ari']:.3f}", "",
-                 trees.rules_text(t), "", report._markdown(t.splits.round(4)), ""]
+    for data, tab in (("all runs", table), ("one run per point", table[table.run == first])):
+        base = None
+        for variant, kw in (("default", {}), ("halves swapped", {"swap": True})):
+            t = trees.fit_tree(tab, params, **kw)
+            base = base if base is not None else t
+            same = bool((t.nodes.phase.to_numpy() == base.nodes.phase.to_numpy()).all())
+            s = score(t, tab, params, labels)
+            rows.append({"example": name, "data": data, "variant": variant, "halves_by": t.halves_by,
+                         "leaves": t.nodes.leaf.nunique(), "same_as_default": same, **s})
+            if variant == "default":
+                text += [f"## {data}: {t.n_phases} phases ({t.halves_by} halves), ARI {s['ari']:.3f}", "",
+                         trees.rules_text(t), "", "Splits tried:", "", report._markdown(t.splits.round(4)), ""]
+                if len(t.merges):
+                    text += ["Separated leaves compared:", "", report._markdown(t.merges.round(4)), ""]
+                if data == "all runs":
+                    runs = res.runs.assign(reference=labels.loc[res.runs.run].to_numpy())
+                    w = t.as_walls()
+                    report.make_phase_map(w, report.node_labels(w, runs)).savefig(
+                        OUT / name / "phase_map_tree.png", dpi=report.DPI, facecolor=report.SURFACE)
     (OUT / name / "tree.txt").write_text(f"# Unsupervised threshold tree: {name}\n\n" + "\n".join(text))
     return rows
 
@@ -57,9 +76,10 @@ def main():
     rows = [r for name in args.only for r in run_one(name, args.workers)]
     new = pd.DataFrame(rows)
     f = OUT / "trees.csv"
-    if f.exists():                          # keep the examples not run this time
+    if f.exists():                          # keep the examples not run this time (same columns only)
         old = pd.read_csv(f)
-        new = pd.concat([old[~old.example.isin(new.example)], new], ignore_index=True)
+        if set(new.columns) <= set(old.columns):
+            new = pd.concat([old[~old.example.isin(new.example)][new.columns], new], ignore_index=True)
     new.to_csv(f, index=False)
     print(new.round(3).to_string(index=False))
 

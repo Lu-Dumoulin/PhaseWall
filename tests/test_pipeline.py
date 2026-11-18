@@ -104,3 +104,27 @@ def test_blocks_chosen_per_field(tmp_path):
     s.describers.blocks = {"u": ("flow",)}
     with pytest.raises(ValueError, match="do not apply"):
         pl.run(s)
+
+
+def test_fields_and_frame_side_before_running(tmp_path):
+    from phasewall.fields import Field
+    s = settings(tmp_path)
+    assert pl.fields_for(s.source) == [Field("u", ("u",))]
+    assert pl.frame_side(s) == 32
+    s.frame = pl.FrameSettings(crop=float(2 * np.pi * 4 / 32 * 16))       # 16 points of the 32
+    assert pl.frame_side(s) == 16
+    gs = pl.Settings(source=pl.Source(example="gray-scott", quick=True))
+    assert [f.name for f in pl.fields_for(gs.source)] == ["u", "v"] and pl.frame_side(gs) == 64
+    assert pl.frame_side(pl.Settings(source=pl.Source(example=None, table="x.csv", parameters=("a",)))) is None
+
+
+def test_a_configuration_keeps_its_own_frame(tmp_path):
+    from phasewall import toy
+    toy.make_ensemble(tmp_path / "ens", eps=[-0.1, 0.3], g=[0.0], seeds=(0, 1), n=32, waves=4)
+    cfg = tmp_path / "ens" / "phasewall.toml"
+    dx = 2 * np.pi * 4 / 32
+    cfg.write_text(cfg.read_text().replace("periodic = true", f"crop = {16 * dx!r}\nperiodic = false", 1))
+    s = pl.Settings(source=pl.Source(example=None, config=str(cfg)))
+    assert pl.frame_side(s) == 16
+    ens = pl.framed(pl.load_ensemble(cfg), s.frame)
+    assert ens.crop == 16 * dx and ens.periodic is False         # empty frame settings keep the file's own

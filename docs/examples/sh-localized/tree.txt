@@ -1,27 +1,43 @@
 # Unsupervised threshold tree: sh-localized
 
-## halves as given: 3 phases, ARI 0.980
+## all runs: 3 phases (runs halves), ARI 1.000
 
 phase 0 (51 points): u.amp.log10var <= -12
-phase 1 (39 points): u.amp.log10var > -12 and u.amp.log10var > -0.5706
-phase 2 (15 points): u.amp.log10var > -12 and u.amp.log10var <= -0.5706
+phase 1 (40 points): u.amp.log10var > -12 and u.amp.log10var > -0.5706
+phase 2 (14 points): u.amp.log10var > -12 and u.amp.log10var <= -0.5706
 
-| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | accepted |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 105 | u.amp.log10var | -12 | 54 | 51 | 0.996 | 0.0653 | 0.964 | 0.991 | 0 | 5.35e+03 | True |
-| 54 | u.amp.log10var | -0.571 | 39 | 15 | 0.918 | 0.169 | 0.841 | 0.963 | 0 | 153 | True |
-| 39 | u.shape.k18 | 0 | 12 | 27 | 0.748 | 0.372 | 0.609 | 0.385 | 0.166 | 0.595 | False |
-| 15 | u.shape.k01 | 0.0002 | 4 | 11 | 0.916 | 0.525 | 0.676 | 0.933 | 0.0015 | 19.1 | False |
+Splits tried:
 
-## halves swapped: 3 phases, ARI 0.975
+| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | both_halves | accepted |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 105 | u.amp.log10var | -12 | 54 | 51 | 0.996 | 0.0653 | 0.964 | 0.991 | 0 | 5.35e+03 | 0.991 | True |
+| 54 | u.amp.log10var | -0.571 | 39 | 15 | 0.918 | 0.169 | 0.841 | 0.963 | 0 | 153 | 0.963 | True |
+| 40 | u.shape.k18 | 0 | 12 | 28 | 0.747 | 0.398 | 0.598 | 0.375 | 0.244 | 0.65 | nan | False |
+| 14 | u.shape.k01 | 0.0002 | 4 | 10 | 0.916 | 0.533 | 0.672 | 0.929 | 0.002 | 17.8 | nan | False |
 
-phase 0 (50 points): u.amp.log10var <= -12
-phase 1 (40 points): u.amp.log10var > -12 and u.mom.std > 0.8427
-phase 2 (15 points): u.amp.log10var > -12 and u.mom.std <= 0.8427
+Separated leaves compared:
 
-| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | accepted |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| 105 | u.amp.log10var | -12 | 55 | 50 | 0.978 | 0.0545 | 0.951 | 0.991 | 0 | 7.38e+03 | True |
-| 55 | u.mom.std | 0.843 | 40 | 15 | 0.86 | 0.138 | 0.801 | 0.964 | 0 | 105 | True |
-| 40 | u.topo.above-1 | 0.0002 | 15 | 25 | 0.821 | 0.29 | 0.702 | 0.4 | 0.0774 | 0.296 | False |
-| 15 | u.mom.std | 0.438 | 8 | 7 | 0.927 | 0.55 | 0.672 | 0.533 | 0.0003 | 0.333 | False |
+| phase_a | phase_b | core_a | core_b | gap | spread_a | spread_b | ratio | merged |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 1 | 45 | 35 | 2.02 | 0 | 0.325 | 2.31 | False |
+
+## one run per point: 3 phases (grid halves), ARI 1.000
+
+phase 0 (51 points): u.amp.log10var <= -12
+phase 1 (38 points): u.amp.log10var > -12 and u.mom.std > 0.3603
+phase 2 (16 points): u.amp.log10var > -12 and u.mom.std <= 0.3603
+
+Splits tried:
+
+| size | column | threshold | above | below | eta2 | ncut | score | agree | p | ratio | both_halves | accepted |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 105 | u.amp.log10var | -12 | 54 | 51 | 0.996 | 0.125 | 0.933 | 1 | 0 | 3.69e+03 | 1 | True |
+| 54 | u.mom.std | 0.36 | 38 | 16 | 0.989 | 0.327 | 0.827 | 1 | 0 | 79.1 | 1 | True |
+| 38 | u.amp.log10var | -0.0382 | 25 | 13 | 0.744 | 0.566 | 0.533 | 0.947 | 0 | 1.03 | 0.842 | False |
+| 16 | u.shape.k17 | 0 | 8 | 8 | 0.771 | 0.693 | 0.504 | 0.75 | 0.0714 | 2.72 | 0.812 | False |
+
+Separated leaves compared:
+
+| phase_a | phase_b | core_a | core_b | gap | spread_a | spread_b | ratio | merged |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 1 | 45 | 32 | 2.07 | 0 | 0.364 | 5.7 | False |

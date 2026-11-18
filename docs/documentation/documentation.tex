@@ -130,7 +130,7 @@ Method & Uses the grid & Gives & Status \\
 walls (Sec.~\ref{sec:walls}) & yes & walls between neighbouring points, each tested on data that did not place it; phases as the regions between walls & implemented \\
 mixed points (Sec.~\ref{sec:mixed}) & no & points whose runs end in different states & implemented \\
 separated parts (Sec.~\ref{sec:merge}) & yes & one phase for parts of one phase that another phase separates & implemented \\
-unsupervised threshold tree (Sec.~\ref{sec:tree}) & yes & phases as leaves of a tree of rules ``descriptor $>$ threshold'' & prototype \\
+unsupervised threshold tree (Sec.~\ref{sec:tree}) & yes & phases as leaves of a tree of rules ``descriptor $>$ threshold'', found by both halves & implemented \\
 Gaussian mixture (Sec.~\ref{sec:blind}) & no & groups of runs, number by BIC & implemented \\
 k-means (Sec.~\ref{sec:blind}) & no & groups of runs, number by silhouette & implemented \\
 HDBSCAN (Sec.~\ref{sec:blind}) & no & dense groups of runs, and noise & implemented \\
@@ -152,8 +152,10 @@ interface). Command-line tool: \code{phasewall inspect | toy | describe | learn 
 (\srcref{src/phasewall/cli.py}). Whole analysis in one call, with cached steps:
 \srcref{src/phasewall/pipeline.py} (\code{Settings} with \code{Source}, \code{FrameSettings},
 \code{Describers}, \code{Methods}, \code{Execution}; \code{run}, \code{estimate}); the
-interface (\code{apps/explore.py}) only fills these settings. A map of the files is at the
-end (Sec.~\ref{sec:map}).
+interface (\code{apps/explore.py}, marimo) only fills these settings: it takes an example or your
+own runs (a CSV table of runs and their snapshot files, whose fields it inspects and you confirm),
+and builds the controls of the tree, of the network and of any registered encoder or method from
+their settings (Sec.~\ref{sec:extend}). A map of the files is at the end (Sec.~\ref{sec:map}).
 \end{codebox}
 
 \subsection{Input: runs, fields and their symmetries}\label{sec:fields}
@@ -617,11 +619,23 @@ Checks logged each epoch: alignment (mean $z_i\cdot z_{i^+}$), uniformity
 ($\log\avg{e^{-2|z_i-z_k|^2}}$ over different runs) and the effective rank of $h$ ($e^{S}$ with $S$
 the entropy of the normalised singular values).
 
-\textbf{What can be tuned today.} Epochs (40), batch (128 runs), learning rate ($10^{-3}$, linear
-warm-up over 3 epochs then cosine decay), weight decay ($10^{-4}$), temperature, draws per run and
-epoch (4), seed, and the channels of the blocks (their number sets the depth, the last one
-$\dim h$). Checks of these choices against the frame (a frame of $n$ points allows at most
-$\log_2(n/4)$ blocks) and a tunable head are planned.
+\textbf{The shape of the network} (Fig.~\ref{fig:network}). Five numbers: the number of blocks, the
+width (channels of the first block, doubled at each block up to $\dim h$), $\dim h$ (channels of the
+last block), and the hidden and projection sizes of the head $g$; with the temperature $T$. The
+default (4 blocks, 32 to 256 channels, head 256 and 64, $T=0.2$) is that of hfml Step 7. Before any
+training a choice is checked against the frame: the last map keeps at least 2 points per side
+(blocks $\le\log_2(n/2)$ for a frame of $n$ points), channels never decrease (width $\le\dim h$),
+the projection is no larger than $\dim h$ nor than the hidden layer, and every value is in its list
+or range; a choice that breaks one is refused with the reason. The receptive field ($7,19,43,91,
+\ldots$ points), the number of weights and a rough memory estimate of one step (a warning only, not
+calibrated on a device) are shown. Also set: epochs (40), batch (128 runs), learning rate
+($10^{-3}$, linear warm-up over 3 epochs then cosine decay), weight decay ($10^{-4}$), draws per run
+and epoch (4), seed.
+
+\textbf{Choosing a network without labels.} Trainings of different shapes are compared by their
+label-free diagnostics at the last epoch: the loss over the loss at collapse, the alignment, the
+uniformity, and the effective rank of $h$ over $\dim h$; never by the scores against reference
+labels, which would bring the labels back into the method (Sec.~\ref{sec:networks}).
 
 \emph{Physics parallel.} The fraction in $\mathcal L$ is a Boltzmann probability at
 temperature $T$ with energy $-z_i\cdot z_k$: the loss is the free energy cost of finding the
@@ -630,6 +644,22 @@ between all points on the sphere (uniformity), as charges spread on a sphere in 
 problem; collapse is the state without repulsion. The stride-2 blocks coarse-grain the field
 step by step, as in a real-space renormalisation group, but with learned kernels.
 \end{tech}
+
+\begin{figure}[H]
+\centering
+\input{figs/fig_network}
+\caption{The shape of the learned encoder and its checks. (a) The default network. (b) The
+receptive field of 1 to 4 blocks; a choice is checked against the frame before training.}\label{fig:network}
+\end{figure}
+
+\begin{algobox}{check of a network}
+\begin{algorithmic}[1]
+\Require blocks $B$, width $w$, $\dim h$, hidden, projection, $T$; frame side $n$
+\State channels $\gets(\min(w\,2^k,\dim h))_{k<B-1}$ then $\dim h$
+\State refuse if: $B>\log_2(n/2)$; $w>\dim h$; projection $>\dim h$; projection $>$ hidden; a value outside its list or range
+\Ensure channels; last map $\lceil n/2^B\rceil$; receptive field; weights of $f$ and $g$; rough memory of one step
+\end{algorithmic}
+\end{algobox}
 
 \begin{algobox}{training of the learned encoder, then $h$}
 \begin{algorithmic}[1]
@@ -651,6 +681,8 @@ step by step, as in a real-space renormalisation group, but with learned kernels
 \begin{codebox}
 \textbf{Files.} \srcref{src/phasewall/nn/data.py} (\code{load_frames}, \code{augment},
 \code{PairViews}), \srcref{src/phasewall/nn/model.py} (\code{Encoder}, \code{ProjectionHead}),
+\srcref{src/phasewall/nn/architecture.py} (\code{Network}, \code{check}, \code{summary},
+\code{receptive_field}, \code{weights}; no PyTorch needed),
 \srcref{src/phasewall/nn/loss.py} (\code{info_nce}, \code{alignment}, \code{uniformity},
 \code{effective_rank}), \srcref{src/phasewall/nn/train.py} (\code{Settings}, \code{train},
 \code{embed}, \code{h_table}, \code{save}, \code{load}), \srcref{src/phasewall/nn/curve.py}
@@ -662,7 +694,10 @@ describes another ensemble with it.
 \textbf{Tests.} Augmentations equal \code{fields.transform}; $h$ unchanged by circular shifts
 of 16 points and changed by 5; the loss is $\ln(2N-1)$ at collapse and $\approx0$ for perfect
 pairs; a 6-epoch training separates stripes from spots ($h$ farther between kinds than within);
-saving and loading give the same $h$; the two commands give the same table.
+saving and loading give the same $h$; the two commands give the same table. Network shapes
+(\srcref{tests/test_architecture.py}): channels and receptive field; every constraint refused with
+its reason; weights counted as PyTorch counts them, for three shapes; a chosen shape trains and is
+saved with its head and temperature; two shapes are cached apart by the pipeline.
 \end{codebox}
 
 \subsection{Combined description and external tables}\label{sec:combined}
@@ -1047,8 +1082,8 @@ positions are ranks of the parameter values.
 \input{figs/fig_utree}
 \caption{The unsupervised threshold tree. (a) One descriptor on the parameter plane (invented
 values) and the split it suggests. (b) A threshold scores high for a gap between two groups of
-values, lower for a smooth drift, which the test then rejects. (c) The tree found on the
-Swift-Hohenberg demo with the halves swapped (Sec.~\ref{sec:sh-tree}).}\label{fig:utree}
+values, lower for a smooth drift, which the test then rejects. (c) The tree found on
+Swift-Hohenberg (Sec.~\ref{sec:sh-tree}).}\label{fig:utree}
 \end{figure}
 
 \begin{tech}
@@ -1061,10 +1096,10 @@ to labels, are not part of \pw{}.
 
 \textbf{Values.} Every descriptor is standardised over all snapshots; the value of a point is the
 median over its snapshots, computed separately on the two halves of its runs ($v_1$ and $v_2$,
-as for the walls, Sec.~\ref{sec:compare}).
+as for the walls, Sec.~\ref{sec:compare}), and over all of them ($v$).
 
-\textbf{Splits} (on $v_1$). For a region $R$ and every descriptor, 32 candidate thresholds at
-quantiles of the point values split $R$ into $S$ (above) and $S'$, both with at least
+\textbf{Splits} (placed on one half). For a region $R$ and every descriptor, 32 candidate
+thresholds at quantiles of the point values split $R$ into $S$ (above) and $S'$, both with at least
 \code{MIN_PHASE} points. A candidate is scored by
 \[
 \eta^2=\frac{n_Sn_{S'}(m_S-m_{S'})^2}{n^2\,\mathrm{var}(v)},\qquad
@@ -1077,59 +1112,87 @@ uniform drift cut in the middle (Fig.~\ref{fig:utree}b); $\mathrm{Ncut}$ is smal
 two contiguous regions of the parameter plane and large for scattered points. The threshold is
 chosen anew in every region.
 
-\textbf{Test} (on $v_2$, which did not choose the split). Three conditions: (i) the values of the
-points on the two sides differ (Mann-Whitney between the points, $p<$ \code{ALPHA}), which pure
-noise fails; (ii) along each parameter, the median jump of the descriptor across the crossing
+\textbf{Test} (on the other half, which did not choose the split). Three conditions: (i) the values
+of the points on the two sides differ (Mann-Whitney between the points, $p<$ \code{ALPHA}), which
+pure noise fails; (ii) along each parameter, the median jump of the descriptor across the crossing
 links is compared with its median jump across the inner links along the same parameter, and the
 ratios, weighted by the number of crossing links, must average at least \code{RATIO}, which a
 smooth drift fails; (iii) the threshold puts at least 90\% of the points on the same side. In (ii),
 comparing along the same parameter matters: a straight cut through a drift crosses mostly links
 along the steep direction while the inner links mix steep and flat ones, which made the drift of
-the mean of $u$ along $\varepsilon$ pass as a jump in a first version. A Mann-Whitney test on the
-link jumps, as for the walls, had too little power for one noisy descriptor and a wall of a few
-links.
+the mean of $u$ along $\varepsilon$ pass as a jump in a first version.
+
+\textbf{Both halves.} A split is kept only if the best split placed on $v_1$ passes the test on
+$v_2$, the best split placed on $v_2$ passes the test on $v_1$, and the two put at least 90\% of the
+points on the same sides. Of the two rules, the one that scores better on $v$ is kept, and every
+point goes to its side by $v$: the tree does not depend on which half is called the first (on the
+five examples, exchanging the halves gives the same tree; a first version placed on $v_1$ only gave
+4 or 3 phases on Swift-Hohenberg and 16 or 21 leaves on Gray-Scott depending on the half).
+
+\textbf{One run per point} (Fig.~\ref{fig:checker}). The two halves in time of a single run are not
+independent: a frozen pattern gives $v_1=v_2$, so the test no longer sees the run-to-run noise, and
+the tree over-splits (11 phases instead of 3 on Swift-Hohenberg with one run per point). When most
+points have a single run, the halves are taken on the grid instead: the points are coloured as a
+checkerboard (parity of the sum of their grid steps, counted by rank of the parameter values). A
+split is placed on the points of one colour (with the links between them: two steps along one
+parameter, or one step along two); each point of the other colour gets the side of the majority of
+its neighbours (ties left out), and conditions (i) to (iii) are tested on these points, whose runs
+did not place the split; then the colours are exchanged, as for the two halves. The rule applies to
+every point.
+
+\textbf{Separated leaves.} Leaves that are one phase in two places are joined as for the walls
+(Sec.~\ref{sec:merge}).
 
 \emph{Physics parallel.} Choosing the descriptor and the threshold is choosing an order parameter
 and the value that separates two phases (the middle of a bimodal distribution, as between the
 liquid and gas densities at coexistence); the normalised cut is the length of the interface
-between the two regions of the parameter plane relative to their sizes, an interfacial energy.
-
-\textbf{Limit.} When a point holds a single run, its two halves are snapshots of the same run,
-strongly correlated: condition (i) then no longer protects against splits that only sort runs,
-and on such data the tree splits far too much. Stopping rules for that case (only the splits found
-with both halves; a minimum $\eta^2$ and a maximum Ncut; fewer, coarser descriptors) are to try.
+between the two regions of the parameter plane relative to their sizes, an interfacial energy. The
+checkerboard is the sublattice decomposition of a lattice model (as in a checkerboard update):
+each site is judged by neighbours that do not depend on it.
 \end{tech}
+
+\begin{figure}[H]
+\centering
+\input{figs/fig_checker}
+\caption{Checkerboard halves for points with a single run (invented values).}\label{fig:checker}
+\end{figure}
 
 \begin{algobox}{unsupervised threshold tree}
 \begin{algorithmic}[1]
 \Require table of $h$ (or its principal components for a learned description); parameters
-\State standardise; $v_1,v_2\gets$ median of each descriptor per point, on each half
+\State standardise; $v_1,v_2,v\gets$ median of each descriptor per point, on each half and on all snapshots
+\State halves $\gets$ runs if most points have several runs, else the checkerboard of the points
 \State queue $\gets$ [all points]
 \While{queue not empty}
   \State take a region $R$; if it is in pieces that share no link, queue each piece and \textbf{continue}
-  \For{each descriptor $j$ and 32 thresholds $\theta$ at quantiles of $v_1[R,j]$}
-    \State $S\gets\{a\in R: v_1[a,j]>\theta\}$; skip unless both sides have $\ge$ \code{MIN_PHASE} points
-    \State score $\gets\eta^2(1-\mathrm{Ncut}/2)$
+  \For{each half $k\in\{1,2\}$} \Comment{runs: $v_k$ on all points; checkerboard: $v$ on colour $k$}
+    \State $(j_k,\theta_k)\gets$ best score $\eta^2(1-\mathrm{Ncut}/2)$ over descriptors and 32 thresholds
+    \State test on the other half: Mann-Whitney $p$, per-parameter jump ratio $r$, agreement
   \EndFor
-  \State $(j,\theta)\gets$ best score; none: $R$ is a leaf, \textbf{continue}
-  \State on $v_2$: $p\gets$ Mann-Whitney between the sides; $r\gets$ per-parameter jump ratio; agree $\gets$ share of points on the same side
-  \If{$p<\alpha$ and $r\ge$ \code{RATIO} and agree $\ge0.9$} \State queue $S$ and $R\setminus S$ with the rule ``$j>\theta$'' or ``$j\le\theta$''
+  \If{both pass ($p<\alpha$, $r\ge$ \code{RATIO}, agree $\ge0.9$) and the two splits agree on 90\% of $R$}
+    \State $(j,\theta)\gets$ the one of the two with the better score on $v$
+    \State queue $\{v_j>\theta\}$ and $\{v_j\le\theta\}$ with the rule ``$j>\theta$'' or ``$j\le\theta$''
   \Else \State $R$ is a leaf \EndIf
 \EndWhile
-\Ensure leaves (phases if $\ge$ \code{MIN_PHASE} points) with their rules; every split tried
+\State leaves of at least \code{MIN_PHASE} points are phases; join separated leaves (Sec.~\ref{sec:merge})
+\Ensure phases with their rules; every split tried; the separated leaves compared
 \end{algorithmic}
 \end{algobox}
 
 \begin{codebox}
 \textbf{Files.} \srcref{src/phasewall/trees.py} (\code{point_values}, \code{best_split},
 \code{test_split}, \code{fit_tree}, \code{rules_text}, \code{components} for a learned
-description, \code{Tree.as_walls} for the plots); tests \srcref{tests/test_trees.py};
+description, \code{point_medians}, \code{checkerboard}, \code{test_split_on_colour}, \code{split_score},
+\code{Tree.as_walls} for the plots); tests \srcref{tests/test_trees.py};
 \srcref{scripts/tree_examples.py} (all examples).
 
 \textbf{Tests.} No split in pure noise, under a drift along both parameters, or under a strong
 drift along one parameter; two phases: the jumping descriptor and a threshold between its two
 levels; three phases: two nested rules on the two jumping descriptors; the same tree with the
-halves swapped; principal components (the number kept, the variance explained).
+halves swapped; accepted splits found by both halves; with one run per point the checkerboard is
+used, finds no split in noise or under a drift and two phases on a step; the colours and links of
+a $3\times3$ checkerboard; one phase in two places is one phase of the tree; principal components
+(the number kept, the variance explained).
 \end{codebox}
 
 \subsection{Blind grouping}\label{sec:blind}
@@ -1258,14 +1321,14 @@ groups; ARI and the pieces expose them.
 A result that holds only for one value of a chosen threshold is not trusted. \textbf{Robustness
 of the walls}: the number of phases against \code{RATIO} ($1.2$ to $3$); a count that stays the same
 over a range is a property of the data, not of the threshold. \textbf{Stability of the tree}: the
-tree rebuilt with the two halves exchanged (place on $v_2$, test on $v_1$); splits found both ways
-are trusted more.
+tree rebuilt with the two halves exchanged; since a split must be found by both halves, the tree
+is the same (checked on every example by \code{scripts/tree_examples.py}).
 \end{tech}
 
 \begin{algobox}{robustness and stability}
 \begin{algorithmic}[1]
 \For{\code{RATIO} in $1.2, 1.3, 1.5, 1.75, 2, 2.5, 3$} \State count the phases of the walls \EndFor
-\State fit the tree with the halves as given and swapped; compare the rules and the leaves
+\State fit the tree with the halves as given and swapped; check that the phases are the same
 \end{algorithmic}
 \end{algobox}
 
@@ -1332,6 +1395,90 @@ scikit-learn needed), \srcref{src/phasewall/walls.py} (\code{phases_against_rati
 \textbf{Tests.} ARI equal to scikit-learn's and to 1 for the same partition under other names; pieces of a group in two places;
 the probe is above 0.95 for labels the description contains and near 0.5 for random labels; no
 ARI when every run is noise.
+\end{codebox}
+
+%======================================================================
+\section{Extending phasewall}\label{sec:extend}
+%======================================================================
+
+\begin{figure}[H]
+\centering
+\input{figs/fig_extend}
+\caption{Layers of \pw{} and the two registries. The interface and the scripts only fill in
+settings; every encoder and method, built in or added, runs through the same interface and is
+checked by the same contract tests.}\label{fig:extend}
+\end{figure}
+
+\begin{tech}
+\textbf{Two registries.} An \emph{encoder} is a settings dataclass and a function
+\code{run(ensemble, settings, context)} that returns tables of descriptions, one row per snapshot
+(columns \code{run}, \code{time}, the parameters, then descriptors named
+\code{name.block.column}). A \emph{method} is a settings dataclass and a function
+\code{run(table, parameters, settings, context)} that returns one integer group per run ($-1$:
+noise) and, if it wants, an extra object (the walls, the rules of a tree). The built-in entries
+(Tables~\ref{tab:encoders} and~\ref{tab:methods}) are registered the same way as any addition, in
+\code{builtins.py}, as thin wrappers around the modules that do the work; those modules stay usable
+on their own. The \code{context} carries the number of processes, the cache folder and keys, the
+device and a progress callback; labels are never passed to a method.
+
+\textbf{Settings for an interface.} Each field of a settings dataclass may carry metadata:
+\code{help}, \code{choices}, \code{range}. \code{settings_spec} lists the fields with their types,
+defaults and metadata, so an interface can draw one control per field without knowing the entry;
+\code{check_settings} refuses a value outside its choices or range before anything runs.
+
+\textbf{Contract tests.} \code{tests/test_contracts.py} runs every registered entry whose optional
+packages are installed: a method gives one group per run; a method declared \code{uses_grid} finds
+one phase in pure noise and two phases on a step, with the runs of each side together; a blind
+method keeps two far clouds apart; an encoder gives finite descriptors in the expected columns, and
+one declared \code{invariant} gives the same description of an ensemble turned by $90^\circ$,
+mirrored and shifted. A new entry is tested by registering it.
+
+\textbf{Other packages} register their entries through Python entry points (groups
+\code{phasewall.encoders} and \code{phasewall.methods}), loaded the first time a registry is read.
+
+\emph{Physics parallel.} The registries play the role of a common interface between a simulation
+code and its analysis tools (as a standard output format lets any tool read any run): an encoder
+only has to produce a table, a method only to read one.
+\end{tech}
+
+\begin{algobox}{the pipeline with the registries}
+\begin{algorithmic}[1]
+\Require settings: source, frame, encoders with their settings, methods with their settings
+\State ensemble $\gets$ simulated example, configuration file, or none (a table of descriptors given)
+\For{each encoder asked for} \State check its settings; tables $\gets$ tables $\cup$ \code{run(ensemble, settings, context)} \EndFor
+\State combined tables (hand-made and learned side by side) if asked for
+\For{each table and each method asked for}
+  \State check its settings; groups $\gets$ \code{run(table, parameters, settings, context)}
+  \State scores of the groups (with labels, if any); keep the extra output
+\EndFor
+\end{algorithmic}
+\end{algobox}
+
+\begin{codebox}
+\textbf{Files.} \srcref{src/phasewall/registry.py} (\code{Context}, \code{EncoderResult},
+\code{MethodResult}, \code{encoder}, \code{method}, \code{encoders}, \code{methods},
+\code{settings_spec}, \code{check_settings}, \code{cache_key}), \srcref{src/phasewall/builtins.py}
+(the built-in entries and their settings), \srcref{src/phasewall/pipeline.py}
+(\code{Describers(others=...)}, \code{Methods(others=..., tree=...)}, \code{Results.extras});
+tests \srcref{tests/test_contracts.py}. A method added from outside:
+\begin{verbatim}
+@dataclass
+class HalfSettings:
+    column: str = field(default="eps", metadata={"help": "parameter cut",
+                                                 "choices": ("eps", "g")})
+
+@registry.method("half", HalfSettings, help="lower and upper half",
+                 uses_grid=True)
+def half(table, parameters, settings, context):
+    p = table.groupby("run")[settings.column].first()
+    return registry.MethodResult((p >= p.median()).astype(int))
+
+pl.run(pl.Settings(...,
+                   methods=pl.Methods(others={"half": HalfSettings()})))
+\end{verbatim}
+\textbf{Tests.} The contracts above for every entry; settings described and checked; errors for a
+settings class that is not a dataclass and for a name registered twice; a method and an encoder
+added from outside run through the pipeline and are scored.
 \end{codebox}
 
 %======================================================================
@@ -1571,6 +1718,44 @@ compared with each alone on every example (Sec.~\ref{sec:examples-results}). Pos
 different runs of one parameter point are another option, but they would hide bistable points.
 \end{tech}
 
+\subsection{Shapes of the learned encoder}\label{sec:networks}
+
+\begin{tech}
+\textbf{Set-up} (\srcref{scripts/compare_networks.py}). Six shapes (Sec.~\ref{sec:learned}), each
+changing one thing from the default, trained once (seed 0, 40 epochs) on the whole periodic box.
+The shape would be chosen from the label-free diagnostics of Table~\ref{tab:networks}; the scores are
+given only to show what the choice changes.
+\end{tech}
+
+\begin{table}[H]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}l>{\raggedright}p{2.6cm}rrrrrrr@{}}
+\toprule
+network & channels; head; $T$ & weights $f$ & $\mathcal L/\mathcal L_{\rm collapse}$ & align. & unif. & rank $h$ & walls & probe \\
+\midrule
+default & 32--256; 256, 64; 0.2 & 1.17 M & 0.264 & 0.999 & $-3.35$ & 85 / 256 & 2, 0.36 & 0.98 \\
+3 blocks & 32, 64, 256; 256, 64; 0.2 & 0.80 M & 0.265 & 0.999 & $-3.35$ & 61 / 256 & 2, 0.36 & 0.99 \\
+5 blocks & 32--512; 512, 64; 0.2 & 4.72 M & 0.277 & 0.998 & $-3.32$ & 55 / 512 & 2, 0.36 & 0.93 \\
+narrow & 8--64; 64, 32; 0.2 & 0.07 M & 0.293 & 0.995 & $-3.27$ & 32 / 64 & 2, 0.36 & 0.98 \\
+wide $h$ & 32--512; 512, 128; 0.2 & 3.24 M & 0.255 & 0.999 & $-3.38$ & 109 / 512 & 2, 0.36 & 0.98 \\
+$T=0.5$ & 32--256; 256, 64; 0.5 & 1.17 M & 0.659 & 1.000 & $-3.29$ & 62 / 256 & 2, 0.36 & 0.98 \\
+\bottomrule
+\end{tabular}
+\caption{Shapes of the learned encoder on Swift-Hohenberg. Label-free diagnostics at the last epoch
+(the loss at a different temperature is not comparable); walls: phases and ARI with the reference;
+probe: balanced accuracy (documentation only). Full tables: \code{docs/networks/swift-hohenberg/}.}\label{tab:networks}
+\end{table}
+
+\begin{tech}
+\textbf{Result.} Every shape gives the same two phases (uniform against patterned): the shape of the
+network does not create the jump at the hexagon-stripe boundary, as more training data did not
+(Sec.~\ref{sec:comparison}). The diagnostics differ little: a wider $h$ lowers the loss slightly and
+uses more dimensions; 5 blocks, whose receptive field (187 points) exceeds the 64-point box, uses the
+fewest dimensions and has the lowest probe. Without labels, the default or the wider $h$ would be
+kept. What the learned description lacks is in its training objective, not in its size.
+\end{tech}
+
 \subsection{Walls against blind grouping and the probe}\label{sec:sh-blind}
 
 \begin{table}[H]
@@ -1641,20 +1826,21 @@ which the hand-made description has and the learned one lacks.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{data/tree_sh.pdf}
-\caption{The threshold tree on Swift-Hohenberg, with the halves as given and swapped, and the
-reference labels.}\label{fig:treesh}
+\includegraphics[width=\textwidth]{../examples/swift-hohenberg/phase_map_tree.png}
+\caption{The threshold tree on Swift-Hohenberg: phases found and the reference labels.}\label{fig:treesh}
 \end{figure}
 
 \begin{tech}
-Both trees make the same first two splits: \code{u.amp.log10var} $\le-12$ (the uniform state: no
-amplitude) and \code{u.topo.below-1} above 0.022 or 0.025 per unit area (hexagons: many separate
-domains of low $u$, the gaps between spots). With the halves swapped these are the only accepted
-splits: 3 phases, 237 of 240 points agree with the reference, ARI 0.96 (walls: 0.93). With the
-halves as given a third split, \code{u.shape.k00} (power at the longest wavelengths), cuts off 9
-stripe points next to the hexagon-stripe boundary: 4 phases, 235 points, ARI 0.90. The two rules
-found without labels are the physical criteria behind the reference labels (amplitude, and a
-spot-like topology where the reference uses the skewness).
+Two splits are kept: \code{u.amp.log10var} $\le-12$ (the uniform state: no amplitude) and
+\code{u.topo.below-1} above 0.025 per unit area (hexagons: many separate domains of low $u$, the gaps
+between spots): 3 phases, 236 of 240 points agree with the reference, ARI 0.94 (walls: 0.93). A
+third candidate, \code{u.shape.k00} (power at the longest wavelengths), would cut off 9 stripe points
+next to the hexagon-stripe boundary; the half that did not place it disagrees on 30\% of the points,
+so it is not kept (it was in a first version that placed splits on one half only). The two rules,
+found without labels, are the physical criteria behind the reference labels (amplitude, and a
+spot-like topology where the reference uses the skewness). With one run per point (the first of the
+8), the checkerboard finds 3 phases with the rules \code{u.mom.kurt} (flat-topped stripes have a
+negative kurtosis) and \code{u.topo.below+0}, ARI 0.90.
 \end{tech}
 
 %======================================================================
@@ -1733,9 +1919,10 @@ the walls found in grey.}\label{fig:gsmap}
   different states has a ratio of 2.3 to 7.4 and stays apart. Most of the stripe band is
   flagged as mixed, although only 19 of the 525 points have runs that end with different labels:
   the flag reflects the spread of labyrinths there, not coexisting states.
-\item \emph{Tree:} 16 and 21 leaves (halves as given and swapped), ARI 0.84 and 0.82. Its rules read
-  as flat or not, then moving or not (\code{u.dyn.moving}), then the shape of $S(k)$. It
-  over-splits: 13 to 18 points sit in leaves below \code{MIN_PHASE}.
+\item \emph{Tree:} 10 phases, 499 points agree, ARI 0.94 (21 leaves, joined to 10; 10 points in
+  leaves below \code{MIN_PHASE}). Its rules read as flat or not (\code{u.amp.log10var}), then which
+  uniform state (\code{u.mom.mean}) or moving or not (\code{u.dyn.moving}), then the shape of $S(k)$
+  and the number of domains of $v$. With one run per point: 7 phases, ARI 0.96.
 \item \emph{Blind grouping:} k-means with $k=7$ matches the reference best (ARI 0.99); its 23 pieces
   are close to the 20 of the reference itself, whose boundaries are ragged.
 \item \emph{Learned:} 1 phase (probe 0.92); \emph{combined:} 6 phases, 503 points, ARI 0.95, the
@@ -1929,8 +2116,8 @@ localised and extended.}\label{fig:shlocmap}
 \end{figure}
 
 \begin{tech}
-\textbf{Results.} Walls: 3 phases, 103 of 105 points agree, ARI 0.96. Tree: 3 phases, 104 points,
-ARI 0.98 both ways, with \code{u.amp.log10var} alone (flat, small for a patch, large for stripes
+\textbf{Results.} Walls: 3 phases, 103 of 105 points agree, ARI 0.96. Tree: 3 phases, all 105 points
+agree, ARI 1.00, with \code{u.amp.log10var} alone (flat, small for a patch, large for stripes
 everywhere). HDBSCAN finds the three states exactly (ARI 1.00) but leaves 13 to 41\% of the runs as
 noise. The learned description alone and the combined one give one phase, although the probe
 recognises the states (1.00).
@@ -1959,7 +2146,7 @@ example & description & phases & agree & ARI & closest blind method (ARI, pieces
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & combined & 2 & 171 & 0.36 & k-means (0.36, 2) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & tree & 4 / 3 & 235 / 237 & 0.90 / 0.96 &  &  \\
+ & tree & 3 & 236 & 0.94 &  &  \\
 \midrule
 \multirow{4}{=}{\textbf{Gray-Scott}\\ 525 points $\times$ 4 runs} & hand-made & 8 & 482 & 0.89 & k-means, $k=7$ (0.99, 23) & 0.96 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
@@ -1967,7 +2154,7 @@ example & description & phases & agree & ARI & closest blind method (ARI, pieces
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & combined & 6 & 503 & 0.95 & HDBSCAN 20 (0.82, 30) & 0.97 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & tree & 16 / 21 & 499 / 492 & 0.84 / 0.82 &  &  \\
+ & tree & 10 & 499 & 0.94 &  &  \\
 \midrule
 \multirow{4}{=}{\textbf{FitzHugh-Nagumo}\\ 99 points $\times$ 4 runs} & hand-made & 1 & 33 & 0 & HDBSCAN 20 (0.71, 16; 23\%) & 0.77 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
@@ -1975,7 +2162,7 @@ example & description & phases & agree & ARI & closest blind method (ARI, pieces
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & combined & 1 & 33 & 0 & HDBSCAN 20 (0.74, 16; 20\%) & 0.79 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & tree & 1 / 1 & 33 / 33 & 0 / 0 &  &  \\
+ & tree & 1 & 33 & 0 &  &  \\
 \midrule
 \multirow{4}{=}{\textbf{Barkley}\\ 165 points $\times$ 4 runs} & hand-made & 2 & 132 & 0.59 & HDBSCAN 20 (0.84, 20; 14\%) & 0.99 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
@@ -1983,7 +2170,7 @@ example & description & phases & agree & ARI & closest blind method (ARI, pieces
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & combined & 2 & 132 & 0.59 & HDBSCAN 20 (0.86, 13; 21\%) & 0.99 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & tree & 2 / 2 & 132 / 131 & 0.58 / 0.58 &  &  \\
+ & tree & 2 & 131 & 0.58 &  &  \\
 \midrule
 \multirow{4}{=}{\textbf{localised SH}\\ 105 points $\times$ 4 runs} & hand-made & 3 & 103 & 0.96 & HDBSCAN 10 (1.00, 3; 13\%) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
@@ -1991,7 +2178,7 @@ example & description & phases & agree & ARI & closest blind method (ARI, pieces
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & combined & 1 & 51 & 0 & HDBSCAN 10 (1.00, 4; 17\%) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & tree & 3 / 3 & 104 / 104 & 0.98 / 0.98 &  &  \\
+ & tree & 3 & 105 & 1.00 &  &  \\
 \bottomrule
 \end{tabular}
 \caption{The examples. Agree: points whose phase carries their most common reference label;
@@ -2000,7 +2187,7 @@ pieces: connected pieces of the groups on the grid (the reference labels form 3 
 Swift-Hohenberg and localised SH, 20 for Gray-Scott); probe: balanced accuracy of a logistic
 regression of the labels on held-out points (a ceiling, it sees the labels). Phases, agree and
 ARI: walls on the description, except the last row of each example: the threshold tree on the
-hand-made description, halves as given / swapped. Noise: share of the runs HDBSCAN leaves out.}
+hand-made description (the same with the halves exchanged). Noise: share of the runs HDBSCAN leaves out.}
 \label{tab:examples}
 \end{table}
 
@@ -2046,7 +2233,8 @@ Constant (file) & Value & Role and reason \\
 \code{TUKEY_ALPHA} (describe) & 0.5 & tapered share of the window of non-periodic frames (4 times less leakage than none) \\
 \code{MIN_WAVELENGTHS} (io) & 3 & non-periodic frames: $S(k)$ only for wavelengths up to $L_c/3$ \\
 \code{MAX_SHIFT_FRACTION} (frames) & 0.2 & default \code{max_shift}: a fifth of the box side \\
-\code{CHANNELS}, \code{HIDDEN}, \code{OUT} (nn) & 32--256, 256, 64 & sizes of $f$ and $g$ (as in hfml Step 7) \\
+\code{Network} (nn) & 4 blocks, 32--256, 256, 64 & default shape of $f$ and $g$ (as in hfml Step 7) \\
+\code{MIN_FINAL} (nn) & 2 & smallest side of the last map: $h$ is a mean over at least $2\times2$ values \\
 \code{T} (nn) & 0.2 & temperature of the InfoNCE loss \\
 \code{Settings} (nn) & 40 epochs, batch 128 & AdamW, $10^{-3}$, warm-up 3 epochs, cosine decay, 4 draws per run and epoch \\
 \code{COMPONENT_NAME} (fields) & stem of 1--3 letters & names taken for components (\code{vx}, \code{Qxy}); \code{rho}, \code{phi} are not \\
@@ -2061,6 +2249,7 @@ role names (io) & \code{v}, \code{p}, \code{Q}, \ldots & names that suggest a ro
 \code{MERGE}, \code{CORE_DEPTH}, \code{MAX_CORE} (walls) & on, 2, 400 & join separated parts of a phase; core depth in grid steps; snapshots per core \\
 \code{MIN_WEIGHT} (walls) & $10^{-8}$ & lower bound of link weights: strong walls keep the graph connected \\
 \code{N_THRESHOLDS}, \code{AGREE} (trees) & 32, 0.9 & candidate thresholds per descriptor; share of points on the same side with the other half \\
+\code{SYMMETRIC}, \code{halves_by} (trees) & on, auto & splits found by both halves; checkerboard halves when most points have one run; sides of a checkerboard colour of at least \code{MIN_PHASE}/2 points \\
 \code{PCA_VARIANCE}, \code{K_MIXTURE}, \code{K_KMEANS} (baselines) & 0.95, 1--10, 2--10 & blind grouping, as in hfml \\
 \code{HDBSCAN_SIZES}, \code{FOLDS}, \code{C_PROBE} (baselines) & 5--40, 5, 1 & HDBSCAN sizes; probe folds and penalty \\
 \code{SEEDS} (toy) & 8 & runs per Swift-Hohenberg point (6 is the fewest that finds the hexagon-stripe wall) \\
@@ -2075,7 +2264,7 @@ choices too (documented in their docstrings).}
 \section{Tests}\label{sec:tests}
 %======================================================================
 
-\code{pytest} runs 153 tests in about a minute, all on small synthetic data with known
+\code{pytest} runs 192 tests in about a minute, all on small synthetic data with known
 answers (no data from any laboratory is in the repository). On every push, the
 continuous-integration workflow \srcref{.github/workflows/tests.yml} runs \code{ruff} and
 \code{pytest}.
@@ -2087,23 +2276,25 @@ continuous-integration workflow \srcref{.github/workflows/tests.yml} runs \code{
 File & What is checked, against which known answer \\
 \midrule
 \code{test_fields.py} & vector rule against the gradient of a rotated scalar; nematic rule against a turned director; group relations of $D_4$; shapes \\
-\code{test_io.py} & round trips with and without Julia layout; first key found; snapshot list sorted by time; TOML configuration and its errors \\
+\code{test_io.py} & round trips with and without Julia layout; first key found; snapshot list sorted by time; TOML configuration and its errors; configuration written and read back, an unchanged file not rewritten \\
 \code{test_field_roles.py} & velocity and polarity turn as vectors; component names; fields from two component datasets in both layouts; same descriptors whatever the role; components refused as scalars; suggestions of the inspector and their TOML; \code{phasewall inspect} \\
 \code{test_frames.py} & crops, coarsening and their errors; $S(k)$ of crops against the exact one; finite against spectral derivatives; windowed moving correlation; rotation and mirror invariance; $\Delta x$ against $\Delta x/2$; mixed grids \\
 \code{test_describe.py} & shells cover the grid; $S(k)$ of one wave; exact moments; periodic domain counts; spots $m^2$ against stripes $m$; flat fields; flows; global order; dynamics; invariance of every descriptor under $D_4$ and shifts; tables and error list \\
+\code{test_architecture.py} & channels and receptive field of a network; constraints against the frame; weights against PyTorch; a chosen shape trains, is saved and is cached apart \\
 \code{test_nn.py} & augmentations against the field rules; shift invariance of a periodic encoder; loss at collapse and for perfect pairs; a short training separates stripes from spots; saving and loading; \code{learn} and \code{describe --encoder} (skipped without PyTorch) \\
 \code{test_blocks.py} & default blocks of every kind; a field's own blocks; blocks that do not fit refused; blocks from the configuration; vortex cores of Gaussian vortices, a cellular and a shear flow; $\pm1$ and $\pm\frac12$ winding defects; no defect in a uniform field \\
+\code{test_contracts.py} & every registered encoder and method: format, one phase in noise and two on a step, two far clouds apart, invariance of invariant encoders; settings described and checked; registration errors; a method and an encoder added from outside run through the pipeline \\
 \code{test_graph.py} & nodes merge rounding errors; links of a full grid, of a refined line, of one parameter; numbering of regions \\
 \code{test_walls.py} & energy distance; halves; feature matrix; cut of a chain; no wall in noise (5 seeds) or a smooth drift; two and three phases with the exact walls; mixed point; count against \code{RATIO}; one phase in two places joined, two different phases not \\
-\code{test_trees.py} & no split in noise or under drifts; two and three phases with the right rules; halves swapped; principal components \\
+\code{test_trees.py} & no split in noise or under drifts; two and three phases with the right rules; halves swapped; splits found by both halves; one run per point (checkerboard): no split in noise or drift, two phases on a step; checkerboard colours and links; one phase in two places joined; principal components \\
 \code{test_baselines.py} & separated clouds found by the mixture, k-means and HDBSCAN; groups in two places counted as two pieces; probe on real and random labels; no ARI without placed points (skipped without scikit-learn) \\
 \code{test_toy.py} & states at six points; stripe amplitude $\sqrt{2\varepsilon/3}$; seeds differ; ensemble readable \\
 \code{test_gray_scott.py} & Laplacian of a wave; reference labels of known fields; a run in the uniform region decays; registry, ensemble and demo command on the quick grid \\
 \code{test_more_examples.py} & registry of every example; FitzHugh-Nagumo labels and a run in the uniform band; Barkley tips of a spiral pair and of plane waves; localised labels and initial patch; quick ensembles readable \\
-\code{test_pipeline.py} & ARI against scikit-learn; the pipeline on a demo, cached; blind methods and probe; table and ensemble sources; cropped frame; learned and combined descriptions; cost estimate \\
+\code{test_pipeline.py} & ARI against scikit-learn; the pipeline on a demo, cached; blind methods and probe; table and ensemble sources; cropped frame; learned and combined descriptions; cost estimate ; fields and frame side known before running; a configuration keeps its own frame \\
 \code{test_report.py} & wall segments at $a=5.5$; phase extents and summary; files written; one-parameter scans \\
 \code{test_cli.py} & \code{describe}, \code{walls}, \code{demo --quick}; labels per point; exit status 0 \\
-\code{test_app.py} & interface: parsing of typed values and ranges; a quick run with every tab drawn (skipped without marimo) \\
+\code{test_app.py} & interface: parsing of typed values and ranges; controls built from settings and read back; typed fields; runs of the quick demo with the tree, of your own runs through the inspector, and of runs with a velocity saved as two datasets, every tab drawn (skipped without marimo) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -2135,11 +2326,10 @@ File & What is checked, against which known answer \\
 \item \textbf{One phase in two places.} Joined only when the cores of the two parts are as
   close as the halves of one of them (Sec.~\ref{sec:merge}): a phase whose description drifts
   strongly across the gap stays in two parts.
-\item \textbf{Tree.} A stopping rule that does not over-split (Gray-Scott) and works with one run
-  per point.
-\item \textbf{Planned for the package.} Registries of encoders and methods with one common
-  interface and shared contract tests, so that a new one is added in one file; a network whose
-  depth, widths and $\dim h$ are chosen within checked constraints.
+\item \textbf{Tree.} Its rules are single thresholds: a phase bounded by a combination of
+  descriptors needs several rules, and leaves smaller than \code{MIN_PHASE} remain at ragged
+  boundaries (10 points in Gray-Scott). The checkerboard for single runs needs a grid; the walls
+  still use halves in time for single runs.
 \end{itemize}
 
 %======================================================================
@@ -2156,7 +2346,7 @@ File & Content & Section \\
 \srcref{src/phasewall/io.py} & TOML configuration, reading and writing snapshots, external tables & \ref{sec:fields}, \ref{sec:combined} \\
 \srcref{src/phasewall/frames.py} & crops, coarsening, non-periodic frames & \ref{sec:frames} \\
 \srcref{src/phasewall/describe.py} & hand-made encoder; combined tables & \ref{sec:describe}, \ref{sec:combined} \\
-\srcref{src/phasewall/nn/} & learned encoder: data, model, loss, training, learning curve & \ref{sec:learned} \\
+\srcref{src/phasewall/nn/} & learned encoder: data, model, shape (architecture), loss, training, learning curve & \ref{sec:learned} \\
 \srcref{src/phasewall/graph.py} & nodes and links of the scan, regions & \ref{sec:compare} \\
 \srcref{src/phasewall/walls.py} & features, distances, cuts, tests, mixed points, separated parts & \ref{sec:compare}--\ref{sec:merge} \\
 \srcref{src/phasewall/trees.py} & unsupervised threshold tree & \ref{sec:tree} \\
@@ -2168,15 +2358,18 @@ File & Content & Section \\
 \srcref{src/phasewall/barkley.py} & Barkley example, spiral tips & \ref{sec:barkley} \\
 \srcref{src/phasewall/sh_localized.py} & localised Swift-Hohenberg example & \ref{sec:shloc} \\
 \srcref{src/phasewall/examples.py} & registry of the examples & \ref{sec:examples-results} \\
-\srcref{src/phasewall/pipeline.py} & whole analysis in one call, cached steps (used by the interface and the scripts) & \ref{sec:overview} \\
+\srcref{src/phasewall/pipeline.py} & whole analysis in one call, cached steps (used by the interface and the scripts) & \ref{sec:overview}, \ref{sec:extend} \\
+\srcref{src/phasewall/registry.py} & registries of encoders and methods, settings for an interface & \ref{sec:extend} \\
+\srcref{src/phasewall/builtins.py} & the built-in encoders and methods, registered & \ref{sec:extend} \\
 \srcref{src/phasewall/report.py} & summary, tables, figures & \ref{sec:demo} \\
 \srcref{src/phasewall/cli.py} & command-line tool & \ref{sec:overview} \\
-\srcref{apps/explore.py} & interactive interface (marimo), only fills the pipeline settings & \ref{sec:overview} \\
+\srcref{apps/explore.py} & interactive interface (marimo): fills the pipeline settings; controls of registered entries built from their settings & \ref{sec:overview}, \ref{sec:extend} \\
 \srcref{scripts/doc_figures.py} & data figures of this document & all \\
 \srcref{scripts/compare_describers.py} & encoders and methods compared on Swift-Hohenberg & \ref{sec:comparison}, \ref{sec:sh-blind} \\
 \srcref{scripts/run_examples.py} & all examples: steady-state check, descriptions, methods & \ref{sec:steady}, \ref{sec:examples-results} \\
 \srcref{scripts/tree_examples.py} & the tree on all examples & \ref{sec:examples-results} \\
-\srcref{tests/} & 153 tests & \ref{sec:tests} \\
+\srcref{scripts/compare_networks.py} & shapes of the learned encoder compared by label-free diagnostics & \ref{sec:networks} \\
+\srcref{tests/} & 192 tests & \ref{sec:tests} \\
 \bottomrule
 \end{tabular}
 \end{table}
