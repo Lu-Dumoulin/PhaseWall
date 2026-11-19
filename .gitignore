@@ -35,3 +35,10 @@ docs/documentation/*.toc
 docs/documentation/*.fls
 docs/documentation/*.fdb_latexmk
 docs/documentation/*.pdf
+# one-page summary: build files (the PDF is copied to docs/TLDR.pdf)
+docs/tldr/*.aux
+docs/tldr/*.log
+docs/tldr/*.out
+docs/tldr/*.fls
+docs/tldr/*.fdb_latexmk
+docs/tldr/TLDR.pdf

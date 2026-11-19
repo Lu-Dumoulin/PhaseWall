@@ -9,8 +9,9 @@ compared, and a wall is placed wherever the description changes more than it var
 point. The regions enclosed by the walls are the candidate phases of the scanned range. No
 labels and no number of phases are given in advance.
 
-The method, its mathematics, a physics parallel for each step and the tests are described in
-[docs/documentation.pdf](docs/documentation.pdf).
+In two pages, mostly schematics and snapshots, with examples that work and one that does not:
+[docs/TLDR.pdf](docs/TLDR.pdf). The method, its mathematics, a physics parallel for each step and
+the tests are described in [docs/documentation.pdf](docs/documentation.pdf).
 
 ## Example: the Swift-Hohenberg equation
 
@@ -462,6 +463,7 @@ This section is for development and will be revised before any public release.
 | 19 | Masked autoencoder (MAE): hide most patches of a field and reconstruct them; no pair of views, so nothing rewards telling runs apart, and the encoder learns local physics (wavelength, cells, defects). A new architecture (patches as tokens, or a sparse CNN) and a decoder; only if step 18 shows that better views are not enough | planned |
 | 20 | Order parameters of a wall (2026-11-19): for each pair of neighbouring phases found by the walls (on any description, in particular the learned one), the hand-made observables that jump across it: jump across the wall over jumps inside each phase, one threshold that reproduces the wall (in physical units), step or onset as a hint, and for the learned description how much of the separating direction of $h$ the hand-made observables explain. Chosen on one half of the runs and scored on the other (many observables, chance hits); shown as a table per wall and a map of the best observable with the walls. Checks that a learned wall is physical and suggests order parameters | to think about |
 | 21 | Learned weights for the hand-made encoder (2026-11-19): hand-made descriptors of several views of a snapshot (crops, zoom, any angle, other snapshots; the descriptors are already invariant to rotations by 90 degrees and shifts), a learned map to the sphere trained as the learned encoder (views of a run together, other runs apart); one weight per descriptor tells which observables matter (metric learning) and could replace the equal block weights of combined tables. Risk: the objective rewards telling runs apart, which may favour the amplitude or run fingerprints rather than jumps at phase boundaries. First a scratch test on Swift-Hohenberg against uniform block weights | next |
+| 22 | Symmetries of the description (2026-11-19): $h$ should have exactly the symmetries of the system, no fewer and no more. Today it is invariant to rotations, mirrors and shifts of the box, but not to symmetries of the field values (FitzHugh-Nagumo is symmetric under $u \to -u$; uniform runs at $u = \pm 0.71$ then look like two states), nor to others a system may have (Galilean invariance of a flow, a gauge of a phase, a swap of two species). To decide: how a user declares the symmetries of a system (per field and for the whole system), how the hand-made observables and the views of the learned encoder respect them, and a check that warns when the data suggest an undeclared one | to think about |
 
 ### Finished package (target)
 
