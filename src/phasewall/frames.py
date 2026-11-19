@@ -36,7 +36,7 @@ import numpy as np
 
 from .fields import Field
 
-MAX_SHIFT_FRACTION = 0.2   # default max_shift: a fifth of the box side (a choice, Ludo 2026-11-17)
+MAX_SHIFT_FRACTION = 0.2   # default max_shift: a fifth of the box side (a choice)
 TOLERANCE = 1e-6           # relative tolerance for "is an integer multiple" (a choice)
 
 

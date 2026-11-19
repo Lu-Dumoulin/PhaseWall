@@ -175,7 +175,7 @@ def run_snapshots(ens: Ensemble, run_path: str | Path) -> list[tuple[float, Path
 
 def load_table(path: str | Path, parameters: list[str], label: str | None = None,
                prefix: str | None = None) -> tuple[pd.DataFrame, pd.Series | None]:
-    """A table of descriptors made elsewhere (for example by hfml), as input to the walls and
+    """A table of descriptors made elsewhere (for example by another program), as input to the walls and
     the other methods. Columns: `run` (one value per run), the parameters, optionally `time`
     (one row per snapshot; without it, one row per run), optionally a label column, and the
     descriptors: the columns named field.block.name, or else every numeric column (starting

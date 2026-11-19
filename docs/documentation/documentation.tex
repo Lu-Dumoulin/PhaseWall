@@ -683,7 +683,7 @@ the entropy of the normalised singular values).
 \textbf{The shape of the network} (Fig.~\ref{fig:network}). Five numbers: the number of blocks, the
 width (channels of the first block, doubled at each block up to $\dim h$), $\dim h$ (channels of the
 last block), and the hidden and projection sizes of the head $g$; with the temperature $T$. The
-default (4 blocks, 32 to 256 channels, head 256 and 64, $T=0.2$) is that of hfml Step 7. Before any
+default (4 blocks, 32 to 256 channels, head 256 and 64, $T=0.2$) is a small network in the style of SimCLR. Before any
 training a choice is checked against the frame: the last map keeps at least 2 points per side
 (blocks $\le\log_2(n/2)$ for a frame of $n$ points), channels never decrease (width $\le\dim h$),
 the projection is no larger than $\dim h$ nor than the hidden layer, and every value is in its list
@@ -1271,7 +1271,7 @@ a $3\times3$ checkerboard; one phase in two places is one phase of the tree; pri
 
 \begin{tech}
 \textbf{Question.} Is cutting the parameter graph better than grouping the runs by their
-description alone, as in the blind search of an earlier project (hfml)? The blind methods do not
+description alone, as in a usual blind search? The blind methods do not
 know the parameter grid. Each run is the mean of its snapshots (block-weighted as in
 Sec.~\ref{sec:compare}), compressed to the principal components that explain 95\% of the variance
 (Fig.~\ref{fig:pca}): with $\Sigma$ the covariance of the centred runs and $\Sigma=V\Lambda V^{\mathsf T}$,
@@ -2330,7 +2330,7 @@ Constant (file) & Value & Role and reason \\
 \code{TUKEY_ALPHA} (describe) & 0.5 & tapered share of the window of non-periodic frames (4 times less leakage than none) \\
 \code{MIN_WAVELENGTHS} (io) & 3 & non-periodic frames: $S(k)$ only for wavelengths up to $L_c/3$ \\
 \code{MAX_SHIFT_FRACTION} (frames) & 0.2 & default \code{max_shift}: a fifth of the box side \\
-\code{Network} (nn) & 4 blocks, 32--256, 256, 64 & default shape of $f$ and $g$ (as in hfml Step 7) \\
+\code{Network} (nn) & 4 blocks, 32--256, 256, 64 & default shape of $f$ and $g$ \\
 \code{MIN_FINAL} (nn) & 2 & smallest side of the last map: $h$ is a mean over at least $2\times2$ values \\
 \code{T} (nn) & 0.2 & temperature of the InfoNCE loss \\
 \code{views} (nn) & \code{"rotzoom"} & views of a run: any angle, mirror, zoom, crop (\code{"d4"}: the views before 2026-11-19) \\
@@ -2351,7 +2351,7 @@ role names (io) & \code{v}, \code{p}, \code{Q}, \ldots & names that suggest a ro
 \code{MIN_WEIGHT} (walls) & $10^{-8}$ & lower bound of link weights: strong walls keep the graph connected \\
 \code{N_THRESHOLDS}, \code{AGREE} (trees) & 32, 0.9 & candidate thresholds per descriptor; share of points on the same side with the other half \\
 \code{SYMMETRIC}, \code{halves_by} (trees) & on, auto & splits found by both halves; checkerboard halves when most points have one run; sides of a checkerboard colour of at least \code{MIN_PHASE}/2 points \\
-\code{PCA_VARIANCE}, \code{K_MIXTURE}, \code{K_KMEANS} (baselines) & 0.95, 1--10, 2--10 & blind grouping, as in hfml \\
+\code{PCA_VARIANCE}, \code{K_MIXTURE}, \code{K_KMEANS} (baselines) & 0.95, 1--10, 2--10 & blind grouping \\
 \code{HDBSCAN_SIZES}, \code{FOLDS}, \code{C_PROBE} (baselines) & 5--40, 5, 1 & HDBSCAN sizes; probe folds and penalty \\
 \code{SEEDS} (toy) & 8 & runs per Swift-Hohenberg point (6 is the fewest that finds the hexagon-stripe wall) \\
 reference labellers (examples) & & thresholds of each example's \code{reference_label}, only for the scores \\

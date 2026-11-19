@@ -7,7 +7,7 @@ README, private like it.
 ## Goal
 
 A notebook that also runs as a dashboard, to explore first the Swift-Hohenberg demo and then
-Gray-Scott, and later the user's own runs or a table of descriptors (as in hfml). The user
+Gray-Scott, and later the user's own runs or a table of descriptors. The user
 chooses:
 
 - the source: a demo (Swift-Hohenberg, Gray-Scott), an ensemble (TOML configuration), or a
@@ -29,7 +29,7 @@ the tables and figures.
 
 ## Which tool
 
-**marimo** (https://marimo.io), chosen by Ludo on 2026-11-17; the Python counterpart of Pluto:
+**marimo** (https://marimo.io), chosen on 2026-11-17; the Python counterpart of Pluto:
 
 | Pluto (PlutoUI), as in HydraFluids | marimo |
 | --- | --- |

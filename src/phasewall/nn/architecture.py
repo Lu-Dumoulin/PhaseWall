@@ -15,8 +15,8 @@ A network is given by five numbers (Network):
   random place) or "d4" (rotations by 90 degrees, mirror and, in a periodic frame, a shift of the
   whole frame); `normalise` (default on): every field of every view minus its own mean, divided by
   its own standard deviation, so that h describes the shape of the pattern, not its amplitude.
-The default shape (4 blocks, 32 to 256 channels, head 256 and 64, T = 0.2) is the network of hfml
-Step 7. The default views were chosen on 2026-11-19: with "d4" and no normalisation the learned
+The default shape (4 blocks, 32 to 256 channels, head 256 and 64, T = 0.2) is a small network in
+the style of SimCLR. The default views were chosen on 2026-11-19: with "d4" and no normalisation the learned
 description found 2 phases on Swift-Hohenberg and 1 on the other examples, because h followed the
 amplitude, which changes smoothly inside a phase; with "rotzoom" and the normalisation it finds the
 3 phases of Swift-Hohenberg for three training seeds (README, plan step 18).

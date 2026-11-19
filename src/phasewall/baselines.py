@@ -1,6 +1,6 @@
 """Other ways to find the states, for comparison with the walls: blind grouping of the runs
 (Gaussian mixture, k-means, HDBSCAN) and a supervised linear probe (logistic regression).
-Adapted from hfml (discover.py, Step 5.2, and the probe of the Step 7 evaluation). Needs the
+Adapted from earlier code by the same author. Needs the
 extra `[baselines]` (scikit-learn).
 
 Blind grouping. Each run is the mean of its snapshots (one row per run). The description is
@@ -34,7 +34,7 @@ from .graph import parameter_nodes
 from .scores import n_groups, point_scores  # noqa: F401  (point_scores: kept importable from here)
 from .walls import feature_matrix
 
-# Choices (as in hfml protocol version 2, except that rows are runs of an ensemble)
+# Choices (rows are runs of an ensemble)
 PCA_VARIANCE = 0.95
 K_MIXTURE = tuple(range(1, 11))
 K_KMEANS = tuple(range(2, 11))

@@ -1,4 +1,4 @@
-"""The contrastive loss and the checks of a training (adapted from hfml Step 7).
+"""The contrastive loss and the checks of a training.
 
 info_nce (SimCLR): a batch holds 2N unit vectors z; rows i and i + N are the two views of
 the same run. Row i is a classification among the 2N - 1 other views whose correct answer is
@@ -14,7 +14,7 @@ normalised singular values: 1 if all h lie on a line, up to the dimension of h).
 import torch
 import torch.nn.functional as F
 
-T = 0.2   # temperature (a choice, as in hfml)
+T = 0.2   # temperature (a choice)
 
 
 def info_nce(z: torch.Tensor, T: float = T) -> torch.Tensor:

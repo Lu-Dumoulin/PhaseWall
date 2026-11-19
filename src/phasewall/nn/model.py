@@ -1,4 +1,4 @@
-"""The encoder f and the projection head g (adapted from hfml Step 7).
+"""The encoder f and the projection head g.
 
 f: four blocks, each a 3 x 3 convolution with stride 2 (halves the grid) then a 3 x 3
 convolution, batch normalisation and ReLU after each; channels in -> 32 -> 64 -> 128 -> 256;
@@ -14,8 +14,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-CHANNELS = (32, 64, 128, 256)   # channels of the four blocks (a choice, as in hfml)
-HIDDEN, OUT = 256, 64           # sizes of the head g (a choice, as in hfml)
+CHANNELS = (32, 64, 128, 256)   # channels of the four blocks (a choice)
+HIDDEN, OUT = 256, 64           # sizes of the head g (a choice)
 
 
 def block(c_in: int, c_out: int, periodic: bool) -> nn.Sequential:

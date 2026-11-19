@@ -193,7 +193,7 @@ def winding_charges(a: np.ndarray, symmetry: str, periodic: bool = True) -> np.n
     """Winding number of every 2 x 2 plaquette of grid points: the turn of the angle of the field
     around it over 2 pi. A polarity (angle atan2(a_y, a_x), period 2 pi) gives +-1, a nematic
     (director angle atan2(Q_xy, Q_xx) / 2, period pi) gives +-1/2; most plaquettes give 0.
-    Adapted from hfml (defects.plaquette_charge, same author)."""
+    Adapted from earlier code by the same author."""
     if symmetry == "nematic":
         theta, period = 0.5 * np.arctan2(a[..., 1], a[..., 0]), np.pi
     else:

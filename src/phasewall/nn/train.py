@@ -40,7 +40,7 @@ PREFIX = "cnn.h"     # columns of the learned description: cnn.h.d000, ...
 
 @dataclass
 class Settings:
-    """Settings of a training (choices; the values of hfml Step 7 except epochs and draws,
+    """Settings of a training (choices; common SimCLR values except epochs and draws,
     which are scaled to small ensembles)."""
 
     epochs: int = 40

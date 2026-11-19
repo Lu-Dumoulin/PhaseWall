@@ -8,7 +8,7 @@ import pytest
 from phasewall.nn.architecture import MIN_FINAL, Network, check, max_blocks, receptive_field, summary, weights
 
 
-def test_default_is_the_network_of_hfml_with_the_new_views():
+def test_default_network_and_views():
     net = Network()
     assert net.channels == (32, 64, 128, 256)
     assert (net.hidden, net.projection, net.temperature) == (256, 64, 0.2)

@@ -18,7 +18,7 @@ effective rank of the description.
 
 Methods (second table). On each description, the walls are compared with blind grouping of the
 runs (Gaussian mixture with k by BIC, k-means with k by silhouette, HDBSCAN with minimum sizes
-5, 10, 20, 40; phasewall.baselines, adapted from hfml) and with a logistic probe of the three
+5, 10, 20, 40; phasewall.baselines) and with a logistic probe of the three
 reference states (supervised: a ceiling, not a method to find states). Scores at the level of
 the points: groups, agreement, adjusted Rand index with the reference, connected pieces of the
 groups on the parameter grid, share of runs called noise (HDBSCAN).
