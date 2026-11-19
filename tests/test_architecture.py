@@ -8,10 +8,11 @@ import pytest
 from phasewall.nn.architecture import MIN_FINAL, Network, check, max_blocks, receptive_field, summary, weights
 
 
-def test_default_is_the_network_of_hfml():
+def test_default_is_the_network_of_hfml_with_the_new_views():
     net = Network()
     assert net.channels == (32, 64, 128, 256)
     assert (net.hidden, net.projection, net.temperature) == (256, 64, 0.2)
+    assert (net.views, net.zoom, net.crop, net.normalise) == ("rotzoom", 1.25, 0.75, True)
 
 
 def test_channels_double_up_to_dim_h():
@@ -28,7 +29,13 @@ def test_constraints():
     check(Network(), 64)
     assert max_blocks(64) == 5 and max_blocks(32) == 4 and max_blocks(MIN_FINAL) == 0
     with pytest.raises(ValueError, match="at most 4 blocks"):
-        check(Network(blocks=5), 32)
+        check(Network(blocks=5, views="d4"), 32)
+    with pytest.raises(ValueError, match="at most 4 blocks"):
+        check(Network(blocks=5), 32)            # rotzoom: the crop grows to the frame, no further
+    check(Network(blocks=4), 32)                # rotzoom: crop 24 of 32 grown to 32 for 4 blocks
+    # non-periodic: the turned and zoomed crop must stay inside (at most 32 / (1.25 sqrt 2) = 18)
+    with pytest.raises(ValueError, match="sees 18 of the frame's 32: at most 3 blocks"):
+        check(Network(blocks=4), 32, periodic=False)
     with pytest.raises(ValueError, match="width 128 is larger than dim_h 64"):
         check(Network(width=128, dim_h=64, projection=32), 64)
     with pytest.raises(ValueError, match="projection 128 is larger than dim_h 64"):
@@ -42,8 +49,10 @@ def test_constraints():
 
 
 def test_summary():
-    s = summary(Network(), 64, in_channels=2, batch=128)
-    assert s["last_map"] == 4 and s["receptive_field"] == 91 and s["dim_h"] == 256
+    s = summary(Network(views="d4"), 64, in_channels=2, batch=128)
+    assert s["input"] == 64 and s["last_map"] == 4 and s["receptive_field"] == 91 and s["dim_h"] == 256
+    r = summary(Network(), 64, in_channels=2, batch=128)
+    assert r["input"] == 48 and r["last_map"] == 3 and r["memory_gb_rough"] < s["memory_gb_rough"]
     small = summary(Network(blocks=2, width=8, dim_h=32), 64, in_channels=2, batch=128)
     assert small["weights_f"] < s["weights_f"] and small["memory_gb_rough"] < s["memory_gb_rough"]
 

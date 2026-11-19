@@ -104,10 +104,11 @@ def test_controls_from_settings(nb):
     from phasewall.builtins import TreeSettings, WallsSettings
     from phasewall.nn.architecture import Network
     c = nb.spec_controls(Network)
-    assert set(c.value) == {"blocks", "width", "dim_h", "hidden", "projection", "temperature"}
+    assert set(c.value) == {"blocks", "width", "dim_h", "hidden", "projection", "temperature",
+                            "views", "zoom", "crop", "normalise"}
     assert nb.settings_from(Network, c.value) == Network()                 # defaults round trip
-    values = dict(c.value) | {"width": "16", "blocks": 3.0}
-    assert nb.settings_from(Network, values) == Network(blocks=3, width=16)
+    values = dict(c.value) | {"width": "16", "blocks": 3.0, "views": "d4", "normalise": False}
+    assert nb.settings_from(Network, values) == Network(blocks=3, width=16, views="d4", normalise=False)
     t = nb.spec_controls(TreeSettings)
     assert nb.settings_from(TreeSettings, t.value) == TreeSettings()
     assert nb.settings_from(WallsSettings, nb.spec_controls(WallsSettings).value) == WallsSettings()
@@ -167,3 +168,14 @@ def test_your_runs_with_a_velocity_saved_as_two_datasets(nb, tmp_path, monkeypat
     assert fields["v"].kind == "velocity" and fields["v"].components == ("vx", "vy")
     cols = defs["res"].tables["hand"].columns
     assert any(c.startswith("v.vortex.") for c in cols) and any(c.startswith("v.flow.") for c in cols)
+
+
+def test_description_text(nb):
+    """The line under each description tab names the description and counts its columns."""
+    import pandas as pd
+
+    t = pd.DataFrame({"run": [0], "time": [1.0], "u.amp.log10var": [0.0], "u.mom.std": [1.0]})
+    assert "2 descriptors" in nb.description_text("hand", t)
+    assert "learned encoder" in nb.description_text("learned-seed0", t)
+    assert "side by side" in nb.description_text("combined-seed0", t)
+    assert "2 columns" in nb.description_text("other", t)

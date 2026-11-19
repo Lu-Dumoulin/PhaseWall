@@ -102,23 +102,42 @@ def test_load_frames(tmp_path):
     assert len(items) == 8 and items[0][0].shape == (2, 32, 32)
 
 
-def test_training_separates_two_kinds_of_pattern(tmp_path):
-    """After a short training, h of stripes and of spots are farther apart than within each
-    kind, and saving then loading gives the same h."""
-    ens = two_kinds(tmp_path)
-    fr = load_frames(ens)
-    enc, log = train(fr, Settings(epochs=6, batch=12, channels=SMALL, warmup=1), dev=torch.device("cpu"),
-                     verbose=False)
-    assert log.loss.iloc[-1] < log.collapse_loss.iloc[-1]
-    h = embed(enc, fr)
+def separation(ens, fr, h):
     kind = ens.runs.set_index("run").a.loc[fr.run].to_numpy()
     hs = (h - h.mean(0)) / (h.std(0) + 1e-9)
     between = np.linalg.norm(hs[kind == 0].mean(0) - hs[kind == 1].mean(0))
     within = np.mean([np.linalg.norm(hs[kind == k] - hs[kind == k].mean(0), axis=1).mean() for k in (0, 1)])
+    return between, within
+
+
+def test_training_with_the_old_views_separates_two_kinds(tmp_path):
+    """The views used before 2026-11-19 (D4, not normalised): after 6 epochs stripes and spots are
+    apart; there the two kinds also differ in amplitude (1 against sqrt 2), an easy cue."""
+    ens = two_kinds(tmp_path)
+    fr = load_frames(ens)
+    enc, log = train(fr, Settings(epochs=6, batch=12, channels=SMALL, warmup=1, views="d4", normalise=False),
+                     dev=torch.device("cpu"), verbose=False)
+    assert log.loss.iloc[-1] < log.collapse_loss.iloc[-1]
+    between, within = separation(ens, fr, embed(enc, fr))
+    assert between > within
+
+
+def test_training_separates_two_kinds_of_pattern(tmp_path):
+    """Default views (any angle, zoom, crop of 24 of 32 points, normalised: the amplitude is gone,
+    only the shape is left, which needs more steps on 24 runs: 30 epochs, 3 blocks for the crop):
+    h of stripes and of spots are farther apart than within each kind, and saving then loading
+    gives the same h."""
+    ens = two_kinds(tmp_path)
+    fr = load_frames(ens)
+    enc, log = train(fr, Settings(epochs=30, batch=12, channels=(8, 16, 32), warmup=1), dev=torch.device("cpu"),
+                     verbose=False)
+    assert log.loss.iloc[-1] < log.collapse_loss.iloc[-1]
+    h = embed(enc, fr)
+    between, within = separation(ens, fr, h)
     assert between > within
     table = h_table(fr, h, ens)
     assert list(table.columns[:3]) == ["run", "time", "a"] and table.columns[3] == "cnn.h.d000"
-    save(tmp_path / "enc", enc, fr, Settings(channels=SMALL), log)
+    save(tmp_path / "enc", enc, fr, Settings(channels=(8, 16, 32)), log)
     enc2, meta = load(tmp_path / "enc")
     assert np.allclose(embed(enc2, fr), h, atol=1e-5)
     assert meta["periodic"] and meta["fields"][0].name == "u"
@@ -127,7 +146,7 @@ def test_training_separates_two_kinds_of_pattern(tmp_path):
 def test_learn_and_describe_commands(tmp_path):
     from phasewall import cli, toy
     toy.make_ensemble(tmp_path, eps=[-0.1, 0.3], g=[0.0, 1.0], seeds=(0, 1), n=32, waves=4)
-    out = cli.run(["learn", str(tmp_path / "phasewall.toml"), "--epochs", "1", "--workers", "1"])
+    out = cli.run(["learn", str(tmp_path / "phasewall.toml"), "--epochs", "1", "--workers", "1", "--blocks", "3"])
     t1 = pd.read_csv(out / "descriptors_cnn.csv")
     assert len(t1) == 8 * (toy.N_SAVE - 1) and "cnn.h.d255" in t1
     csv = cli.run(["describe", str(tmp_path / "phasewall.toml"), "--encoder", str(out), "--workers", "1"])

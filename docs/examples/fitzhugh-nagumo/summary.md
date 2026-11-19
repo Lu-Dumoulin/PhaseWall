@@ -1,6 +1,6 @@
 # fitzhugh-nagumo
 
-396 runs on 99 parameter points (eps, delta); analysis 0 min.
+396 runs on 99 parameter points (eps, delta); analysis 2 min.
 
 Reference labels (runs): uniform 134, dynamic 121, stripes 83, fronts 51, holes 7
 
@@ -46,32 +46,32 @@ Each row: a description and a method; agree = points carrying the most common re
 | hand | kmeans | 8 | 0 | 88 | 99 | 0.537 | 0.537 | 22 | 0 |
 | hand | hdbscan_10 | 6 | 18 | 75 | 99 | 0.699 | 0.515 | 17 | 0.205 |
 | hand | hdbscan_20 | 5 | 22 | 71 | 99 | 0.71 | 0.496 | 16 | 0.23 |
-| learned seed 0 | walls | 1 | 0 | 33 | 99 | 0 | 0 | 1 | 0 |
-| learned seed 0 | mixture | 9 | 0 | 72 | 99 | 0.237 | 0.237 | 25 | 0 |
-| learned seed 0 | kmeans | 10 | 0 | 74 | 99 | 0.238 | 0.238 | 32 | 0 |
-| learned seed 0 | hdbscan_10 | 7 | 33 | 62 | 99 | 0.71 | 0.508 | 15 | 0.348 |
-| learned seed 0 | hdbscan_20 | 4 | 45 | 28 | 99 | 0.104 | 0.159 | 13 | 0.439 |
+| learned seed 0 | walls | 2 | 0 | 44 | 99 | 0.193 | 0.193 | 2 | 0 |
+| learned seed 0 | mixture | 10 | 0 | 89 | 99 | 0.426 | 0.426 | 25 | 0 |
+| learned seed 0 | kmeans | 10 | 0 | 89 | 99 | 0.426 | 0.426 | 25 | 0 |
+| learned seed 0 | hdbscan_10 | 8 | 14 | 78 | 99 | 0.614 | 0.483 | 21 | 0.116 |
+| learned seed 0 | hdbscan_20 | 6 | 38 | 54 | 99 | 0.578 | 0.672 | 15 | 0.366 |
 | combined seed 0 | walls | 1 | 0 | 33 | 99 | 0 | 0 | 1 | 0 |
-| combined seed 0 | mixture | 8 | 0 | 88 | 99 | 0.542 | 0.542 | 23 | 0 |
-| combined seed 0 | kmeans | 8 | 0 | 87 | 99 | 0.529 | 0.529 | 21 | 0 |
-| combined seed 0 | hdbscan_10 | 6 | 12 | 80 | 99 | 0.734 | 0.598 | 15 | 0.146 |
-| combined seed 0 | hdbscan_20 | 5 | 20 | 74 | 99 | 0.739 | 0.531 | 16 | 0.197 |
-| learned seed 1 | walls | 1 | 0 | 33 | 99 | 0 | 0 | 1 | 0 |
-| learned seed 1 | mixture | 10 | 0 | 74 | 99 | 0.256 | 0.256 | 29 | 0 |
-| learned seed 1 | kmeans | 10 | 0 | 74 | 99 | 0.256 | 0.256 | 29 | 0 |
-| learned seed 1 | hdbscan_10 | 8 | 44 | 52 | 99 | 0.639 | 0.3 | 20 | 0.437 |
-| learned seed 1 | hdbscan_20 | 3 | 44 | 23 | 99 | -0.035 | 0.116 | 11 | 0.427 |
+| combined seed 0 | mixture | 9 | 0 | 89 | 99 | 0.485 | 0.485 | 24 | 0 |
+| combined seed 0 | kmeans | 8 | 0 | 88 | 99 | 0.552 | 0.552 | 21 | 0 |
+| combined seed 0 | hdbscan_10 | 7 | 20 | 73 | 99 | 0.75 | 0.519 | 12 | 0.215 |
+| combined seed 0 | hdbscan_20 | 5 | 18 | 75 | 99 | 0.72 | 0.55 | 16 | 0.177 |
+| learned seed 1 | walls | 2 | 0 | 42 | 99 | 0.168 | 0.168 | 2 | 0 |
+| learned seed 1 | mixture | 10 | 0 | 88 | 99 | 0.411 | 0.411 | 27 | 0 |
+| learned seed 1 | kmeans | 10 | 0 | 87 | 99 | 0.423 | 0.423 | 27 | 0 |
+| learned seed 1 | hdbscan_10 | 8 | 17 | 73 | 99 | 0.568 | 0.481 | 22 | 0.179 |
+| learned seed 1 | hdbscan_20 | 7 | 32 | 61 | 99 | 0.626 | 0.581 | 17 | 0.311 |
 | combined seed 1 | walls | 1 | 0 | 33 | 99 | 0 | 0 | 1 | 0 |
-| combined seed 1 | mixture | 10 | 0 | 89 | 99 | 0.513 | 0.513 | 26 | 0 |
-| combined seed 1 | kmeans | 6 | 0 | 88 | 99 | 0.569 | 0.569 | 20 | 0 |
-| combined seed 1 | hdbscan_10 | 7 | 15 | 77 | 99 | 0.727 | 0.56 | 16 | 0.167 |
-| combined seed 1 | hdbscan_20 | 5 | 19 | 75 | 99 | 0.742 | 0.548 | 16 | 0.194 |
+| combined seed 1 | mixture | 10 | 0 | 89 | 99 | 0.449 | 0.449 | 25 | 0 |
+| combined seed 1 | kmeans | 8 | 0 | 88 | 99 | 0.542 | 0.542 | 22 | 0 |
+| combined seed 1 | hdbscan_10 | 6 | 19 | 74 | 99 | 0.75 | 0.527 | 15 | 0.187 |
+| combined seed 1 | hdbscan_20 | 5 | 18 | 75 | 99 | 0.72 | 0.55 | 16 | 0.182 |
 
-Probe (logistic regression of the reference labels, held-out points, balanced accuracy): hand 0.765, learned seed 0 0.698, combined seed 0 0.787, learned seed 1 0.701, combined seed 1 0.787
+Probe (logistic regression of the reference labels, held-out points, balanced accuracy): hand 0.765, learned seed 0 0.751, combined seed 0 0.788, learned seed 1 0.746, combined seed 1 0.790
 
 ## Trainings (last epoch)
 
 | name | loss | collapse_loss | alignment | uniformity | effective_rank_h |
 |---|---|---|---|---|---|
-| learned seed 0 | 2.23 | 5.54 | 0.995 | -2.56 | 34 |
-| learned seed 1 | 2.25 | 5.54 | 0.995 | -2.56 | 32.1 |
+| learned seed 0 | 2.67 | 5.54 | 0.961 | -2.47 | 27 |
+| learned seed 1 | 2.67 | 5.54 | 0.959 | -2.48 | 26.3 |

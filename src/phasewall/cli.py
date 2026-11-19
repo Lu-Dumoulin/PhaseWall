@@ -107,13 +107,15 @@ def cmd_learn(args) -> Path:
           f"frame {frames.x.shape[2]} x {frames.x.shape[3]}, {'periodic' if frames.periodic else 'not periodic'}")
     from .nn.architecture import Network, check, summary
     net = Network(blocks=args.blocks, width=args.width, dim_h=args.dim_h, hidden=args.hidden,
-                  projection=args.projection, temperature=args.temperature)
+                  projection=args.projection, temperature=args.temperature, views=args.views, zoom=args.zoom,
+                  crop=args.crop, normalise=not args.no_normalise)
     try:
-        check(net, frames.x.shape[-1])
+        check(net, frames.x.shape[-1], frames.periodic)
     except ValueError as err:
         sys.exit(f"phasewall: {err}")
-    info = summary(net, frames.x.shape[-1], frames.in_channels)
-    print(f"network: channels {info['channels']}, last map {info['last_map']} points, receptive field "
+    info = summary(net, frames.x.shape[-1], frames.in_channels, periodic=frames.periodic)
+    print(f"views {net.views}{' normalised' if net.normalise else ''}, input {info['input']} points; "
+          f"network: channels {info['channels']}, last map {info['last_map']} points, receptive field "
           f"{info['receptive_field']} points, {info['weights_f']} weights in f, about {info['memory_gb_rough']:.1f} GB "
           "per step (rough)")
     settings = Settings.from_network(net, epochs=args.epochs, seed=args.seed)
@@ -213,6 +215,12 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--hidden", type=int, default=256, help="hidden layer of the head (default 256)")
     s.add_argument("--projection", type=int, default=64, help="dimension of z (default 64)")
     s.add_argument("--temperature", type=float, default=0.2, help="temperature of the loss (default 0.2)")
+    s.add_argument("--views", choices=["rotzoom", "d4"], default="rotzoom",
+                   help="views of a run: rotzoom (any angle, zoom, crop; default) or d4 (90 degrees, whole frame)")
+    s.add_argument("--zoom", type=float, default=1.25, help="rotzoom: zoom factors in [1/zoom, zoom] (default 1.25)")
+    s.add_argument("--crop", type=float, default=0.75, help="rotzoom: crop side / frame side (default 0.75)")
+    s.add_argument("--no-normalise", action="store_true",
+                   help="keep the amplitude of each view (default: each field divided by its own std)")
     s.set_defaults(func=cmd_learn)
 
     s = sub.add_parser("walls", help="walls and phases from a table of descriptors")

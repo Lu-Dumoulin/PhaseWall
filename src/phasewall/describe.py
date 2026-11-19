@@ -22,6 +22,23 @@ For every field (arrays [x, y] or [x, y, component], grid spacing dx):
 - defects: polarities and nematics: topological defects counted by their winding number, the
          turn of the angle of the field around each 2 x 2 plaquette of grid points (+-1 for a
          polarity, +-1/2 for a nematic), per unit area: `plus` and `minus`.
+- parts: compares the parts of the frame with each other (Binder's block distribution idea,
+         Binder 1981): in every square block of side PARTS_SIDE of the frame side (all
+         positions; wrapped in a periodic box), six local numbers: log10 of the variance and
+         the mean (in units of the variance and the standard deviation of the whole frame),
+         skewness and log10 of the kurtosis of the values (as for mom), log10 of a local
+         wavenumber sqrt(<|grad a|^2> / var a), and the anisotropy of the structure tensor
+         <grad a grad a^T> (about 1 for stripes, about 0 for spots; components summed, so it
+         turns with the field). H is the variance of these numbers over the blocks, averaged
+         over the six; the column is log10 H. One state everywhere: the blocks differ only by
+         finite-size noise and H is small; two states side by side (hexagons next to stripes,
+         spots on a uniform background): H is large. Domains of one state as large as the
+         blocks (labyrinth stripes) fall in between. A block flat to within PARTS_VAR_FLOOR of
+         the frame variance takes the values of the whole frame for its shape numbers (a
+         choice: they are not defined there). Not a default block: on the Swift-Hohenberg and
+         Gray-Scott demos it marks coexistence well but does not improve the walls (2026-11-18);
+         the slope of log H against log l (Binder's test, -2 for one state, 0 for two) was
+         tried as a second column and removed: it was noisy and merged phases.
 - dyn:   for a pair of snapshots a time pair_dt apart: the correlation C of the fluctuations
          at the same place (still) and after the best shift (moving), given as the
          decorrelation log10(1 - C + DECOR_FLOOR). A frozen pattern has both at the floor; a
@@ -73,6 +90,10 @@ DECOR_FLOOR = 1e-3    # correlations above 1 - DECOR_FLOOR count as frozen (a ch
 LEVELS = (-1.0, 0.0, 1.0)   # topo: levels in standard deviations from the mean (a choice)
 TUKEY_ALPHA = 0.5     # non-periodic S(k): tapered share of the window (a choice: 4x less leakage
                       # than no window on Swift-Hohenberg crops, 2026-11-17)
+PARTS_SIDE = 0.5            # parts: block side as a fraction of the frame side (a choice)
+PARTS_VAR_FLOOR = 1e-6      # parts: a block whose variance is below this share of the frame
+                            # variance is flat (a choice)
+PARTS_H_FLOOR = 1e-6        # parts: H below this counts as 0 in log10 H (a choice)
 OW_LEVEL = 0.2        # vortex cores: W < -0.2 std(W), the usual threshold of the Okubo-Weiss criterion
                       # (Isern-Fontanet et al. 2003; a choice)
 
@@ -253,6 +274,69 @@ def _log10(x: float) -> float:
     return float(np.log10(max(x, FLAT**2)))
 
 
+# ---------------------------------------------------------------- parts of a frame
+def box_means(x: np.ndarray, side: int, periodic: bool = True) -> np.ndarray:
+    """Mean of x over every square block of `side` points: one value per block position
+    (n x n positions in a periodic frame, wrapping across the edges; (n - side + 1)^2 inside a
+    non-periodic one). Sums by a cumulative table, so every block costs the same."""
+    if periodic:
+        x = np.pad(x, ((0, side - 1), (0, side - 1)), mode="wrap")
+    c = np.zeros((x.shape[0] + 1, x.shape[1] + 1))
+    c[1:, 1:] = np.cumsum(np.cumsum(x, axis=0), axis=1)
+    s = c[side:, side:] - c[:-side, side:] - c[side:, :-side] + c[:-side, :-side]
+    return s / side**2
+
+
+def _parts_numbers(z: np.ndarray, grads: list[tuple[np.ndarray, np.ndarray]], comps: np.ndarray,
+                   side: int, periodic: bool, whole: np.ndarray) -> np.ndarray:
+    """The six local numbers of the parts block (module docstring) for every block: array
+    (6, positions). z: values in units of the frame (mean 0, variance 1); grads: (d_x, d_y) of
+    each component; comps: the components (for the variance under the wavenumber); whole: the
+    six numbers of the whole frame, used for the shape numbers of flat blocks."""
+    m1, m2, m3, m4 = (box_means(z**p, side, periodic) for p in (1, 2, 3, 4))
+    var = np.maximum(m2 - m1**2, 0.0)
+    c3 = m3 - 3 * m1 * m2 + 2 * m1**3
+    c4 = m4 - 4 * m1 * m3 + 6 * m1**2 * m2 - 3 * m1**4
+    flat = var < PARTS_VAR_FLOOR
+    safe = np.where(flat, 1.0, var)
+    skew = np.where(flat, whole[2], c3 / safe**1.5)
+    kurt = np.where(flat, whole[3], np.log10(np.maximum(c4 / safe**2, PARTS_VAR_FLOOR)))
+    jxx = sum(box_means(gx * gx, side, periodic) for gx, _ in grads)
+    jyy = sum(box_means(gy * gy, side, periodic) for _, gy in grads)
+    jxy = sum(box_means(gx * gy, side, periodic) for gx, gy in grads)
+    cvar = sum(np.maximum(box_means(c * c, side, periodic) - box_means(c, side, periodic) ** 2, 0.0)
+               for c in comps)
+    trace = jxx + jyy
+    still = flat | (trace <= 0) | (cvar <= 0)
+    wave = np.where(still, whole[4], 0.5 * np.log10(np.where(still, 1.0, trace) / np.where(still, 1.0, cvar)))
+    aniso = np.where(still, whole[5], np.sqrt((jxx - jyy) ** 2 + 4 * jxy**2) / np.where(still, 1.0, trace))
+    return np.stack([np.log10(np.maximum(var, PARTS_VAR_FLOOR)), m1, skew, kurt, wave, aniso]).reshape(6, -1)
+
+
+def parts(a: np.ndarray, values: np.ndarray, dx: float, periodic: bool = True,
+          side: float = PARTS_SIDE) -> dict[str, float]:
+    """The parts block of one field (module docstring): {"log10H": ...}.
+    a: the prepared field [x, y] or [x, y, component]; values: what mom describes (the field,
+    |a| or 2|Q|); side: block side as a fraction of the frame side."""
+    c = _components(a)
+    comps = [c[..., i] for i in range(c.shape[2])]
+    grads = [gradients(np.stack([ci, ci], axis=-1), dx, periodic)[:2] for ci in comps]
+    if not periodic:            # finite differences exist on the interior points only
+        values, comps = values[1:-1, 1:-1], [ci[1:-1, 1:-1] for ci in comps]
+    std = float(values.std())
+    if std < FLAT:
+        return {"log10H": float(np.log10(PARTS_H_FLOOR))}
+    z = (values - values.mean()) / std
+    trace = float(sum(np.mean(gx**2 + gy**2) for gx, gy in grads))
+    cvar = float(sum(ci.var() for ci in comps))
+    _, _, skew, kurt = moments(z)
+    whole = np.array([0.0, 0.0, skew, np.log10(max(kurt + 3, PARTS_VAR_FLOOR)),
+                      0.5 * np.log10(trace / cvar) if trace > 0 and cvar > 0 else 0.0, 0.0])
+    n = max(2, round(side * min(z.shape)))
+    numbers = _parts_numbers(z, grads, np.array(comps), n, periodic, whole)
+    return {"log10H": float(np.log10(np.mean(np.var(numbers, axis=1)) + PARTS_H_FLOOR))}
+
+
 # ---------------------------------------------------------------- one field
 def prepared(a: np.ndarray, f: Field) -> np.ndarray:
     """The array that is described: (a - <a>) / <a> for a relative scalar."""
@@ -306,6 +390,8 @@ def field_descriptors(a: np.ndarray, f: Field, dx: float, edges: np.ndarray,
         out |= {f"{f.name}.vortex.{k}": v for k, v in vortex_cores(a, dx, periodic).items()}
     if "defects" in use:
         out |= {f"{f.name}.defects.{k}": v for k, v in defect_counts(a, f.symmetry, dx, periodic).items()}
+    if "parts" in use:
+        out |= {f"{f.name}.parts.{k}": v for k, v in parts(a, values, dx, periodic).items()}
     return out
 
 
@@ -503,6 +589,11 @@ def explain(column: str, fields: list[Field] | None = None) -> str:
             return what[name]
     if block == "defects" and name in ("plus", "minus"):
         return f"{'positive' if name == 'plus' else 'negative'} topological defects of {f} per unit area (winding number)"
+    if block == "parts":
+        what = {"log10H": f"how much the parts of the frame differ: log10 of the spread of local numbers of {f} "
+                          "over blocks of half the side (large when two states sit side by side)"}
+        if name in what:
+            return what[name]
     if block == "dyn":
         what = {"still": f"change of {f} over the lag, at the same place: log10(1 - C + 0.001)",
                 "moving": f"change of {f} over the lag, following the pattern (best shift): log10(1 - C + 0.001)"}

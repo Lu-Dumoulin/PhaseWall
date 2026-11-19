@@ -8,8 +8,10 @@ one number, its standard deviation over the whole ensemble, so that all inputs a
 both components of a vector or a nematic share that number, so the rotation rules still hold.
 
 A training item is two views of one run: two different pairs of the run (the same one if it
-has a single pair), each turned by a random element of D4 with the rules of fields.py (vectors
-and nematics turn with the grid) and, in a periodic frame only, shifted at random.
+has a single pair). With the views "d4" each is turned here by a random element of D4 with the
+rules of fields.py (vectors and nematics turn with the grid) and, in a periodic frame only,
+shifted at random; with the default views "rotzoom" the pairs are returned as they are and the
+views are made on the device for the whole batch (views.py).
 """
 
 from dataclasses import dataclass
@@ -146,8 +148,9 @@ class PairViews(Dataset):
     depend only on (seed, epoch, i), so a training can be repeated. Set `epoch` before each
     epoch."""
 
-    def __init__(self, frames: FrameSet, draws: int = DRAWS, seed: int = 0):
+    def __init__(self, frames: FrameSet, draws: int = DRAWS, seed: int = 0, augment: bool = True):
         self.frames, self.draws, self.seed, self.epoch = frames, draws, seed, 0
+        self.augment = augment        # False: the pairs as they are (views made later, nn/views.py)
         self.rows = [np.flatnonzero(frames.run == r) for r in np.unique(frames.run)]
 
     def __len__(self) -> int:
@@ -160,6 +163,8 @@ class PairViews(Dataset):
         others = rows[rows != a]
         b = int(rng.choice(others)) if len(others) else a
         f = self.frames
+        if not self.augment:
+            return torch.from_numpy(f.x[a]), torch.from_numpy(f.x[b])
         v1 = augment(f.x[a], f.fields, rng, f.periodic)
         v2 = augment(f.x[b], f.fields, rng, f.periodic)
         return torch.from_numpy(v1), torch.from_numpy(v2)

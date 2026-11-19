@@ -1,14 +1,15 @@
 """Tests of the blocks of observables (describe.py) chosen per field: the defaults of each kind,
 a field's own choice, the checks of that choice, and the role-specific blocks against fields
 whose answer is known: Gaussian vortices, a cellular flow and a shear flow (Okubo-Weiss), asters, vortices and
-saddles of a polarity (+1, +1, -1), and +-1/2 defects of a nematic."""
+saddles of a polarity (+1, +1, -1), and +-1/2 defects of a nematic; the parts block (two states side by
+side against one state everywhere, its block sums, its invariance under the symmetries of the box)."""
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from phasewall import describe as d
-from phasewall.fields import BLOCKS, DEFAULT_BLOCKS, Field
+from phasewall.fields import BLOCKS, DEFAULT_BLOCKS, Field, transform
 from phasewall.io import load_ensemble
 
 N, DX = 64, 0.5
@@ -115,3 +116,66 @@ def test_a_uniform_field_has_no_defect():
     p[..., 0] = 1.0
     assert d.defect_counts(p, "vector", DX) == {"plus": 0.0, "minus": 0.0}
     assert d.defect_counts(np.zeros((N, N, 2)), "nematic", DX) == {"plus": 0.0, "minus": 0.0}
+
+
+# ---------------------------------------------------------------- parts
+def test_box_means_are_the_block_averages():
+    """Every block position, against a direct sum: n^2 positions wrapped in a periodic frame,
+    (n - side + 1)^2 inside a non-periodic one."""
+    a = np.random.default_rng(0).standard_normal((7, 7))
+    side = 3
+    per = d.box_means(a, side, periodic=True)
+    wrapped = np.tile(a, (2, 2))
+    assert per.shape == (7, 7)
+    assert per[5, 6] == pytest.approx(wrapped[5:8, 6:9].mean())
+    inner = d.box_means(a, side, periodic=False)
+    assert inner.shape == (5, 5)
+    assert inner[2, 4] == pytest.approx(a[2:5, 4:7].mean())
+
+
+def test_parts_sees_two_states_side_by_side():
+    """Stripes next to hexagons, and spots on a flat background, differ far more from block to
+    block than stripes or hexagons alone; a flat field gives the floor."""
+    k = 2 * np.pi * 8 / L                          # 8 wavelengths per box
+    stripes = np.cos(k * X)
+    hexagons = sum(np.cos(k * (np.cos(t) * X + np.sin(t) * Y)) for t in (0, 2 * np.pi / 3, 4 * np.pi / 3))
+    half = np.where(X < L / 2, stripes, hexagons / 2)
+    spots = np.zeros((N, N))
+    spots[10:14, 10:14] = spots[40:44, 30:34] = 1.0
+    u = Field("u", ("u",), blocks=("parts",))
+
+    def h(a):
+        return d.describe_snapshot({"u": a}, [u], DX)["u.parts.log10H"]
+
+    one_state = max(h(stripes), h(hexagons))
+    assert h(half) > one_state + 2
+    assert h(spots) > h(half)
+    assert h(np.zeros((N, N))) == pytest.approx(np.log10(d.PARTS_H_FLOOR))
+
+
+def test_parts_is_unchanged_by_the_symmetries_of_the_box():
+    """Rotations, mirrors and (whole periodic box) shifts, for every kind of field; D4 also in a
+    non-periodic frame, where the blocks lie inside the frame."""
+    rng = np.random.default_rng(3)
+
+    def smooth(shape):
+        f = np.fft.fft2(rng.standard_normal(shape), axes=(0, 1))
+        kk = np.hypot(*np.meshgrid(np.fft.fftfreq(N, 1 / N), np.fft.fftfreq(N, 1 / N), indexing="ij"))
+        f[kk > 6] = 0
+        return np.fft.ifft2(f, axes=(0, 1)).real
+
+    fields = [Field("u", ("u",), blocks=("parts",)), Field("p", ("p",), "vector", blocks=("parts",)),
+              Field("Q", ("Q",), "nematic", blocks=("parts",)), Field("v", ("v",), "velocity", blocks=("parts",)),
+              Field("q", ("q",), "polarity", blocks=("parts",))]
+    snap = {"u": smooth((N, N)), "p": smooth((N, N, 2)), "Q": smooth((N, N, 2)), "v": smooth((N, N, 2)),
+            "q": smooth((N, N, 2))}
+    for periodic, shifts in ((True, [(0, 0), (7, 19)]), (False, [(0, 0)])):
+        ref = d.describe_snapshot(snap, fields, DX, periodic=periodic)
+        assert len(ref) == 5
+        for turns in range(4):
+            for mirror in (False, True):
+                for shift in shifts:
+                    t = d.describe_snapshot(transform(snap, fields, turns, mirror, shift), fields, DX,
+                                            periodic=periodic)
+                    for c in ref:
+                        assert t[c] == pytest.approx(ref[c], rel=1e-9, abs=1e-9), (c, periodic, turns, mirror, shift)

@@ -1,6 +1,6 @@
 # gray-scott
 
-2100 runs on 525 parameter points (F, k); analysis 1 min.
+2100 runs on 525 parameter points (F, k); analysis 8 min.
 
 Reference labels (runs): uniform (high v) 827, uniform 577, stripes 267, dynamic 239, isolated spots 91, spots 68, holes 31
 
@@ -47,31 +47,31 @@ Each row: a description and a method; agree = points carrying the most common re
 | hand | hdbscan_10 | 22 | 26 | 490 | 525 | 0.78 | 0.754 | 36 | 0.062 |
 | hand | hdbscan_20 | 19 | 42 | 482 | 525 | 0.801 | 0.749 | 38 | 0.102 |
 | learned seed 0 | walls | 1 | 0 | 207 | 525 | 0 | 0 | 1 | 0 |
-| learned seed 0 | mixture | 10 | 0 | 406 | 525 | 0.451 | 0.451 | 40 | 0 |
-| learned seed 0 | kmeans | 10 | 0 | 421 | 525 | 0.483 | 0.483 | 34 | 0 |
-| learned seed 0 | hdbscan_10 | 8 | 103 | 376 | 525 | 0.677 | 0.519 | 20 | 0.2 |
-| learned seed 0 | hdbscan_20 | 3 | 168 | 331 | 525 | 0.862 | 0.596 | 8 | 0.324 |
-| combined seed 0 | walls | 6 | 0 | 503 | 525 | 0.951 | 0.951 | 8 | 0 |
-| combined seed 0 | mixture | 10 | 0 | 517 | 525 | 0.758 | 0.758 | 27 | 0 |
+| learned seed 0 | mixture | 10 | 0 | 426 | 525 | 0.426 | 0.426 | 130 | 0 |
+| learned seed 0 | kmeans | 10 | 0 | 467 | 525 | 0.516 | 0.516 | 137 | 0 |
+| learned seed 0 | hdbscan_10 | 22 | 61 | 445 | 525 | 0.394 | 0.353 | 198 | 0.121 |
+| learned seed 0 | hdbscan_20 | 14 | 34 | 473 | 525 | 0.507 | 0.498 | 179 | 0.072 |
+| combined seed 0 | walls | 4 | 0 | 440 | 525 | 0.859 | 0.859 | 6 | 0 |
+| combined seed 0 | mixture | 10 | 0 | 517 | 525 | 0.727 | 0.727 | 58 | 0 |
 | combined seed 0 | kmeans | 4 | 0 | 356 | 525 | 0.535 | 0.535 | 10 | 0 |
-| combined seed 0 | hdbscan_10 | 21 | 48 | 476 | 525 | 0.822 | 0.748 | 36 | 0.109 |
-| combined seed 0 | hdbscan_20 | 17 | 72 | 453 | 525 | 0.822 | 0.725 | 30 | 0.15 |
+| combined seed 0 | hdbscan_10 | 44 | 52 | 465 | 525 | 0.24 | 0.194 | 182 | 0.109 |
+| combined seed 0 | hdbscan_20 | 27 | 64 | 460 | 525 | 0.258 | 0.211 | 181 | 0.13 |
 | learned seed 1 | walls | 1 | 0 | 207 | 525 | 0 | 0 | 1 | 0 |
-| learned seed 1 | mixture | 10 | 0 | 392 | 525 | 0.42 | 0.42 | 32 | 0 |
-| learned seed 1 | kmeans | 10 | 0 | 398 | 525 | 0.451 | 0.451 | 35 | 0 |
-| learned seed 1 | hdbscan_10 | 12 | 170 | 355 | 525 | 0.859 | 0.493 | 23 | 0.323 |
-| learned seed 1 | hdbscan_20 | 6 | 264 | 256 | 525 | 0.933 | 0.455 | 11 | 0.504 |
-| combined seed 1 | walls | 6 | 0 | 503 | 525 | 0.951 | 0.951 | 8 | 0 |
-| combined seed 1 | mixture | 10 | 0 | 516 | 525 | 0.754 | 0.754 | 32 | 0 |
+| learned seed 1 | mixture | 10 | 0 | 459 | 525 | 0.509 | 0.509 | 140 | 0 |
+| learned seed 1 | kmeans | 10 | 0 | 459 | 525 | 0.509 | 0.509 | 140 | 0 |
+| learned seed 1 | hdbscan_10 | 21 | 56 | 452 | 525 | 0.402 | 0.364 | 200 | 0.11 |
+| learned seed 1 | hdbscan_20 | 17 | 65 | 441 | 525 | 0.399 | 0.356 | 184 | 0.128 |
+| combined seed 1 | walls | 4 | 0 | 440 | 525 | 0.856 | 0.856 | 6 | 0 |
+| combined seed 1 | mixture | 10 | 0 | 517 | 525 | 0.728 | 0.728 | 56 | 0 |
 | combined seed 1 | kmeans | 4 | 0 | 356 | 525 | 0.535 | 0.535 | 10 | 0 |
-| combined seed 1 | hdbscan_10 | 21 | 56 | 469 | 525 | 0.827 | 0.742 | 36 | 0.128 |
-| combined seed 1 | hdbscan_20 | 16 | 80 | 443 | 525 | 0.845 | 0.717 | 28 | 0.169 |
+| combined seed 1 | hdbscan_10 | 45 | 55 | 465 | 525 | 0.219 | 0.179 | 191 | 0.114 |
+| combined seed 1 | hdbscan_20 | 26 | 47 | 473 | 525 | 0.253 | 0.227 | 181 | 0.099 |
 
-Probe (logistic regression of the reference labels, held-out points, balanced accuracy): hand 0.962, learned seed 0 0.924, combined seed 0 0.965, learned seed 1 0.917, combined seed 1 0.962
+Probe (logistic regression of the reference labels, held-out points, balanced accuracy): hand 0.962, learned seed 0 0.945, combined seed 0 0.964, learned seed 1 0.945, combined seed 1 0.964
 
 ## Trainings (last epoch)
 
 | name | loss | collapse_loss | alignment | uniformity | effective_rank_h |
 |---|---|---|---|---|---|
-| learned seed 0 | 2.01 | 5.54 | 0.997 | -2.41 | 90.5 |
-| learned seed 1 | 2.02 | 5.54 | 0.997 | -2.4 | 91.4 |
+| learned seed 0 | 2.3 | 5.54 | 0.969 | -2.37 | 27.8 |
+| learned seed 1 | 2.31 | 5.54 | 0.97 | -2.37 | 26.6 |

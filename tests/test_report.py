@@ -71,3 +71,21 @@ def test_label_colours_are_one_to_one():
     colour = report.label_colours(labels, phase)
     assert colour["b"] == 0 and colour["c"] == 1          # largest overlaps take their phase colour
     assert len(set(colour.values())) == 3                 # "a" gets a free colour
+
+
+def test_phase_map_of_a_tree_has_no_jumps_panel(two_phases):
+    """A tree places its splits by thresholds, not by jumps: its phase map shows the phases (and
+    the labels), not the constant jumps of Tree.as_walls."""
+    from phasewall.trees import fit_tree
+
+    t, w = two_phases
+    tree = fit_tree(t, ["a", "b"]).as_walls()
+    labels = pd.Series(np.where(w.nodes.a > 5, "high", "low"), index=w.nodes.index)
+
+    def titles(fig):
+        return [t for ax in fig.axes for t in (ax.get_title(loc="left"), ax.get_title()) if t]
+
+    assert any("Jump" in s for s in titles(report.make_phase_map(w, labels)))
+    tree_titles = titles(report.make_phase_map(tree, labels))
+    assert len(tree_titles) == 2 and not any("Jump" in s for s in tree_titles)
+    assert len(titles(report.make_phase_map(tree))) == 1

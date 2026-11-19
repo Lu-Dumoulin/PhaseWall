@@ -36,6 +36,7 @@ NETWORKS = {   # the default and one change at a time (a choice of the compariso
     "narrow": Network(width=8, dim_h=64, hidden=64, projection=32),
     "wide h": Network(dim_h=512, hidden=512, projection=128),
     "T = 0.5": Network(temperature=0.5),
+    "d4 views": Network(views="d4", normalise=False),     # the views used before 2026-11-19
 }
 
 

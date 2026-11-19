@@ -1,6 +1,6 @@
 # barkley
 
-660 runs on 165 parameter points (a, b); analysis 0 min.
+660 runs on 165 parameter points (a, b); analysis 2 min.
 
 Reference labels (runs): spirals 325, rest 198, plane waves 137
 
@@ -47,31 +47,31 @@ Each row: a description and a method; agree = points carrying the most common re
 | hand | hdbscan_10 | 10 | 14 | 145 | 165 | 0.747 | 0.635 | 35 | 0.076 |
 | hand | hdbscan_20 | 5 | 24 | 134 | 165 | 0.84 | 0.734 | 20 | 0.136 |
 | learned seed 0 | walls | 1 | 0 | 90 | 165 | 0 | 0 | 1 | 0 |
-| learned seed 0 | mixture | 10 | 0 | 149 | 165 | 0.294 | 0.294 | 24 | 0 |
-| learned seed 0 | kmeans | 10 | 0 | 152 | 165 | 0.298 | 0.298 | 24 | 0 |
-| learned seed 0 | hdbscan_10 | 3 | 40 | 123 | 165 | 0.957 | 0.624 | 6 | 0.248 |
-| learned seed 0 | hdbscan_20 | 2 | 56 | 95 | 165 | 0.763 | 0.425 | 5 | 0.317 |
+| learned seed 0 | mixture | 10 | 0 | 148 | 165 | 0.296 | 0.296 | 21 | 0 |
+| learned seed 0 | kmeans | 10 | 0 | 150 | 165 | 0.312 | 0.312 | 21 | 0 |
+| learned seed 0 | hdbscan_10 | 3 | 24 | 108 | 165 | 0.411 | 0.511 | 3 | 0.15 |
+| learned seed 0 | hdbscan_20 | 2 | 1 | 131 | 165 | 0.581 | 0.572 | 2 | 0.005 |
 | combined seed 0 | walls | 2 | 0 | 132 | 165 | 0.586 | 0.586 | 2 | 0 |
-| combined seed 0 | mixture | 10 | 0 | 158 | 165 | 0.466 | 0.466 | 31 | 0 |
+| combined seed 0 | mixture | 10 | 0 | 158 | 165 | 0.407 | 0.407 | 35 | 0 |
 | combined seed 0 | kmeans | 2 | 0 | 131 | 165 | 0.566 | 0.566 | 3 | 0 |
-| combined seed 0 | hdbscan_10 | 9 | 26 | 132 | 165 | 0.762 | 0.635 | 34 | 0.152 |
-| combined seed 0 | hdbscan_20 | 4 | 34 | 126 | 165 | 0.856 | 0.754 | 13 | 0.214 |
+| combined seed 0 | hdbscan_10 | 8 | 10 | 148 | 165 | 0.811 | 0.727 | 32 | 0.052 |
+| combined seed 0 | hdbscan_20 | 4 | 36 | 125 | 165 | 0.883 | 0.76 | 11 | 0.208 |
 | learned seed 1 | walls | 1 | 0 | 90 | 165 | 0 | 0 | 1 | 0 |
-| learned seed 1 | mixture | 10 | 0 | 145 | 165 | 0.291 | 0.291 | 35 | 0 |
-| learned seed 1 | kmeans | 10 | 0 | 141 | 165 | 0.281 | 0.281 | 28 | 0 |
-| learned seed 1 | hdbscan_10 | 2 | 9 | 127 | 165 | 0.608 | 0.56 | 4 | 0.058 |
-| learned seed 1 | hdbscan_20 | 2 | 62 | 96 | 165 | 0.857 | 0.456 | 8 | 0.342 |
+| learned seed 1 | mixture | 10 | 0 | 143 | 165 | 0.281 | 0.281 | 29 | 0 |
+| learned seed 1 | kmeans | 9 | 0 | 145 | 165 | 0.293 | 0.293 | 26 | 0 |
+| learned seed 1 | hdbscan_10 | 3 | 24 | 108 | 165 | 0.399 | 0.502 | 4 | 0.158 |
+| learned seed 1 | hdbscan_20 | 3 | 37 | 95 | 165 | 0.39 | 0.355 | 4 | 0.224 |
 | combined seed 1 | walls | 2 | 0 | 132 | 165 | 0.586 | 0.586 | 2 | 0 |
-| combined seed 1 | mixture | 10 | 0 | 158 | 165 | 0.451 | 0.451 | 33 | 0 |
+| combined seed 1 | mixture | 10 | 0 | 158 | 165 | 0.456 | 0.456 | 34 | 0 |
 | combined seed 1 | kmeans | 2 | 0 | 131 | 165 | 0.566 | 0.566 | 3 | 0 |
-| combined seed 1 | hdbscan_10 | 9 | 28 | 130 | 165 | 0.767 | 0.624 | 32 | 0.171 |
-| combined seed 1 | hdbscan_20 | 4 | 35 | 125 | 165 | 0.855 | 0.757 | 12 | 0.211 |
+| combined seed 1 | hdbscan_10 | 8 | 8 | 151 | 165 | 0.824 | 0.754 | 33 | 0.047 |
+| combined seed 1 | hdbscan_20 | 4 | 34 | 127 | 165 | 0.884 | 0.755 | 13 | 0.203 |
 
-Probe (logistic regression of the reference labels, held-out points, balanced accuracy): hand 0.986, learned seed 0 0.960, combined seed 0 0.993, learned seed 1 0.927, combined seed 1 0.992
+Probe (logistic regression of the reference labels, held-out points, balanced accuracy): hand 0.986, learned seed 0 0.948, combined seed 0 0.993, learned seed 1 0.947, combined seed 1 0.994
 
 ## Trainings (last epoch)
 
 | name | loss | collapse_loss | alignment | uniformity | effective_rank_h |
 |---|---|---|---|---|---|
-| learned seed 0 | 2.21 | 5.54 | 0.996 | -2.27 | 43.8 |
-| learned seed 1 | 2.23 | 5.54 | 0.995 | -2.24 | 39.2 |
+| learned seed 0 | 2.34 | 5.54 | 0.982 | -2.25 | 35.3 |
+| learned seed 1 | 2.33 | 5.54 | 0.985 | -2.23 | 37.8 |

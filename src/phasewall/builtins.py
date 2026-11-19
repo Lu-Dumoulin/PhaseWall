@@ -81,9 +81,9 @@ def learned(ens, settings: LearnedSettings, context: Context) -> EncoderResult:
     from .nn.train import embed, h_table, save, train
 
     net = settings.network
-    # the network is part of the cache name only when it is not the default, so that trainings
-    # made before the network could be chosen are still found
-    extra = [] if net == Network() else [net]
+    # the network (with its views) is always part of the cache name: trainings cached before the
+    # default views changed (2026-11-19) must not be read as trainings with the new ones
+    extra = [net]
     frames, tables, logs = None, {}, []
     for seed in settings.seeds:
         folder = Path(context.cache) / f"learned-{cache_key(context.key, context.frame, settings.epochs, seed, *extra)}" \
@@ -92,7 +92,7 @@ def learned(ens, settings: LearnedSettings, context: Context) -> EncoderResult:
             table, log = pd.read_pickle(folder / "table.pkl"), pd.read_csv(folder / "log.csv")
         else:
             frames = frames or load_frames(ens, context.workers, progress=context.progress)
-            check(net, frames.x.shape[-1])
+            check(net, frames.x.shape[-1], frames.periodic)
             ts = TrainSettings.from_network(net, epochs=settings.epochs, seed=seed)
             enc, log = train(frames, ts, dev=context.device, verbose=False, progress=context.progress)
             table = h_table(frames, embed(enc, frames), ens)

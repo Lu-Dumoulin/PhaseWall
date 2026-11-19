@@ -6,6 +6,11 @@ linearly over the first `warmup` epochs, then decays to 0 as a cosine. Every epo
 loss, alignment and uniformity of the batches, and the effective rank of h on all pairs, are
 logged (they do not stop the training, which always runs the given number of epochs).
 
+The views (views.py: "rotzoom" by default, or "d4"; normalised by default) are settings of the
+training. The encoder carries them (encoder.views), and save() writes them, so that embed() gives
+h from the same kind of input whatever trained or loaded the encoder; an encoder saved before the
+views existed is read with the old ones (D4, not normalised).
+
 After training, f is frozen and g dropped: h_table gives one row per pair with the columns
 run, time, the parameters and cnn.h.d000, cnn.h.d001, ... (the format of describe.py, so that
 walls.find_walls reads it unchanged; the 256 columns form one block).
@@ -28,6 +33,7 @@ from .architecture import Network
 from .data import DRAWS, FrameSet, PairViews
 from .loss import T, alignment, effective_rank, info_nce, uniformity
 from .model import CHANNELS, HIDDEN, OUT, Encoder, ProjectionHead, count_weights
+from .views import OLD, ViewSettings, embedding_input, training_views
 
 PREFIX = "cnn.h"     # columns of the learned description: cnn.h.d000, ...
 
@@ -48,12 +54,17 @@ class Settings:
     seed: int = 0
     hidden: int = HIDDEN      # head g: hidden layer
     projection: int = OUT     # head g: dimension of z
+    views: str = "rotzoom"    # views.py (defaults: architecture.Network)
+    zoom: float = 1.25
+    crop: float = 0.75
+    normalise: bool = True
 
     @classmethod
     def from_network(cls, network: Network, **kw) -> "Settings":
-        """Training settings for a network of architecture.py (channels, head, temperature)."""
+        """Training settings for a network of architecture.py (channels, head, temperature, views)."""
         return cls(channels=network.channels, hidden=network.hidden, projection=network.projection,
-                   temperature=network.temperature, **kw)
+                   temperature=network.temperature, views=network.views, zoom=network.zoom, crop=network.crop,
+                   normalise=network.normalise, **kw)
 
 
 def device() -> torch.device:
@@ -74,12 +85,16 @@ def schedule(step: int, warmup_steps: int, total_steps: int) -> float:
 
 @torch.no_grad()
 def embed(encoder: Encoder, frames: FrameSet, dev: torch.device | None = None, batch: int = 256) -> np.ndarray:
-    """h of every pair (rows, dim), encoder in evaluation mode, no augmentation."""
+    """h of every pair (rows, dim), encoder in evaluation mode, from the input of its views
+    (views.embedding_input: centred crop or whole frame, normalised if trained so)."""
     dev = dev or next(encoder.parameters()).device
+    vs = getattr(encoder, "views", OLD)
     was_training = encoder.training
     encoder.eval()
-    out = [encoder(torch.from_numpy(frames.x[i:i + batch]).to(dev)).cpu()
-           for i in range(0, len(frames.x), batch)]
+    with torch.no_grad():
+        out = [encoder(embedding_input(torch.from_numpy(frames.x[i:i + batch]).to(dev), frames.fields, vs,
+                                       frames.periodic)).cpu()
+               for i in range(0, len(frames.x), batch)]
     encoder.train(was_training)
     return torch.cat(out).numpy()
 
@@ -93,8 +108,13 @@ def h_table(frames: FrameSet, h: np.ndarray, ens: Ensemble) -> pd.DataFrame:
 
 
 def new_encoder(frames: FrameSet, settings: Settings) -> Encoder:
+    """An untrained encoder for these frames and settings, carrying its views. Circular padding
+    only for the views "d4" of a periodic frame (a turned crop is not periodic)."""
     torch.manual_seed(settings.seed)
-    return Encoder(frames.in_channels, tuple(settings.channels), frames.periodic)
+    circular = frames.periodic and settings.views == "d4"
+    enc = Encoder(frames.in_channels, tuple(settings.channels), circular)
+    enc.views, enc.circular = ViewSettings.of(settings), circular
+    return enc
 
 
 def train(frames: FrameSet, settings: Settings | None = None, dev: torch.device | str | None = None,
@@ -107,7 +127,9 @@ def train(frames: FrameSet, settings: Settings | None = None, dev: torch.device 
     np.random.seed(s.seed)
     encoder = new_encoder(frames, s).to(dev)
     head = ProjectionHead(encoder.dim, s.hidden, s.projection).to(dev)
-    dataset = PairViews(frames, draws=s.draws, seed=s.seed)
+    vs = encoder.views
+    dataset = PairViews(frames, draws=s.draws, seed=s.seed, augment=vs.kind == "d4")
+    gen = torch.Generator().manual_seed(s.seed)          # draws of the rotzoom views
     batch = min(s.batch, len(dataset.rows))
     loader = DataLoader(dataset, batch_size=batch, shuffle=True, drop_last=True,
                         generator=torch.Generator().manual_seed(s.seed))
@@ -119,7 +141,8 @@ def train(frames: FrameSet, settings: Settings | None = None, dev: torch.device 
         dataset.epoch = epoch
         t0, losses, aligns, unifs = time.perf_counter(), [], [], []
         for v1, v2 in loader:
-            z = head(encoder(torch.cat([v1, v2]).to(dev)))
+            x = training_views(torch.cat([v1, v2]).to(dev), frames.fields, vs, gen, frames.periodic)
+            z = head(encoder(x))
             loss = info_nce(z, s.temperature)
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -150,6 +173,7 @@ def save(out: str | Path, encoder: Encoder, frames: FrameSet, settings: Settings
     torch.save(encoder.state_dict(), out / "encoder.pt")
     log.to_csv(out / "log.csv", index=False)
     meta = {"settings": asdict(settings), "in_channels": frames.in_channels, "periodic": frames.periodic,
+            "circular": bool(getattr(encoder, "circular", frames.periodic)),
             "scale": frames.scale.tolist(), "fields": [[f.name, list(f.keys), f.kind, f.relative, list(f.components)] for f in frames.fields],
             "weights_f": count_weights(encoder), "torch": torch.__version__}
     (out / "settings.json").write_text(json.dumps(meta, indent=1))
@@ -160,8 +184,13 @@ def load(out: str | Path) -> tuple[Encoder, dict]:
     """The encoder saved by save() (on the CPU, evaluation mode) and its settings.json."""
     out = Path(out)
     meta = json.loads((out / "settings.json").read_text())
-    enc = Encoder(meta["in_channels"], tuple(meta["settings"]["channels"]), meta["periodic"])
+    st = meta["settings"]
+    circular = meta.get("circular", meta["periodic"])      # saved before the views: as the frame
+    enc = Encoder(meta["in_channels"], tuple(st["channels"]), circular)
     enc.load_state_dict(torch.load(out / "encoder.pt", map_location="cpu", weights_only=True))
+    enc.views = ViewSettings(st["views"], st["zoom"], st["crop"], st["normalise"], len(st["channels"])) \
+        if "views" in st else OLD
+    enc.circular = circular
     # fields saved before components existed have four entries
     meta["fields"] = [Field(f[0], tuple(f[1]), f[2], f[3], tuple(f[4]) if len(f) > 4 else ()) for f in meta["fields"]]
     return enc.eval(), meta

@@ -323,6 +323,7 @@ Block & Observables (columns) & scalar & vector & velocity & polarity & nematic 
 \code{flow}  & $\log_{10}\avg{(\nabla\cdot\mathbf a)^2}$, $\log_{10}\avg{(\nabla\times\mathbf a)^2}$, curl share & & \yes & \yes & \yes & \\
 \code{vortex} & Okubo-Weiss vortex cores: area share, cores per unit area & & $\circ$ & \yes & & \\
 \code{defects} & winding-number defects per unit area: \code{plus}, \code{minus} ($\pm1$, nematic $\pm\frac12$) & & $\circ$ & & \yes & \yes \\
+\code{parts} & spread of six local numbers over blocks of half the side: two states side by side (\code{log10H}) & $\circ$ & $\circ$ & $\circ$ & $\circ$ & $\circ$ \\
 \code{dyn}   & decorrelation over $\Delta t$ at the same place (\code{still}) and after the best shift (\code{moving}) & \yes & \yes & \yes & \yes & \yes \\
 \bottomrule
 \end{tabular}
@@ -478,6 +479,37 @@ defined modulo $\pi$, so steps are the smallest turns modulo $\pi$ and the charg
 rotation-invariant number; splay and bend of the director are not computed yet.
 \end{tech}
 
+\subsubsection{Parts of a frame: two states side by side}\label{sec:parts}
+\begin{tech}
+The other blocks describe a frame as a whole: a frame that is half hexagons and half stripes
+gets the average of the two. The block \code{parts} (not a default; any kind of field) compares
+the parts of the frame with each other. In every square block of side $\ell=L/2$ (all
+positions, wrapped across the edges of a periodic box, inside the frame otherwise) it computes
+six local numbers of the values $z=(v-\bar v)/\sigma$ of the whole frame: $\log_{10}$ of the
+variance and the mean, the skewness and $\log_{10}$ of the kurtosis, a local wavenumber
+$\tfrac12\log_{10}(\avg{|\nabla a|^2}/\mathrm{var}\,a)$, and the anisotropy of the structure
+tensor $\mathsf J=\avg{\nabla a\,\nabla a^{\mathsf T}}$ (components summed),
+$\sqrt{(J_{xx}-J_{yy})^2+4J_{xy}^2}/(J_{xx}+J_{yy})$: about 1 for stripes, about 0 for spots.
+All six are unchanged by rotations and mirrors, and the set of all block positions is too, so the
+block keeps the symmetries of the box. $H$ is the variance of these numbers over the blocks,
+averaged over the six; the column is \code{log10H}. Block sums come from a cumulative table, so
+all positions cost a few passes over the frame.
+
+\emph{Physics parallel.} Binder's block distribution (K.~Binder, Z.\ Phys.\ B \textbf{43}, 119
+(1981)): in one phase, blocks larger than the correlation length differ only by finite-size
+fluctuations, so $H$ is small and falls like $1/\ell^2$; at coexistence the blocks fall in one
+phase or the other and $H$ stays large. Active matter uses the same idea: the density in boxes
+becomes bimodal in motility-induced phase separation. On the Swift-Hohenberg demo the largest
+$H$ are hexagons next to stripes in one box, at 21 points of the hexagon-stripe boundary (1 or 2
+such runs of 8 per point, which the mixed flag of the walls, built on differences between runs,
+does not see); on Gray-Scott, spots on a uniform background ($\log_{10}H\approx0.2$ to $0.7$
+against $-1.8$ and below for every other state). Added to the hand-made table it does not improve
+the walls (Swift-Hohenberg unchanged; Gray-Scott 482 to 478 of 525 points), which is why it is
+not a default. The slope of $\log H$ against $\log\ell$ (Binder's test: $-2$ for one phase, $0$
+for coexistence) was tried as a second column and dropped: noisy (finite-size effects of a
+perfect pattern alone reach $-5$), and it merged phases on Gray-Scott.
+\end{tech}
+
 \subsubsection{Non-periodic frames}\label{sec:nonperiodic}
 
 \begin{tech}
@@ -545,6 +577,7 @@ interrogation windows.
   \If{vector} \State \code{flow} $\gets$ divergence and curl (spectral, or finite differences) \EndIf
   \If{velocity} \State \code{vortex} $\gets$ cores of $W<-0.2\,\std W$: area share, count per area \EndIf
   \If{polarity or nematic} \State \code{defects} $\gets$ plaquettes of winding $\ge\frac12$ unit, $\le-\frac12$ unit, per area \EndIf
+  \If{asked for} \State \code{parts} $\gets\log_{10}H$, spread over all blocks of side $L/2$ of six local numbers \EndIf
   \If{the snapshot at $t-\Delta t$ exists} \State \code{dyn} $\gets\log_{10}(1-C+10^{-3})$ for $C_{\rm still}$ and $C_{\rm moving}$ \EndIf
 \EndFor
 \Ensure one row: \code{field.block.name} $\to$ value
@@ -569,7 +602,10 @@ $m^2$ domains and $\cos kx$ gives $m$; a gradient has curl share 0 and its rotat
 curl share 1; a frozen pattern gives both correlations at the floor, a shifted one only
 $C_{\rm moving}$; the vortex block counts one and two Gaussian vortices and the four cells of a
 cellular flow, and no core in a shear flow; the defects block finds the $+1$ and $-1$ defects of a
-polarity and the $\pm\frac12$ defects of a nematic, and none in a uniform field; each kind computes
+polarity and the $\pm\frac12$ defects of a nematic, and none in a uniform field; the parts block
+gives stripes next to hexagons a spread more than 100 times that of stripes or hexagons alone,
+spots on a flat background more still, and a flat field the floor, and its block sums match direct
+sums; each kind computes
 its default blocks, a field only its own, and a block that does not fit the kind is refused; every
 descriptor of random scalar, vector, velocity, polarity and nematic fields is unchanged under
 all 8 elements of $D_4$ and periodic shifts. Non-periodic frames: $S(k)$ of crops within 6\% of
@@ -604,11 +640,36 @@ $7,19,43,91$ points over the four blocks. Then
 $h_c=\frac{1}{|\Omega|}\sum_{\mathbf r\in\Omega}F_c(\mathbf r)$, the mean of each final map
 $F_c$ over the frame $\Omega$. Padding is circular for a periodic frame, so a shift of the input by a
 multiple of $2^4=16$ points leaves $h$ exactly unchanged (tested); zero padding otherwise.
-Invariance under rotations and mirrors is not built in: it is learned from the augmentations.
+Invariance under rotations and mirrors is not built in: it is learned from the views.
 
-\textbf{Training (SimCLR).} A batch holds two views of each of $N$ runs: two different pairs of
-the run, each turned by a random element of $D_4$ with the rules of Sec.~\ref{sec:fields}
-(and shifted at random in a periodic frame). With $z=g(h)/|g(h)|$, $g$ a two-layer perceptron
+\textbf{Views} (\srcref{src/phasewall/nn/views.py}; default since 2026-11-19, \code{views="rotzoom"}).
+Each of the two pairs of a run is turned by an angle $\theta$ drawn in $[0,2\pi)$, mirrored with
+probability $\frac12$, zoomed by a factor $s$ drawn log-uniformly in $[1/1.25,\,1.25]$, and cut to a
+square crop of $\frac34$ of the frame side at a random place: the view reads the field at
+$M\mathbf o+\mathbf c$ for every point $\mathbf o$ of the crop, $M=R(\theta)D/s$ ($D$ the mirror),
+by bilinear interpolation, the periodic field being tiled $3\times3$ so that the crop never meets an
+edge. Components turn with the grid: the map from the field to the view has the linear part
+$A=DR(-\theta)$ (times $s$), so a vector becomes $A\mathbf a$ and a nematic $A\mathsf QA^{\mathsf T}$,
+that is $(Q_{xx},Q_{xy})$ turned by $-2\theta$ (tested against gradients of a turned scalar). Then
+every field of every view is \emph{normalised}: its own mean removed (each component), divided by
+its own standard deviation (both frames of the pair together). In a periodic frame the crop is at
+least what the blocks need ($2\cdot2^B$ points) and at most the frame; in a non-periodic frame at
+most $n/(1.25\sqrt2)$, so that the turned crop stays inside. After training, $h$ is computed on the
+centred crop, not turned, normalised as in training. The previous views (\code{views="d4"}: a
+random element of $D_4$ with the rules of Sec.~\ref{sec:fields}, and a shift in a periodic frame,
+whole frame, not normalised) remain a setting.
+
+\emph{Why.} With the $D_4$ views and no normalisation the learned description found 2 phases of 3
+on Swift-Hohenberg and one phase on every other example. Two causes were measured
+(Sec.~\ref{sec:comparison}): a run fingerprint (the wavevector of the periodic box, orientation
+and wavelength together, which $D_4$ leaves unchanged), removed by turning and zooming each view on
+its own; and mostly the amplitude, which grows like $\sqrt\varepsilon$ inside a phase and made
+$h$ change as much between neighbouring points as across the hexagon-stripe boundary, removed by
+the normalisation. The views are the operations the description must not see; the loss can only be
+lowered by what survives them, the shape of the pattern.
+
+\textbf{Training (SimCLR).} A batch holds two views of each of $N$ runs, made from two different
+pairs of the run. With $z=g(h)/|g(h)|$, $g$ a two-layer perceptron
 ($256\to256\to64$), the InfoNCE loss is
 \[
 \mathcal L=-\frac{1}{2N}\sum_{i=1}^{2N}\log\frac{e^{z_i\cdot z_{i^+}/T}}{\sum_{k\ne i}e^{z_i\cdot z_k/T}},\qquad T=0.2,
@@ -654,10 +715,11 @@ receptive field of 1 to 4 blocks; a choice is checked against the frame before t
 
 \begin{algobox}{check of a network}
 \begin{algorithmic}[1]
-\Require blocks $B$, width $w$, $\dim h$, hidden, projection, $T$; frame side $n$
+\Require blocks $B$, width $w$, $\dim h$, hidden, projection, $T$, views; frame side $n$
 \State channels $\gets(\min(w\,2^k,\dim h))_{k<B-1}$ then $\dim h$
-\State refuse if: $B>\log_2(n/2)$; $w>\dim h$; projection $>\dim h$; projection $>$ hidden; a value outside its list or range
-\Ensure channels; last map $\lceil n/2^B\rceil$; receptive field; weights of $f$ and $g$; rough memory of one step
+\State input side $m\gets n$ (\code{d4}), or the crop (\code{rotzoom}, above)
+\State refuse if: $B>\log_2(m/2)$; $w>\dim h$; projection $>\dim h$; projection $>$ hidden; a value outside its list or range
+\Ensure channels; input side $m$; last map $\lceil m/2^B\rceil$; receptive field; weights of $f$ and $g$; rough memory of one step
 \end{algorithmic}
 \end{algobox}
 
@@ -667,33 +729,43 @@ receptive field of 1 to 4 blocks; a choice is checked against the frame before t
 \State initialise $f$ and $g$ at random (seed)
 \For{epoch $=1,\dots,$ epochs}
   \For{each batch of $N$ runs (each run drawn \code{draws} times per epoch)}
-    \State two different pairs of each run; each turned by a random element of $D_4$ (and shifted if periodic)
+    \State two different pairs of each run; each turned by any angle, mirrored, zoomed, cropped at a random place (or $D_4$ and a shift: \code{views="d4"})
+    \State each field of each view minus its mean, divided by its standard deviation (\code{normalise})
     \State $z\gets g(f(\text{views}))/|g(f(\text{views}))|$; $\mathcal L\gets$ InfoNCE$(z,T)$
     \State AdamW step on $f$ and $g$; learning rate from the warm-up and cosine schedule
   \EndFor
   \State log loss, alignment, uniformity, effective rank of $h$
 \EndFor
 \State drop $g$
-\Ensure for every snapshot with a partner: $h=f(\text{pair})$, columns \code{cnn.h.d000} \ldots \code{d255}
+\Ensure for every snapshot with a partner: $h=f(\text{centred crop of the pair, normalised})$, columns \code{cnn.h.d000} \ldots \code{d255}
 \end{algorithmic}
 \end{algobox}
 
 \begin{codebox}
 \textbf{Files.} \srcref{src/phasewall/nn/data.py} (\code{load_frames}, \code{augment},
-\code{PairViews}), \srcref{src/phasewall/nn/model.py} (\code{Encoder}, \code{ProjectionHead}),
+\code{PairViews}), \srcref{src/phasewall/nn/views.py} (\code{rotzoom}, \code{resample},
+\code{turn_components}, \code{normalise}, \code{embedding_input}; the views travel with the encoder
+and are saved with it; an encoder saved before them is read with the old views),
+\srcref{src/phasewall/nn/model.py} (\code{Encoder}, \code{ProjectionHead}),
 \srcref{src/phasewall/nn/architecture.py} (\code{Network}, \code{check}, \code{summary},
 \code{receptive_field}, \code{weights}; no PyTorch needed),
 \srcref{src/phasewall/nn/loss.py} (\code{info_nce}, \code{alignment}, \code{uniformity},
 \code{effective_rank}), \srcref{src/phasewall/nn/train.py} (\code{Settings}, \code{train},
 \code{embed}, \code{h_table}, \code{save}, \code{load}), \srcref{src/phasewall/nn/curve.py}
-(learning curve); tests \srcref{tests/test_nn.py}; extra \code{[nn]} (PyTorch; Apple GPU, CUDA or
+(learning curve); tests \srcref{tests/test_nn.py}, \srcref{tests/test_views.py}; extra \code{[nn]} (PyTorch; Apple GPU, CUDA or
 CPU). Commands: \code{phasewall learn ensemble.toml} trains and writes
 \code{encoder/descriptors_cnn.csv}; \code{phasewall describe ensemble.toml --encoder encoder}
 describes another ensemble with it.
 
 \textbf{Tests.} Augmentations equal \code{fields.transform}; $h$ unchanged by circular shifts
 of 16 points and changed by 5; the loss is $\ln(2N-1)$ at collapse and $\approx0$ for perfect
-pairs; a 6-epoch training separates stripes from spots ($h$ farther between kinds than within);
+pairs; a short training separates stripes from spots ($h$ farther between kinds than within; 6
+epochs with the old views, 30 with the default ones, which leave only the shape); views
+(\srcref{tests/test_views.py}): the input side, the normalisation of every field of every view, a
+turn by $90^\circ$ exact, the wavelength kept at any angle and divided by the zoom, vectors and
+nematics turned with the grid (the gradient of a turned scalar, and the nematic of that gradient,
+for three random angles with and without mirror), the views kept on saving and old encoders read
+with the old views;
 saving and loading give the same $h$; the two commands give the same table. Network shapes
 (\srcref{tests/test_architecture.py}): channels and receptive field; every constraint refused with
 its reason; weights counted as PyTorch counts them, for three shapes; a chosen shape trains and is
@@ -1643,35 +1715,39 @@ $\sqrt{2\varepsilon/3}$ within 2\% at $\varepsilon=0.1$ and 0.2; the ensemble wr
 whole periodic box, and as a centred crop of $40\times40$ points (5 wavelengths) described
 as a non-periodic frame (Sec.~\ref{sec:frames}). In each case four encoders use the same rows
 (the 5 snapshots of each run that have a partner $\Delta t$ earlier): the hand-made one, the
-learned one trained with seeds 0 and 1 (40 epochs, about 2 min on a laptop GPU), and the same
-network with its random initial weights (untrained), which shows what the architecture gives
-before any training. Walls use the default settings. Besides the phases and the agreement with
-the reference labels, three numbers explain the result: the AUC of $J$ at true boundaries
-(probability that a link between two reference states jumps more than a link inside one
-state), the relative jump (median $J$ of a kind of link over the median of all jumps), and a
-linear probe (ridge classifier of hexagons against stripes per snapshot, tested on held-out
-parameter points; balanced accuracy).
+learned one with its default views (Sec.~\ref{sec:learned}) trained with seeds 0 and 1 (40 epochs,
+about 1 min on a laptop GPU), and the same network with its random initial weights (untrained),
+which shows what the architecture gives before any training. Walls use the default settings.
+Besides the phases and the agreement with the reference labels, three numbers explain the result:
+the AUC of $J$ at true boundaries (probability that a link between two reference states jumps more
+than a link inside one state), the relative jump (median $J$ of a kind of link over the median of
+all jumps), and a linear probe (ridge classifier of hexagons against stripes per snapshot, tested
+on held-out parameter points; balanced accuracy).
 \end{tech}
 
 \begin{table}[H]
-\centering\small
+\centering\footnotesize
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{@{}llcccccc@{}}
 \toprule
-frame & description & phases & agree & AUC & jump hex/stripes & jump uniform/pattern & probe \\
+frame & description & phases & agree & AUC & jump hex/str. & jump unif./pattern & probe \\
 \midrule
 periodic & hand-made & 3 & 235 & 0.98 & 1.92 & 4.41 & 1.00 \\
-periodic & learned, seed 0 & 2 & 171 & 0.92 & 1.37 & 2.22 & 0.98 \\
-periodic & learned, seed 1 & 2 & 171 & 0.89 & 1.30 & 2.13 & 0.98 \\
-periodic & untrained & 2 & 171 & 0.80 & 1.18 & 1.91 & 0.95 \\
+periodic & learned, seed 0 & 3 & 237 & 0.99 & 1.95 & 4.01 & 0.99 \\
+periodic & learned, seed 1 & 3 & 235 & 0.98 & 1.97 & 3.94 & 1.00 \\
+periodic & untrained & 2 & 171 & 0.93 & 1.14 & 2.38 & 0.93 \\
+periodic & old views, seeds 0, 1 & 2, 2 & 171 & 0.92, 0.89 & 1.37, 1.30 & 2.22, 2.13 & 0.98 \\
 crop & hand-made & 3 & 235 & 0.99 & 2.04 & 5.00 & 0.99 \\
-crop & learned, seed 0 & 2 & 171 & 0.88 & 1.17 & 2.25 & 0.96 \\
-crop & learned, seed 1 & 2 & 171 & 0.82 & 1.08 & 2.27 & 0.94 \\
-crop & untrained & 2 & 159 & 0.71 & 1.06 & 1.53 & 0.94 \\
+crop & learned, seed 0 & 2 & 171 & 0.97 & 1.76 & 3.13 & 0.99 \\
+crop & learned, seed 1 & 2 & 171 & 0.97 & 1.65 & 3.02 & 0.99 \\
+crop & untrained & 2 & 171 & 0.89 & 1.11 & 2.09 & 0.93 \\
+crop & old views, seeds 0, 1 & 2, 2 & 171 & 0.88, 0.82 & 1.17, 1.08 & 2.25, 2.27 & 0.96, 0.94 \\
 \bottomrule
 \end{tabular}
 \caption{Encoders compared on Swift-Hohenberg (agree: of 240 points; relative jumps about 1
-inside a state: 0.96 to 1.00). Full table with walls, mixed points, robustness range, effective
-rank and times: \href{\repo/blob/main/docs/comparison/summary.md}{\code{docs/comparison/summary.md}}.}\label{tab:comparison}
+inside a state: 0.96 to 0.99). Old views: the views used before 2026-11-19 ($D_4$, whole frame, not
+normalised), from the earlier run of the same script. Full table with walls, mixed points, robustness
+range, effective rank and times: \href{\repo/blob/main/docs/comparison/summary.md}{\code{docs/comparison/summary.md}}.}\label{tab:comparison}
 \end{table}
 
 \begin{figure}[H]
@@ -1685,46 +1761,48 @@ size (phase 0 is the largest), so colours do not name the same state in every pa
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth]{../comparison/training.png}
-\caption{Trainings: InfoNCE loss far below collapse ($\ln(2N-1)=5.54$) and effective rank of $h$
-growing to 82--90 of 256 dimensions; alignment 0.999, uniformity $-3.35$ at the end.}\label{fig:training}
+\caption{Trainings: InfoNCE loss at about half its value at collapse ($\ln(2N-1)=5.54$; 2.5 to 3.1
+at the end), effective rank of $h$ 26 to 31 of 256 dimensions; alignment 0.88 to 0.92,
+uniformity $-2.7$ to $-3.0$. With the old views the loss reached 1.46 and the rank 85: their
+task was easier (Sec.~\ref{sec:networks}).}\label{fig:training}
 \end{figure}
 
 \begin{tech}
-\textbf{Result.} The hand-made encoder finds the three phases in both frames (235 of 240
-points in each); every learned or untrained network finds two (uniform against patterned,
-171 points). The trainings are healthy (Fig.~\ref{fig:training}), and the learned $h$ does
-contain the difference between hexagons and stripes: the linear probe finds it in 94--98\% of
-held-out points. What it lacks is a \emph{jump}: the median $J$ between a hexagon point and a
-stripe point is 1.08--1.37 times the median of all jumps, little more than inside a phase,
-against 1.9--2.0 for the hand-made description, whose skewness and domain counts change abruptly
-at that boundary. The walls method looks for discontinuities, so a description that separates
-states along a smooth direction is not enough. The spread within points is not the cause: in the
-periodic box it is the same for both (27--29\% of the variance for the learned $h$, 30\% for the
-hand-made one); in the crop it is larger for the learned $h$ (48--52\% against 27\%).
+\textbf{Result.} In the periodic box the learned encoder finds the three phases for both seeds
+(237 and 235 of 240 points), as the hand-made one (235): its jump at the hexagon-stripe boundary
+(1.95--1.97 times the median jump) is that of the hand-made description (1.92). The untrained
+network gives two phases: the training is what makes the jump. In the crop the learned encoder
+still gives two phases although its jump went up from 1.08--1.17 (old views) to 1.65--1.76: in a
+non-periodic frame the turned and zoomed crop must stay inside the frame, so the network sees 22 of
+its 40 points (less than three wavelengths), and the spread within points is three times that of
+the periodic box (44\% of the variance against 14\%; hand-made 27--30\%).
+
+\textbf{Why the old views failed} (scratch study, plan step 18 of the README). With rotations by
+$90^\circ$, the whole frame and the amplitude kept, the learned description found 2 phases for every
+seed, every network shape, more data, and VICReg instead of InfoNCE. Two causes were measured. A run
+fingerprint: on a periodic box of 64 points a pattern can only take a few wavevectors (orientation
+and wavelength together), which $D_4$ leaves unchanged; in the old $h$ hexagons and stripes with the
+same wavevector were about as far apart as two stripe patterns with different ones (ratio 1.3,
+hand-made 6). Turning and zooming each view on its own removed most of it, but the walls still found
+2 phases: $h$ followed the amplitude, which grows like $\sqrt\varepsilon$ inside a phase, so it
+changed as much between neighbouring points as across the boundary (hexagon-stripe jump 0.99 of the
+jump inside a phase). Normalising each view removed it. Multi-crop views and removing the runs of
+the same point from the negatives added nothing.
 
 \emph{Physics parallel.} The hexagon-stripe transition is first order (it is bistable), so an
-order parameter jumps there. The learned $h$ behaves like a coordinate that varies smoothly through
-the transition, while the hand-made descriptors include quantities that jump there (the skewness,
-near 0 for stripes and finite for spots).
-
-\textbf{More data does not help.} Trained on 2 or 4 runs per point instead of 8 (480 or 960
-runs, the same number of training steps) and evaluated on all runs, the learned description
-gives the same result: 2 phases, relative jump hexagons/stripes 1.01--1.07, probe 0.95--0.98
-(measured with the earlier runs to $t=500$).
-
-\textbf{To try.} The loss separates individual runs, so it is indifferent to whether two runs
-differ within a phase or across a boundary. The combined description (Sec.~\ref{sec:combined}) is
-compared with each alone on every example (Sec.~\ref{sec:examples-results}). Positives from
-different runs of one parameter point are another option, but they would hide bistable points.
+order parameter jumps there. The old $h$ behaved like a coordinate dominated by the amplitude, which
+varies smoothly through the transition; the new $h$, blind to the amplitude, describes the shape,
+which jumps, as the hand-made skewness (near 0 for stripes, finite for spots).
 \end{tech}
 
 \subsection{Shapes of the learned encoder}\label{sec:networks}
 
 \begin{tech}
 \textbf{Set-up} (\srcref{scripts/compare_networks.py}). Six shapes (Sec.~\ref{sec:learned}), each
-changing one thing from the default, trained once (seed 0, 40 epochs) on the whole periodic box.
-The shape would be chosen from the label-free diagnostics of Table~\ref{tab:networks}; the scores are
-given only to show what the choice changes.
+changing one thing from the default, trained once (seed 0, 40 epochs) on the whole periodic box with
+the default views, and the default shape with the old views. The shape would be chosen from the
+label-free diagnostics of Table~\ref{tab:networks}; the scores are given only to show what the
+choice changes.
 \end{tech}
 
 \begin{table}[H]
@@ -1734,12 +1812,14 @@ given only to show what the choice changes.
 \toprule
 network & channels; head; $T$ & weights $f$ & $\mathcal L/\mathcal L_{\rm collapse}$ & align. & unif. & rank $h$ & walls & probe \\
 \midrule
-default & 32--256; 256, 64; 0.2 & 1.17 M & 0.264 & 0.999 & $-3.35$ & 85 / 256 & 2, 0.36 & 0.98 \\
-3 blocks & 32, 64, 256; 256, 64; 0.2 & 0.80 M & 0.265 & 0.999 & $-3.35$ & 61 / 256 & 2, 0.36 & 0.99 \\
-5 blocks & 32--512; 512, 64; 0.2 & 4.72 M & 0.277 & 0.998 & $-3.32$ & 55 / 512 & 2, 0.36 & 0.93 \\
-narrow & 8--64; 64, 32; 0.2 & 0.07 M & 0.293 & 0.995 & $-3.27$ & 32 / 64 & 2, 0.36 & 0.98 \\
-wide $h$ & 32--512; 512, 128; 0.2 & 3.24 M & 0.255 & 0.999 & $-3.38$ & 109 / 512 & 2, 0.36 & 0.98 \\
-$T=0.5$ & 32--256; 256, 64; 0.5 & 1.17 M & 0.659 & 1.000 & $-3.29$ & 62 / 256 & 2, 0.36 & 0.98 \\
+default & 32--256; 256, 64; 0.2 & 1.17 M & 0.536 & 0.895 & $-2.75$ & 27 / 256 & 3, 0.96 & 1.00 \\
+3 blocks & 32, 64, 256; 256, 64; 0.2 & 0.80 M & 0.525 & 0.894 & $-2.77$ & 34 / 256 & 4, 0.89 & 1.00 \\
+5 blocks & 32--512; 512, 64; 0.2 & 4.72 M & 0.489 & 0.925 & $-2.81$ & 30 / 512 & 3, 0.91 & 1.00 \\
+narrow & 8--64; 64, 32; 0.2 & 0.07 M & 0.660 & 0.885 & $-2.21$ & 13 / 64 & 4, 0.90 & 1.00 \\
+wide $h$ & 32--512; 512, 128; 0.2 & 3.24 M & 0.542 & 0.896 & $-2.71$ & 37 / 512 & 3, 0.93 & 1.00 \\
+$T=0.5$ & 32--256; 256, 64; 0.5 & 1.17 M & 0.730 & 0.944 & $-2.27$ & 23 / 256 & 4, 0.91 & 1.00 \\
+\addlinespace
+old views & default & 1.17 M & 0.264 & 0.999 & $-3.35$ & 85 / 256 & 2, 0.36 & 0.98 \\
 \bottomrule
 \end{tabular}
 \caption{Shapes of the learned encoder on Swift-Hohenberg. Label-free diagnostics at the last epoch
@@ -1748,12 +1828,14 @@ probe: balanced accuracy (documentation only). Full tables: \code{docs/networks/
 \end{table}
 
 \begin{tech}
-\textbf{Result.} Every shape gives the same two phases (uniform against patterned): the shape of the
-network does not create the jump at the hexagon-stripe boundary, as more training data did not
-(Sec.~\ref{sec:comparison}). The diagnostics differ little: a wider $h$ lowers the loss slightly and
-uses more dimensions; 5 blocks, whose receptive field (187 points) exceeds the 64-point box, uses the
-fewest dimensions and has the lowest probe. Without labels, the default or the wider $h$ would be
-kept. What the learned description lacks is in its training objective, not in its size.
+\textbf{Result.} With the default views every shape finds the three states or splits one of them
+in two (3 or 4 phases, ARI 0.89 to 0.96); with the old views the default shape gives two, as did
+every shape with the old views before 2026-11-19. The views mattered, not the size. A warning for
+choosing without labels: the old views have the best label-free diagnostics (loss a quarter of its
+value at collapse, alignment 0.999, rank 85) and the worst result. Easier views give a lower loss;
+these diagnostics compare shapes trained on the same views, never views with each other. Among the
+shapes with the default views, the diagnostics differ little; the default or the wider $h$ would be
+kept.
 \end{tech}
 
 \subsection{Walls against blind grouping and the probe}\label{sec:sh-blind}
@@ -1771,10 +1853,10 @@ periodic & hand-made & walls & 3 & 235 & 0.93 & 0.93 & 3 & 0 \\
  & & HDBSCAN, $m=10$ & 7 & 216 & 0.77 & 0.66 & 11 & 12\% \\
  & & HDBSCAN, $m=20$ & 6 & 205 & 0.78 & 0.59 & 10 & 20\% \\
 \addlinespace
- & learned (seed 0) & walls & 2 & 171 & 0.36 & 0.36 & 2 & 0 \\
- & & mixture ($k=10$) & 10 & 191 & 0.14 & 0.14 & 18 & 0 \\
- & & k-means ($k=10$) & 10 & 182 & 0.11 & 0.11 & 24 & 0 \\
- & & HDBSCAN, $m=10$ & 2 & 171 & 0.36 & 0.36 & 2 & 2\% \\
+ & learned (seed 0) & walls & 3 & 237 & 0.96 & 0.96 & 3 & 0 \\
+ & & mixture ($k=10$) & 10 & 235 & 0.30 & 0.30 & 16 & 0 \\
+ & & k-means ($k=2$) & 2 & 203 & 0.60 & 0.60 & 2 & 0 \\
+ & & HDBSCAN, $m=20$ & 4 & 117 & 0.90 & 0.51 & 7 & 44\% \\
 \addlinespace
 crop & hand-made & walls & 3 & 235 & 0.93 & 0.93 & 3 & 0 \\
  & & mixture ($k=10$) & 9 & 238 & 0.48 & 0.48 & 15 & 0 \\
@@ -1782,8 +1864,8 @@ crop & hand-made & walls & 3 & 235 & 0.93 & 0.93 & 3 & 0 \\
  & & HDBSCAN, $m=20$ & 3 & 237 & 0.97 & 0.96 & 3 & 4\% \\
 \addlinespace
  & learned (seed 0) & walls & 2 & 171 & 0.36 & 0.36 & 2 & 0 \\
- & & mixture ($k=10$) & 10 & 192 & 0.13 & 0.13 & 38 & 0 \\
- & & HDBSCAN, $m=10$ & 2 & 171 & 0.36 & 0.36 & 2 & 4\% \\
+ & & k-means ($k=8$) & 8 & 237 & 0.31 & 0.31 & 46 & 0 \\
+ & & HDBSCAN, $m=40$ & 5 & 206 & 0.92 & 0.84 & 19 & 11\% \\
 \bottomrule
 \end{tabular}
 \caption{Walls against blind grouping on the same descriptions (agree: of 240 points; noise:
@@ -1802,24 +1884,23 @@ open grey circles: points that HDBSCAN calls noise.}\label{fig:methodsmaps}
 
 \begin{tech}
 \textbf{Result.} In the periodic box only the walls give the three states as three connected
-regions (ARI 0.93). The mixture asks for the top of its range ($k=10$ by BIC) and slices the
-phases into 13 to 15 pieces along the smooth drift of the description with $\varepsilon$ and $g$;
-its high agreement (230 and 238) only reflects many small pure groups, which ARI and the pieces
-expose. k-means chooses $k=7$ in the periodic box (5 groups on the points) and $k=2$ in the crop
-(uniform against patterned). HDBSCAN leaves 12--20\% of the runs as noise in the periodic box and
-breaks the uniform state into small groups; in the crop, with sizes 10 and 20, it finds the three
-states (ARI 0.97 on the points it places, 0.96 with its 4\% of noise), slightly closer to the
-reference than the walls (0.93). With the learned description no method finds the hexagon-stripe
-boundary: the mixture and k-means cut the patterned region into bands that follow $\varepsilon$
-and $g$.
+regions, on the hand-made (ARI 0.93) and on the learned description (0.96). The mixture asks for
+the top of its range ($k=10$ by BIC) and slices the phases into 13 to 16 pieces along the smooth
+drift of the description with $\varepsilon$ and $g$; its high agreement (230 to 238) only reflects
+many small pure groups, which ARI and the pieces expose. k-means chooses $k=7$ (hand-made) or $k=2$
+(learned) in the periodic box. HDBSCAN leaves 12--20\% (hand-made) and 27--49\% (learned) of the
+runs as noise; on the points it places it is close to the reference (0.77--0.90). In the crop,
+with sizes 10 to 40, HDBSCAN finds the three states on the hand-made description (ARI 0.97, 4\% of
+noise), slightly closer to the reference than the walls (0.93); on the learned description of the
+crop, where the walls find two phases, HDBSCAN with size 40 reaches 0.92 (seed 0) and 0.99 (seed 1)
+with 5--11\% of noise.
 
 \textbf{Probe.} The logistic regression recognises the three states on held-out points with
-balanced accuracy 0.999 and 0.995 (hand-made, periodic and crop), 0.960--0.981 (learned) and
-0.954--0.958 (untrained). Every description contains the states; they differ in how the states
-are laid out. Blind grouping needs separate clouds, which the descriptions have only in part
-(in the periodic box the hexagon and stripe clouds touch and drift with the parameters; in the
-crop they separate enough for HDBSCAN). The walls need only a jump along the parameter grid,
-which the hand-made description has and the learned one lacks.
+balanced accuracy 0.999 and 0.995 (hand-made, periodic and crop), 0.997--0.998 and 0.991 (learned)
+and 0.954--0.959 (untrained). Every description contains the states; they differ in how the states
+are laid out. Blind grouping needs separate clouds, which the descriptions have only in part. The
+walls need only a jump along the parameter grid, which the hand-made and the learned descriptions
+have in the periodic box.
 \end{tech}
 
 \subsection{The unsupervised threshold tree}\label{sec:sh-tree}
@@ -1925,8 +2006,11 @@ the walls found in grey.}\label{fig:gsmap}
   and the number of domains of $v$. With one run per point: 7 phases, ARI 0.96.
 \item \emph{Blind grouping:} k-means with $k=7$ matches the reference best (ARI 0.99); its 23 pieces
   are close to the 20 of the reference itself, whose boundaries are ragged.
-\item \emph{Learned:} 1 phase (probe 0.92); \emph{combined:} 6 phases, 503 points, ARI 0.95, the
-  only example where the combination helps. Probe of the hand-made description: 0.96.
+\item \emph{Learned:} 1 phase (probe 0.95); \emph{combined:} 4 phases, 440 points, ARI 0.86, the
+  result of the variance and mean of $u$ and $v$ alone (Sec.~\ref{sec:examples-results}). Before the
+  views of Sec.~\ref{sec:learned} (2026-11-19) the combined table gave 6 phases, 503 points, ARI
+  0.95: the old $h$ kept the mean values, which separate the uniform states, and the new one removes
+  them. Probe of the hand-made description: 0.96.
 \end{itemize}
 \end{tech}
 
@@ -1981,8 +2065,9 @@ one phase, and the reference labels, which change from run to run at many points
 \begin{tech}
 \textbf{Results: the assumptions of the method fail.} No method finds the states well: the walls
 and the tree give one phase for every description; the best blind method, HDBSCAN, reaches ARI
-0.71 to 0.74 with 20 to 35\% of the runs as noise; the probe is below 0.8 (0.77 hand-made, 0.70
-learned, 0.79 combined). Two causes were measured.
+0.71 to 0.75 with 12 to 35\% of the runs as noise; the probe is below 0.8 (0.77 hand-made, 0.75
+learned, 0.79 combined). The learned description with its new views gives two weak phases (ARI
+0.19). Two causes were measured.
 \begin{itemize}[leftmargin=1.2em, itemsep=1pt]
 \item \emph{An odd field.} The model is symmetric under $(u,v)\to(-u,-v)$, but the description is
   not: the uniform runs end at $u\approx-0.71$ (79 runs) or $+0.71$ (55), at random, and 22 points
@@ -2061,10 +2146,11 @@ and the active states, within one grid step of the reference; plane waves and sp
 phase (ARI 0.59 and 0.58). At 52 of the 165 points the four runs do not end in the same state (26
 points rest and spirals, 22 plane waves and spirals, 4 rest and plane waves): whether a spiral
 pair survives depends on the initial condition. This is the second cause of the failure on
-FitzHugh-Nagumo. The probe recognises the three states (0.99 hand-made, 0.96 learned), and
-HDBSCAN on the learned description separates them best (ARI 0.96) but leaves a quarter of the
-runs as noise. The learned description alone gives one phase; combined, it gives the same walls as
-the hand-made one.
+FitzHugh-Nagumo. The probe recognises the three states (0.99 hand-made, 0.95 learned), and
+HDBSCAN on the combined description separates them best (ARI 0.88, a fifth of the runs as noise).
+The learned description alone gives one phase, with the new views as with the old ones (with the
+old ones HDBSCAN on it reached 0.96, leaving a quarter of the runs as noise; with the new ones
+0.58); combined, it gives the same walls as the hand-made one.
 \end{tech}
 
 %======================================================================
@@ -2119,8 +2205,10 @@ localised and extended.}\label{fig:shlocmap}
 \textbf{Results.} Walls: 3 phases, 103 of 105 points agree, ARI 0.96. Tree: 3 phases, all 105 points
 agree, ARI 1.00, with \code{u.amp.log10var} alone (flat, small for a patch, large for stripes
 everywhere). HDBSCAN finds the three states exactly (ARI 1.00) but leaves 13 to 41\% of the runs as
-noise. The learned description alone and the combined one give one phase, although the probe
-recognises the states (1.00).
+noise. The learned description finds the three states too (105 of 105 points, ARI 1.00, both
+training seeds; k-means on it as well), with the views of Sec.~\ref{sec:learned}; before them it
+gave one phase although the probe recognised the states (1.00). The combined one gives the walls of
+the hand-made description (103 points, 0.96).
 \end{tech}
 
 %======================================================================
@@ -2128,7 +2216,8 @@ recognises the states (1.00).
 %======================================================================
 
 All examples are run by \srcref{scripts/run_examples.py} with the hand-made, the learned (seed 0;
-seed 1 gives the same phases) and the combined description and every method, and by
+seed 1 gives the same phases; default views of Sec.~\ref{sec:learned}, since 2026-11-19) and the
+combined description and every method, and by
 \srcref{scripts/tree_examples.py} for the tree; every method uses its defaults, and the reference
 labels are used only for the scores. All numbers: \code{docs/examples/overview.md} and
 \code{trees.csv}.
@@ -2142,41 +2231,41 @@ example & description & phases & agree & ARI & closest blind method (ARI, pieces
 \midrule
 \multirow{4}{=}{\textbf{Swift-Hohenberg}\\ 240 points $\times$ 8 runs} & hand-made & 3 & 235 & 0.93 & HDBSCAN 20 (0.78, 10) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & learned & 2 & 171 & 0.36 & HDBSCAN 20 (0.37, 2) & 0.98 \\
+ & learned & 3 & 237 & 0.96 & HDBSCAN 20 (0.90, 7; 44\%) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & combined & 2 & 171 & 0.36 & k-means (0.36, 2) & 1.00 \\
+ & combined & 3 & 236 & 0.94 & HDBSCAN 20 (0.73, 10; 31\%) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 3 & 236 & 0.94 &  &  \\
 \midrule
 \multirow{4}{=}{\textbf{Gray-Scott}\\ 525 points $\times$ 4 runs} & hand-made & 8 & 482 & 0.89 & k-means, $k=7$ (0.99, 23) & 0.96 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & learned & 1 & 207 & 0 & HDBSCAN 20 (0.86, 8; 32\%) & 0.92 \\
+ & learned & 1 & 207 & 0 & k-means, $k=10$ (0.52, 137) & 0.95 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & combined & 6 & 503 & 0.95 & HDBSCAN 20 (0.82, 30) & 0.97 \\
+ & combined & 4 & 440 & 0.86 & Gaussian mixture (0.73, 58) & 0.96 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 10 & 499 & 0.94 &  &  \\
 \midrule
 \multirow{4}{=}{\textbf{FitzHugh-Nagumo}\\ 99 points $\times$ 4 runs} & hand-made & 1 & 33 & 0 & HDBSCAN 20 (0.71, 16; 23\%) & 0.77 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & learned & 1 & 33 & 0 & HDBSCAN 10 (0.71, 15; 35\%) & 0.70 \\
+ & learned & 2 & 44 & 0.19 & HDBSCAN 10 (0.61, 21; 12\%) & 0.75 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & combined & 1 & 33 & 0 & HDBSCAN 20 (0.74, 16; 20\%) & 0.79 \\
+ & combined & 1 & 33 & 0 & HDBSCAN 10 (0.75, 12; 21\%) & 0.79 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 1 & 33 & 0 &  &  \\
 \midrule
 \multirow{4}{=}{\textbf{Barkley}\\ 165 points $\times$ 4 runs} & hand-made & 2 & 132 & 0.59 & HDBSCAN 20 (0.84, 20; 14\%) & 0.99 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & learned & 1 & 90 & 0 & HDBSCAN 10 (0.96, 6; 25\%) & 0.96 \\
+ & learned & 1 & 90 & 0 & HDBSCAN 20 (0.58, 2; $<$1\%) & 0.95 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & combined & 2 & 132 & 0.59 & HDBSCAN 20 (0.86, 13; 21\%) & 0.99 \\
+ & combined & 2 & 132 & 0.59 & HDBSCAN 20 (0.88, 11; 21\%) & 0.99 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 2 & 131 & 0.58 &  &  \\
 \midrule
 \multirow{4}{=}{\textbf{localised SH}\\ 105 points $\times$ 4 runs} & hand-made & 3 & 103 & 0.96 & HDBSCAN 10 (1.00, 3; 13\%) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & learned & 1 & 51 & 0 & HDBSCAN 20 (1.00, 2; 41\%) & 1.00 \\
+ & learned & 3 & 105 & 1.00 & k-means, $k=3$ (1.00, 3) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & combined & 1 & 51 & 0 & HDBSCAN 10 (1.00, 4; 17\%) & 1.00 \\
+ & combined & 3 & 103 & 0.96 & k-means, $k=3$ (1.00, 3) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 3 & 105 & 1.00 &  &  \\
 \bottomrule
@@ -2202,13 +2291,21 @@ large as the jumps and the walls are not found.
 with noise) a blind method matches the reference better than the walls. Only on Swift-Hohenberg,
 where the hexagon and stripe clouds touch and drift, are the walls clearly ahead.
 
-\textbf{The learned description has no jump.} Alone, it gives one phase on Gray-Scott, localised SH,
-FitzHugh-Nagumo and Barkley, and two on Swift-Hohenberg, while the probe still recognises the
-states (0.70 to 1.00): the states are in $h$ but $h$ changes smoothly across their boundaries.
-Combined with the hand-made description it helps on Gray-Scott (ARI 0.89 to 0.95) and removes walls
-on Swift-Hohenberg and localised SH, where the walls of the combined table follow those of the
-learned one. Why the learned block dominates although it is weighted as one block among the
-hand-made ones has not been looked into yet.
+\textbf{The learned description, with its views.} With the default views (turned, zoomed and
+cropped, each field normalised; Sec.~\ref{sec:learned}) the learned description alone finds the
+phases of the static patterns: 3 on Swift-Hohenberg (ARI 0.96 and 0.93 for seeds 0 and 1,
+hand-made 0.93) and 3 on localised SH (ARI 1.00 for both seeds, hand-made 0.96). Before the views
+it found 2 and 1. It still gives one phase on Gray-Scott and Barkley and two weak ones on
+FitzHugh-Nagumo, while the probe recognises the states (0.75 to 1.00). On Gray-Scott the states
+differ partly by the mean values of $u$ and $v$ (the uniform states), which the normalisation
+removes on purpose; Barkley and FitzHugh-Nagumo are dynamic and have points whose runs end in
+different states. The scratch study with three seeds (README, plan step 18) gave the same picture.
+
+\textbf{Combined tables are dominated by small blocks.} Every block of columns has the same weight
+in the distances (Sec.~\ref{sec:compare}), so a few hand-made blocks count as much as the 256
+columns of $h$. With the new $h$, the combined table on Gray-Scott gives 4 phases (ARI 0.86), the
+same as the walls on the variance and mean of $u$ and $v$ alone; with the old $h$ it gave 6 (0.95).
+On Swift-Hohenberg and localised SH it gives the phases of the hand-made description.
 \end{tech}
 
 %======================================================================
@@ -2236,6 +2333,10 @@ Constant (file) & Value & Role and reason \\
 \code{Network} (nn) & 4 blocks, 32--256, 256, 64 & default shape of $f$ and $g$ (as in hfml Step 7) \\
 \code{MIN_FINAL} (nn) & 2 & smallest side of the last map: $h$ is a mean over at least $2\times2$ values \\
 \code{T} (nn) & 0.2 & temperature of the InfoNCE loss \\
+\code{views} (nn) & \code{"rotzoom"} & views of a run: any angle, mirror, zoom, crop (\code{"d4"}: the views before 2026-11-19) \\
+\code{zoom}, \code{crop} (nn) & 1.25, 0.75 & zoom factors in $[1/1.25, 1.25]$; crop side over frame side (periodic) \\
+\code{normalise} (nn) & on & every field of every view divided by its own standard deviation \\
+\code{STD_FLOOR} (views) & $10^{-8}$ & views flatter than this are only centred \\
 \code{Settings} (nn) & 40 epochs, batch 128 & AdamW, $10^{-3}$, warm-up 3 epochs, cosine decay, 4 draws per run and epoch \\
 \code{COMPONENT_NAME} (fields) & stem of 1--3 letters & names taken for components (\code{vx}, \code{Qxy}); \code{rho}, \code{phi} are not \\
 role names (io) & \code{v}, \code{p}, \code{Q}, \ldots & names that suggest a role in the inspector (suggestions only) \\
@@ -2282,7 +2383,8 @@ File & What is checked, against which known answer \\
 \code{test_describe.py} & shells cover the grid; $S(k)$ of one wave; exact moments; periodic domain counts; spots $m^2$ against stripes $m$; flat fields; flows; global order; dynamics; invariance of every descriptor under $D_4$ and shifts; tables and error list \\
 \code{test_architecture.py} & channels and receptive field of a network; constraints against the frame; weights against PyTorch; a chosen shape trains, is saved and is cached apart \\
 \code{test_nn.py} & augmentations against the field rules; shift invariance of a periodic encoder; loss at collapse and for perfect pairs; a short training separates stripes from spots; saving and loading; \code{learn} and \code{describe --encoder} (skipped without PyTorch) \\
-\code{test_blocks.py} & default blocks of every kind; a field's own blocks; blocks that do not fit refused; blocks from the configuration; vortex cores of Gaussian vortices, a cellular and a shear flow; $\pm1$ and $\pm\frac12$ winding defects; no defect in a uniform field \\
+\code{test_views.py} & input side of the views; every field of every view normalised; a turn by $90^\circ$ exact; wavelength kept at any angle, divided by the zoom; vectors and nematics turned with the grid (gradients of a turned scalar); views saved with the encoder, old encoders read with the old views \\
+\code{test_blocks.py} & default blocks of every kind; a field's own blocks; blocks that do not fit refused; blocks from the configuration; vortex cores of Gaussian vortices, a cellular and a shear flow; $\pm1$ and $\pm\frac12$ winding defects; no defect in a uniform field; parts: block sums, two states side by side, invariance under $D_4$ and shifts \\
 \code{test_contracts.py} & every registered encoder and method: format, one phase in noise and two on a step, two far clouds apart, invariance of invariant encoders; settings described and checked; registration errors; a method and an encoder added from outside run through the pipeline \\
 \code{test_explain.py} & every block has a definition; every column of every kind of field is explained; examples of explanations \\
 \code{test_graph.py} & nodes merge rounding errors; links of a full grid, of a refined line, of one parameter; numbering of regions \\
@@ -2321,9 +2423,11 @@ File & What is checked, against which known answer \\
   \code{max_shift} only; $S(k)$ is measured for wavelengths up to $L_c/3$ only.
 \item \textbf{Grids.} Links join neighbours along one parameter at a time; scattered (non-grid)
   samples would need another graph, for example nearest neighbours.
-\item \textbf{Learned description.} It carries the states but without a jump at their boundaries
-  (Secs.~\ref{sec:comparison} and~\ref{sec:examples-results}); why it dominates the combined table
-  is open.
+\item \textbf{Learned description.} With its views (Sec.~\ref{sec:learned}) it finds the phases of
+  static patterns that differ by shape (Swift-Hohenberg, localised SH), not those that differ by
+  the mean value of a field (the uniform states of Gray-Scott), which the normalisation removes,
+  nor those of the dynamic examples. A combined table is dominated by its smallest blocks (every
+  block has the same weight); weighting blocks by what they carry is open.
 \item \textbf{One phase in two places.} Joined only when the cores of the two parts are as
   close as the halves of one of them (Sec.~\ref{sec:merge}): a phase whose description drifts
   strongly across the gap stays in two parts.
@@ -2347,7 +2451,7 @@ File & Content & Section \\
 \srcref{src/phasewall/io.py} & TOML configuration, reading and writing snapshots, external tables & \ref{sec:fields}, \ref{sec:combined} \\
 \srcref{src/phasewall/frames.py} & crops, coarsening, non-periodic frames & \ref{sec:frames} \\
 \srcref{src/phasewall/describe.py} & hand-made encoder; combined tables & \ref{sec:describe}, \ref{sec:combined} \\
-\srcref{src/phasewall/nn/} & learned encoder: data, model, shape (architecture), loss, training, learning curve & \ref{sec:learned} \\
+\srcref{src/phasewall/nn/} & learned encoder: data, views, model, shape (architecture), loss, training, learning curve & \ref{sec:learned} \\
 \srcref{src/phasewall/graph.py} & nodes and links of the scan, regions & \ref{sec:compare} \\
 \srcref{src/phasewall/walls.py} & features, distances, cuts, tests, mixed points, separated parts & \ref{sec:compare}--\ref{sec:merge} \\
 \srcref{src/phasewall/trees.py} & unsupervised threshold tree & \ref{sec:tree} \\
@@ -2391,5 +2495,6 @@ J.~E.~Pearson, Science \textbf{261}, 189 (1993), Gray-Scott patterns.
 A.~Hagberg and E.~Meron, Phys.\ Rev.\ Lett.\ \textbf{72}, 2494 (1994), FitzHugh-Nagumo fronts.
 D.~Barkley, Physica D \textbf{49}, 61 (1991), excitable media.
 J.~Burke and E.~Knobloch, Phys.\ Rev.\ E \textbf{73}, 056211 (2006), localised states.
+K.~Binder, Z.\ Phys.\ B \textbf{43}, 119 (1981), block distribution functions.
 
 \end{document}

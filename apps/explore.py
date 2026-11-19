@@ -280,6 +280,21 @@ def block_grid(block_inputs, fields):
 
 
 @app.function
+def description_text(name: str, table) -> str:
+    """One line saying what a description is (shown under its tab in the results)."""
+    from phasewall.describe import descriptor_columns
+
+    n = len(descriptor_columns(table))
+    if name.startswith("hand"):
+        return f"Hand-made observables of every field: **{n} descriptors** per snapshot."
+    if name.startswith("learned"):
+        return f"h of the learned encoder (CNN, self-supervised): **{n} dimensions** per snapshot."
+    if name.startswith("combined"):
+        return f"Hand-made observables and learned h side by side: **{n} columns** per snapshot."
+    return f"**{n} columns** per snapshot."
+
+
+@app.function
 def seconds_text(s: float) -> str:
     if s < 1:
         return "under 1 s"
@@ -751,8 +766,9 @@ def _(
                 _channels = 2 * sum(1 if f.symmetry == "scalar" else 2 for f in known_fields) or 2   # a pair of frames
                 _info = network_summary(_network, _side, in_channels=_channels)
                 settings_notes.append(
-                    f"network: channels {_info['channels']}, last map {_info['last_map']} points, receptive field "
-                    f"{_info['receptive_field']} points for a frame of {_side}, {_info['weights_f']:,} weights")
+                    f"views {_network.views}{' normalised' if _network.normalise else ''}, input {_info['input']} "
+                    f"of {_side} points; network: channels {_info['channels']}, last map {_info['last_map']} points, "
+                    f"receptive field {_info['receptive_field']} points, {_info['weights_f']:,} weights")
     except ValueError as _e:
         settings_problems.append(str(_e))
         settings = None
@@ -1017,18 +1033,22 @@ def _(get_results, settings):
 
 @app.cell
 def _(res):
-    # Which description the per-description tabs show; which method the phase map and the
-    # snapshots show (the walls or the tree); which field the snapshots show.
-    description = mo.ui.dropdown(list(res.tables), value=next(iter(res.tables)), label="description")
+    # Which description the results show: a tab bar like the results tabs (its value is the
+    # name of the open tab), each tab saying what the description is. Which method the phase
+    # map and the snapshots show (the walls or the tree); which field the snapshots show.
+    # open_tab keeps the results tab open when the description changes: a plain dict, updated
+    # by on_change, read when the results cell runs again (mo.state would rerun it on every click).
+    description = mo.ui.tabs({name: mo.md(description_text(name, table)) for name, table in res.tables.items()})
+    open_tab = {"name": "Phase map"}
     _maps = [m for m in ("walls", "tree") if any(k[1] == m for k in res.extras)]
     map_method = mo.ui.dropdown(_maps or ["walls"], value=(_maps or ["walls"])[0], label="phases from")
     _fields = [f.name for f in res.ensemble.fields] if res.ensemble is not None else []
     snapshot_field = mo.ui.dropdown(_fields, value=_fields[0] if _fields else None, label="field")
-    return description, map_method, snapshot_field
+    return description, map_method, open_tab, snapshot_field
 
 
 @app.cell
-def _(description, map_method, res, snapshot_field):
+def _(description, map_method, open_tab, res, snapshot_field):
     # The results, in tabs. Each tab is a function, drawn only when the tab is opened (lazy).
     _name = description.value
     _walls = res.walls.get(_name)
@@ -1069,11 +1089,17 @@ def _(description, map_method, res, snapshot_field):
         if _shown is None:
             return mo.md("Neither the walls nor the tree were run.")
         what = "tree" if _shown is not _walls else "walls"
+        if what == "walls":
+            panels = ("Left: jump across each link. Middle: phases and walls; a ring marks a mixed point. "
+                      "Right: labels, if known (never seen by PhaseWall).")
+        else:
+            panels = ("Left: phases and the walls between them (the tree places its splits by thresholds "
+                      "on descriptors, see the Rules tab, so there is no jump to show). Right: labels, if "
+                      "known (never seen by PhaseWall).")
         return mo.vstack([
             map_method,
-            mo.md(f"**{_shown.n_phases} phase{'' if _shown.n_phases == 1 else 's'}** found by the **{what}** on **{_name}**. Left: jump across each "
-                  "link. Middle: phases and walls; a ring marks a mixed point. Right: labels, if known (never "
-                  "seen by phasewall)."),
+            mo.md(f"**{_shown.n_phases} phase{'' if _shown.n_phases == 1 else 's'}** found by the **{what}** "
+                  f"on **{_name}**. {panels}"),
             _figure(lambda: report.make_phase_map(_shown, _reference(_shown))),
         ])
 
@@ -1171,13 +1197,16 @@ def _(description, map_method, res, snapshot_field):
         "Export": _export,
     }
     # Without a browser (--run, e.g. `marimo export html apps/explore.py -- --run`) every tab is
-    # drawn at once, so that the export holds all of them.
+    # drawn at once, so that the export holds all of them. results_tabs is a global name (no
+    # leading underscore): marimo sends the clicks of an element to Python only then, so that
+    # on_change runs. No other cell reads it, so a click reruns nothing.
     if "run" in mo.cli_args():
-        _view = mo.ui.tabs({k: f() for k, f in _tabs.items()})
+        results_tabs = mo.ui.tabs({k: f() for k, f in _tabs.items()})
     else:
-        _view = mo.ui.tabs(_tabs, lazy=True)
-    mo.vstack([description, _view])
-    return
+        results_tabs = mo.ui.tabs(_tabs, value=open_tab["name"] if open_tab["name"] in _tabs else None,
+                                  lazy=True, on_change=lambda name: open_tab.update(name=name))
+    mo.vstack([mo.md("**Description shown**"), description, results_tabs])
+    return (results_tabs,)
 
 
 if __name__ == "__main__":

@@ -48,6 +48,7 @@ BLOCKS = {
     "flow": VECTORS,                          # divergence and curl
     "vortex": ("velocity", "vector"),         # Okubo-Weiss vortex cores
     "defects": ("polarity", "vector", "nematic"),   # winding-number defects (+-1, or +-1/2 for nematics)
+    "parts": KINDS,                           # parts of the frame compared (coexistence); not a default yet
 }
 # One-line definition of every block, for interfaces and reports (describe.explain gives every column).
 BLOCK_HELP = {
@@ -59,6 +60,7 @@ BLOCK_HELP = {
     "flow": "divergence and curl: splay against bend, sources against vortices",
     "vortex": "vortex cores of a flow (Okubo-Weiss: rotation stronger than strain): area share and number",
     "defects": "topological defects counted by their winding number (+-1, nematic +-1/2), per unit area",
+    "parts": "how much the parts of the frame differ from each other: two states side by side (coexistence)",
     "dyn": "change over the lag between two snapshots, at the same place (still) and following the pattern (moving)",
 }
 COMMON = ("amp", "shape", "mom", "topo")

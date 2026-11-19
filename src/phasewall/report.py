@@ -242,16 +242,20 @@ def phase_map_figure(w: Walls, path: str | Path, reference: pd.Series | None = N
 
 
 def make_phase_map(w: Walls, reference: pd.Series | None = None) -> Figure:
-    """Jumps, phases with walls and (if given) reference labels, for a scan of two parameters."""
+    """Jumps, phases with walls and (if given) reference labels, for a scan of two parameters.
+    The jumps panel is drawn only for the walls: a tree (trees.Tree.as_walls, settings "tree")
+    places its splits by thresholds on descriptors, and its links carry no jump."""
     if len(w.parameters) != 2:
         raise ValueError("a phase map needs a scan of exactly two parameters")
-    panels = 3 if reference is not None else 2
+    jumps = not w.settings.get("tree", False)
+    panels = int(jumps) + 1 + int(reference is not None)
     fig = Figure(figsize=(4.4 * panels, 4.6), facecolor=SURFACE, layout="constrained")
-    axes = fig.subplots(1, panels)
-    plot_jumps(axes[0], w)
-    plot_phases(axes[1], w)
+    axes = list(np.atleast_1d(fig.subplots(1, panels)))
+    if jumps:
+        plot_jumps(axes.pop(0), w)
+    plot_phases(axes.pop(0), w)
     if reference is not None:
-        plot_reference(axes[2], w, reference)
+        plot_reference(axes.pop(0), w, reference)
     return fig
 
 
