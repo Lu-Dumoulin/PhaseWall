@@ -598,6 +598,13 @@ not used: the tree must find the phases without any input from the user.
 
 Open questions on the method:
 
+- Noise with one run per point: the spread of a point is then measured between the two time
+  halves of its run, which are much more alike than two runs at the same parameters (in scans
+  with both, two runs differed 4 to 7 times more). The spread and the `mixed` flag are then too
+  small, and the threshold tree, which tests its splits with those halves, over-splits. Planned:
+  take the noise of such points from their neighbours (runs at adjacent parameter points)
+  instead of from time halves. The walls' test itself compares jumps between different points
+  and is not affected.
 - Learned description: with its views since 2026-11-19 (turned, zoomed, cropped, normalised) it
   finds the phases of static patterns that differ by shape. Open: states that differ by the mean
   value of a field (Gray-Scott's uniform states; the normalisation removes it on purpose), dynamic
