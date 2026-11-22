@@ -17,12 +17,17 @@ A training item is two pairs of snapshots of one run (data.PairViews); each beco
 - "d4": the views of data.augment (rotation by k x 90 degrees, mirror, and a periodic shift in a
   periodic frame), made on the CPU when the item is drawn.
 
-Then, if normalise: every field of every view minus its own mean (each component), divided by
-its own standard deviation (all its components and both frames of the pair together, so that the
-change between the frames is kept and a rotation of the components changes nothing); a view
-flatter than STD_FLOOR is only centred. h then describes the shape of the pattern, not its
-amplitude: on Swift-Hohenberg the amplitude grows like sqrt(eps) inside a phase and hid the
+Then, if normalise: every scalar field of every view minus its own mean, divided by its own
+standard deviation (both frames of the pair together, so that the change between the frames is
+kept); a view flatter than STD_FLOOR is only centred. h then describes the shape of the pattern,
+not its amplitude: on Swift-Hohenberg the amplitude grows like sqrt(eps) inside a phase and hid the
 hexagon-stripe boundary (README, plan step 18).
+Vector and nematic fields (keep_vector_mean, default since 2026-11-20) are only divided by their
+root mean square (all components and both frames together; a rotation of the components changes
+nothing): their mean is an order parameter (global polarisation, global alignment), invariant under
+the turns of the views up to the turn itself, and removing it made a uniformly polarised state look
+like a disordered one. With keep_vector_mean False (encoders saved before 2026-11-20) they are
+centred per component like scalars.
 
 For the description h after training (embedding_input): "rotzoom" takes the centred crop of
 input_side() points without turning or zooming it; "d4" the whole frame; both normalised as in
@@ -53,19 +58,21 @@ class ViewSettings:
     crop: float = 0.75
     normalise: bool = True
     blocks: int = 4          # blocks of the network (the crop is at least what they need)
+    keep_vector_mean: bool = True   # vectors and nematics: divided by their rms, not centred
 
     @classmethod
     def of(cls, s) -> "ViewSettings":
-        """From a Network or a training Settings (views, zoom, crop, normalise; blocks or channels)."""
+        """From a Network or a training Settings (views, zoom, crop, normalise, keep_vector_mean;
+        blocks or channels)."""
         blocks = s.blocks if isinstance(s, Network) else len(s.channels)
-        return cls(s.views, s.zoom, s.crop, s.normalise, blocks)
+        return cls(s.views, s.zoom, s.crop, s.normalise, blocks, s.keep_vector_mean)
 
     def side(self, n: int, periodic: bool) -> int:
         """Points per side of the network's input for a frame of n points (architecture.view_side)."""
         return view_side(self.kind, self.zoom, self.crop, self.blocks, n, periodic)
 
 
-OLD = ViewSettings("d4", normalise=False)    # encoders saved before 2026-11-19
+OLD = ViewSettings("d4", normalise=False, keep_vector_mean=False)    # encoders saved before 2026-11-19
 
 
 def field_channels(fields: list[Field], c: int) -> list[tuple[str, list[int], list[int]]]:
@@ -78,12 +85,15 @@ def field_channels(fields: list[Field], c: int) -> list[tuple[str, list[int], li
     return out
 
 
-def normalise(x: torch.Tensor, fields: list[Field]) -> torch.Tensor:
-    """x (B, C, h, w): every field of every view minus its mean, divided by its standard deviation."""
+def normalise(x: torch.Tensor, fields: list[Field], keep_vector_mean: bool = True) -> torch.Tensor:
+    """x (B, C, h, w): every field of every view divided by its own root mean square; scalars (and
+    vectors and nematics if not keep_vector_mean) first minus their mean, per component."""
     out = x.clone()
-    for _, before, now in field_channels(fields, x.shape[1] // 2):
+    for sym, before, now in field_channels(fields, x.shape[1] // 2):
         ch = before + now
-        a = x[:, ch] - x[:, ch].mean(dim=(2, 3), keepdim=True)
+        a = x[:, ch]
+        if sym == "scalar" or not keep_vector_mean:
+            a = a - a.mean(dim=(2, 3), keepdim=True)
         s = a.pow(2).mean(dim=(1, 2, 3)).sqrt().view(-1, 1, 1, 1)
         out[:, ch] = torch.where(s > STD_FLOOR, a / s.clamp_min(STD_FLOOR), a)
     return out
@@ -150,7 +160,7 @@ def training_views(x: torch.Tensor, fields: list[Field], vs: ViewSettings, gen: 
     """The views of a batch of pairs (already turned by data.augment for "d4")."""
     if vs.kind == "rotzoom":
         x = rotzoom(x, fields, vs, gen, periodic)
-    return normalise(x, fields) if vs.normalise else x
+    return normalise(x, fields, vs.keep_vector_mean) if vs.normalise else x
 
 
 def embedding_input(x: torch.Tensor, fields: list[Field], vs: ViewSettings, periodic: bool) -> torch.Tensor:
@@ -160,4 +170,4 @@ def embedding_input(x: torch.Tensor, fields: list[Field], vs: ViewSettings, peri
         side = vs.side(n, periodic)
         a = (n - side) // 2
         x = x[:, :, a:a + side, a:a + side]
-    return normalise(x, fields) if vs.normalise else x
+    return normalise(x, fields, vs.keep_vector_mean) if vs.normalise else x

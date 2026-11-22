@@ -13,8 +13,10 @@ A network is given by five numbers (Network):
 - the views the network is trained on (nn/views.py): `views` "rotzoom" (default: rotation by any
   angle, mirror, zoom by a factor in [1/zoom, zoom], a crop of `crop` times the frame side at a
   random place) or "d4" (rotations by 90 degrees, mirror and, in a periodic frame, a shift of the
-  whole frame); `normalise` (default on): every field of every view minus its own mean, divided by
-  its own standard deviation, so that h describes the shape of the pattern, not its amplitude.
+  whole frame); `normalise` (default on): every field of every view divided by its own root mean
+  square, scalars first centred, so that h describes the shape of the pattern, not its amplitude;
+  `keep_vector_mean` (default on): vectors and nematics keep their mean (global polarisation or
+  alignment, an order parameter); off, they are centred like scalars (as before 2026-11-20).
 The default shape (4 blocks, 32 to 256 channels, head 256 and 64, T = 0.2) is a small network in
 the style of SimCLR. The default views were chosen on 2026-11-19: with "d4" and no normalisation the learned
 description found 2 phases on Swift-Hohenberg and 1 on the other examples, because h followed the
@@ -72,6 +74,8 @@ class Network:
                                                 "range": (0.25, 1.0)})
     normalise: bool = field(default=True, metadata={
         "help": "every field of every view divided by its own standard deviation (h without the amplitude)"})
+    keep_vector_mean: bool = field(default=True, metadata={
+        "help": "normalise: vectors and nematics keep their mean (global polarisation or alignment)"})
 
     @property
     def channels(self) -> tuple[int, ...]:

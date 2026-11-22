@@ -12,7 +12,7 @@ def test_default_network_and_views():
     net = Network()
     assert net.channels == (32, 64, 128, 256)
     assert (net.hidden, net.projection, net.temperature) == (256, 64, 0.2)
-    assert (net.views, net.zoom, net.crop, net.normalise) == ("rotzoom", 1.25, 0.75, True)
+    assert (net.views, net.zoom, net.crop, net.normalise, net.keep_vector_mean) == ("rotzoom", 1.25, 0.75, True, True)
 
 
 def test_channels_double_up_to_dim_h():

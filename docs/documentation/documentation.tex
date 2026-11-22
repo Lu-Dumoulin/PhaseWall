@@ -651,8 +651,11 @@ by bilinear interpolation, the periodic field being tiled $3\times3$ so that the
 edge. Components turn with the grid: the map from the field to the view has the linear part
 $A=DR(-\theta)$ (times $s$), so a vector becomes $A\mathbf a$ and a nematic $A\mathsf QA^{\mathsf T}$,
 that is $(Q_{xx},Q_{xy})$ turned by $-2\theta$ (tested against gradients of a turned scalar). Then
-every field of every view is \emph{normalised}: its own mean removed (each component), divided by
-its own standard deviation (both frames of the pair together). In a periodic frame the crop is at
+every field of every view is \emph{normalised}: a scalar field minus its own mean, divided by its
+own standard deviation (both frames of the pair together); a vector or nematic field only divided
+by its root mean square (all components and both frames), so that its mean, a global polarisation
+or alignment, is kept (\code{keep_vector_mean}, default since 2026-11-20; it is an order parameter,
+and with it removed a uniformly polarised state looks like a disordered one). In a periodic frame the crop is at
 least what the blocks need ($2\cdot2^B$ points) and at most the frame; in a non-periodic frame at
 most $n/(1.25\sqrt2)$, so that the turned crop stays inside. After training, $h$ is computed on the
 centred crop, not turned, normalised as in training. The previous views (\code{views="d4"}: a
@@ -730,7 +733,7 @@ receptive field of 1 to 4 blocks; a choice is checked against the frame before t
 \For{epoch $=1,\dots,$ epochs}
   \For{each batch of $N$ runs (each run drawn \code{draws} times per epoch)}
     \State two different pairs of each run; each turned by any angle, mirrored, zoomed, cropped at a random place (or $D_4$ and a shift: \code{views="d4"})
-    \State each field of each view minus its mean, divided by its standard deviation (\code{normalise})
+    \State each scalar field of each view minus its mean, divided by its standard deviation; vectors and nematics divided by their rms (\code{normalise})
     \State $z\gets g(f(\text{views}))/|g(f(\text{views}))|$; $\mathcal L\gets$ InfoNCE$(z,T)$
     \State AdamW step on $f$ and $g$; learning rate from the warm-up and cosine schedule
   \EndFor
@@ -2336,6 +2339,7 @@ Constant (file) & Value & Role and reason \\
 \code{views} (nn) & \code{"rotzoom"} & views of a run: any angle, mirror, zoom, crop (\code{"d4"}: the views before 2026-11-19) \\
 \code{zoom}, \code{crop} (nn) & 1.25, 0.75 & zoom factors in $[1/1.25, 1.25]$; crop side over frame side (periodic) \\
 \code{normalise} (nn) & on & every field of every view divided by its own standard deviation \\
+\code{keep_vector_mean} (nn) & on & vectors and nematics not centred by the normalisation (their mean is an order parameter) \\
 \code{STD_FLOOR} (views) & $10^{-8}$ & views flatter than this are only centred \\
 \code{Settings} (nn) & 40 epochs, batch 128 & AdamW, $10^{-3}$, warm-up 3 epochs, cosine decay, 4 draws per run and epoch \\
 \code{COMPONENT_NAME} (fields) & stem of 1--3 letters & names taken for components (\code{vx}, \code{Qxy}); \code{rho}, \code{phi} are not \\
@@ -2383,7 +2387,7 @@ File & What is checked, against which known answer \\
 \code{test_describe.py} & shells cover the grid; $S(k)$ of one wave; exact moments; periodic domain counts; spots $m^2$ against stripes $m$; flat fields; flows; global order; dynamics; invariance of every descriptor under $D_4$ and shifts; tables and error list \\
 \code{test_architecture.py} & channels and receptive field of a network; constraints against the frame; weights against PyTorch; a chosen shape trains, is saved and is cached apart \\
 \code{test_nn.py} & augmentations against the field rules; shift invariance of a periodic encoder; loss at collapse and for perfect pairs; a short training separates stripes from spots; saving and loading; \code{learn} and \code{describe --encoder} (skipped without PyTorch) \\
-\code{test_views.py} & input side of the views; every field of every view normalised; a turn by $90^\circ$ exact; wavelength kept at any angle, divided by the zoom; vectors and nematics turned with the grid (gradients of a turned scalar); views saved with the encoder, old encoders read with the old views \\
+\code{test_views.py} & input side of the views; every field of every view normalised, vectors and nematics keep their mean; a turn by $90^\circ$ exact; wavelength kept at any angle, divided by the zoom; vectors and nematics turned with the grid (gradients of a turned scalar); views saved with the encoder, old encoders read with the old views \\
 \code{test_blocks.py} & default blocks of every kind; a field's own blocks; blocks that do not fit refused; blocks from the configuration; vortex cores of Gaussian vortices, a cellular and a shear flow; $\pm1$ and $\pm\frac12$ winding defects; no defect in a uniform field; parts: block sums, two states side by side, invariance under $D_4$ and shifts \\
 \code{test_contracts.py} & every registered encoder and method: format, one phase in noise and two on a step, two far clouds apart, invariance of invariant encoders; settings described and checked; registration errors; a method and an encoder added from outside run through the pipeline \\
 \code{test_explain.py} & every block has a definition; every column of every kind of field is explained; examples of explanations \\

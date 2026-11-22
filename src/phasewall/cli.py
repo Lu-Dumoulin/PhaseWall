@@ -108,7 +108,8 @@ def cmd_learn(args) -> Path:
     from .nn.architecture import Network, check, summary
     net = Network(blocks=args.blocks, width=args.width, dim_h=args.dim_h, hidden=args.hidden,
                   projection=args.projection, temperature=args.temperature, views=args.views, zoom=args.zoom,
-                  crop=args.crop, normalise=not args.no_normalise)
+                  crop=args.crop, normalise=not args.no_normalise,
+                  keep_vector_mean=not args.centre_vectors)
     try:
         check(net, frames.x.shape[-1], frames.periodic)
     except ValueError as err:
@@ -221,6 +222,8 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--crop", type=float, default=0.75, help="rotzoom: crop side / frame side (default 0.75)")
     s.add_argument("--no-normalise", action="store_true",
                    help="keep the amplitude of each view (default: each field divided by its own std)")
+    s.add_argument("--centre-vectors", action="store_true",
+                   help="normalise: centre vectors and nematics too (default: they keep their mean)")
     s.set_defaults(func=cmd_learn)
 
     s = sub.add_parser("walls", help="walls and phases from a table of descriptors")

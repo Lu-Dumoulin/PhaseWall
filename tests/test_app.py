@@ -105,7 +105,7 @@ def test_controls_from_settings(nb):
     from phasewall.nn.architecture import Network
     c = nb.spec_controls(Network)
     assert set(c.value) == {"blocks", "width", "dim_h", "hidden", "projection", "temperature",
-                            "views", "zoom", "crop", "normalise"}
+                            "views", "zoom", "crop", "normalise", "keep_vector_mean"}
     assert nb.settings_from(Network, c.value) == Network()                 # defaults round trip
     values = dict(c.value) | {"width": "16", "blocks": 3.0, "views": "d4", "normalise": False}
     assert nb.settings_from(Network, values) == Network(blocks=3, width=16, views="d4", normalise=False)

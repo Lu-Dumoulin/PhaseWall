@@ -101,7 +101,9 @@ are the same for both:
   dropped after training). A view is one pair of frames of the run, turned by any angle,
   mirrored, zoomed by a factor between 0.8 and 1.25, cut to a square of 3/4 of the frame at a
   random place (vector and nematic components turn with the grid), and **normalised**: every
-  field minus its own mean, divided by its own standard deviation. These views are the
+  scalar field minus its own mean, divided by its own standard deviation; vector and nematic
+  fields only divided by their root mean square, so that their mean (a global polarisation or
+  alignment, an order parameter) is kept (`keep_vector_mean`, default since 2026-11-20). These views are the
   operations the description must not see, so the loss can only be lowered by the shape of the
   pattern; `views="d4"` (rotations by 90 degrees and shifts, whole frame, not normalised) gives
   the views used before 2026-11-19.
@@ -322,7 +324,7 @@ phasewall describe other.toml --encoder encoder   # the trained encoder on anoth
 ```
 
 The shape of the learned encoder (blocks, width, $\dim h$, head, temperature) and its views
-(`--views`, `--zoom`, `--crop`, `--no-normalise`) are checked against the frame before training:
+(`--views`, `--zoom`, `--crop`, `--no-normalise`, `--centre-vectors`) are checked against the frame before training:
 the network sees the crop of its views, at least what its blocks need in a periodic frame, and
 small enough to stay inside a non-periodic one. On Swift-Hohenberg, six shapes with the default
 views (`scripts/compare_networks.py`, results in
@@ -406,7 +408,7 @@ register theirs through the entry points `phasewall.encoders` and `phasewall.met
 
 ## Tests
 
-`pytest` runs 209 tests on small synthetic fields with known answers, in about a minute:
+`pytest` runs 210 tests on small synthetic fields with known answers, in about a minute:
 the symmetry rules of vector and nematic fields against the gradient of a scalar and the
 tensor of a director field; velocity and polarity turning as vectors; file round trips in Julia
 layout; fields assembled from component datasets, components refused as scalars, and the

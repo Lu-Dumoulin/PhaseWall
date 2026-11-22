@@ -9,7 +9,8 @@ logged (they do not stop the training, which always runs the given number of epo
 The views (views.py: "rotzoom" by default, or "d4"; normalised by default) are settings of the
 training. The encoder carries them (encoder.views), and save() writes them, so that embed() gives
 h from the same kind of input whatever trained or loaded the encoder; an encoder saved before the
-views existed is read with the old ones (D4, not normalised).
+views existed is read with the old ones (D4, not normalised), one saved before keep_vector_mean
+with vectors and nematics centred.
 
 After training, f is frozen and g dropped: h_table gives one row per pair with the columns
 run, time, the parameters and cnn.h.d000, cnn.h.d001, ... (the format of describe.py, so that
@@ -58,13 +59,14 @@ class Settings:
     zoom: float = 1.25
     crop: float = 0.75
     normalise: bool = True
+    keep_vector_mean: bool = True
 
     @classmethod
     def from_network(cls, network: Network, **kw) -> "Settings":
         """Training settings for a network of architecture.py (channels, head, temperature, views)."""
         return cls(channels=network.channels, hidden=network.hidden, projection=network.projection,
                    temperature=network.temperature, views=network.views, zoom=network.zoom, crop=network.crop,
-                   normalise=network.normalise, **kw)
+                   normalise=network.normalise, keep_vector_mean=network.keep_vector_mean, **kw)
 
 
 def device() -> torch.device:
@@ -188,8 +190,8 @@ def load(out: str | Path) -> tuple[Encoder, dict]:
     circular = meta.get("circular", meta["periodic"])      # saved before the views: as the frame
     enc = Encoder(meta["in_channels"], tuple(st["channels"]), circular)
     enc.load_state_dict(torch.load(out / "encoder.pt", map_location="cpu", weights_only=True))
-    enc.views = ViewSettings(st["views"], st["zoom"], st["crop"], st["normalise"], len(st["channels"])) \
-        if "views" in st else OLD
+    enc.views = ViewSettings(st["views"], st["zoom"], st["crop"], st["normalise"], len(st["channels"]),
+                             st.get("keep_vector_mean", False)) if "views" in st else OLD
     enc.circular = circular
     # fields saved before components existed have four entries
     meta["fields"] = [Field(f[0], tuple(f[1]), f[2], f[3], tuple(f[4]) if len(f) > 4 else ()) for f in meta["fields"]]

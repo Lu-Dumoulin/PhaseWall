@@ -82,8 +82,13 @@ def learned(ens, settings: LearnedSettings, context: Context) -> EncoderResult:
 
     net = settings.network
     # the network (with its views) is always part of the cache name: trainings cached before the
-    # default views changed (2026-11-19) must not be read as trainings with the new ones
-    extra = [net]
+    # default views changed (2026-11-19) must not be read as trainings with the new ones.
+    # keep_vector_mean changes nothing for scalar fields: left out of the name then, so that
+    # trainings cached before it existed (2026-11-20) are still read
+    key = dataclasses.asdict(net)
+    if all(f.symmetry == "scalar" for f in ens.fields):
+        key.pop("keep_vector_mean")
+    extra = [key]
     frames, tables, logs = None, {}, []
     for seed in settings.seeds:
         folder = Path(context.cache) / f"learned-{cache_key(context.key, context.frame, settings.epochs, seed, *extra)}" \

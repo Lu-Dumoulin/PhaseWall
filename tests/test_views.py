@@ -1,5 +1,5 @@
 """Tests of nn/views.py, the views of the learned encoder: what the network sees (input side), the
-normalisation of every field of every view, the resampling (a turn by 90 degrees is exact, the
+normalisation of every field of every view (vectors and nematics keep their mean), the resampling (a turn by 90 degrees is exact, the
 wavelength is kept at zoom 1), components that turn with the grid (a vector field that is the
 gradient of a scalar stays the gradient of the turned scalar; a nematic built from that gradient
 stays the nematic of the turned gradient), the input of the description after training, and the
@@ -36,11 +36,13 @@ def test_input_side():
 
 
 def test_normalise_every_field_of_every_view():
+    """Old normalisation (keep_vector_mean False): every field centred per component and divided
+    by its rms; a flat view is only centred."""
     rng = np.random.default_rng(0)
     x = torch.tensor(rng.normal(size=(3, 6, 8, 8)) * [[[[1.0]], [[5.0]], [[5.0]], [[2.0]], [[7.0]], [[7.0]]]] + 3,
                      dtype=torch.float32)            # a pair of (u, p_x, p_y)
     x[2] = 4.0                                       # a flat view
-    y = v.normalise(x, [U, P])
+    y = v.normalise(x, [U, P], keep_vector_mean=False)
     for b in (0, 1):
         u, p = y[b, [0, 3]], y[b, [1, 2, 4, 5]]
         assert abs(float(u.mean())) < 1e-5 and float(u.pow(2).mean().sqrt()) == pytest.approx(1, rel=1e-5)
@@ -48,6 +50,36 @@ def test_normalise_every_field_of_every_view():
         for c in (1, 2, 4, 5):
             assert abs(float(y[b, c].mean())) < 1e-5
     assert torch.all(y[2] == 0)                      # only centred
+
+
+def test_vectors_keep_their_mean():
+    """Default (keep_vector_mean): scalars as before; a vector field is only divided by its rms, so
+    its mean direction and the share |<p>| / rms (polarisation) are kept; a uniform vector field
+    keeps its direction whatever its amplitude; a nematic keeps its mean too; a rotation of the
+    components before or after the normalisation gives the same view."""
+    rng = np.random.default_rng(1)
+    x = torch.tensor(rng.normal(size=(2, 6, 8, 8)), dtype=torch.float32)
+    x[:, [1, 4]] += 3.0                              # p_x has a mean: polarised along x
+    x[:, [2, 5]] *= 0.5
+    y = v.normalise(x, [U, P])
+    assert torch.allclose(y[:, [0, 3]], v.normalise(x, [U, P], keep_vector_mean=False)[:, [0, 3]])
+    for b in (0, 1):
+        p, q = x[b, [1, 2, 4, 5]], y[b, [1, 2, 4, 5]]
+        rms = float(p.pow(2).mean().sqrt())
+        assert torch.allclose(q, p / rms, atol=1e-6)
+        assert float(q.pow(2).mean().sqrt()) == pytest.approx(1, rel=1e-5)
+        assert float(q[[0, 2]].mean()) == pytest.approx(float(p[[0, 2]].mean()) / rms, rel=1e-5)
+    uniform = torch.zeros(1, 6, 4, 4)
+    uniform[:, [1, 4]], uniform[:, [2, 5]] = 0.6, 0.8   # |p| = 1 along (0.6, 0.8)
+    yu = v.normalise(2 * uniform, [U, P])
+    assert torch.allclose(yu, v.normalise(uniform, [U, P]), atol=1e-6)        # amplitude gone
+    assert torch.allclose(yu, uniform * math.sqrt(2), atol=1e-6)   # direction kept; rms per component 1
+    xq = x.clone()
+    assert abs(float(v.normalise(xq, [U, Q])[:, [1, 4]].mean())) > 0.5   # nematic keeps <Q_xx>
+    theta, mirror = torch.tensor([0.7, 2.1]), torch.tensor([False, True])
+    a = v.normalise(v.turn_components(x, [U, P], theta, mirror), [U, P])
+    b = v.turn_components(v.normalise(x, [U, P]), [U, P], theta, mirror)
+    assert torch.allclose(a, b, atol=1e-5)
 
 
 def stripes(n=N, k=8, angle=0.0):
@@ -146,11 +178,16 @@ def test_views_are_kept_with_the_encoder(tmp_path):
     fr = FrameSet(x, np.arange(6), np.ones(6), [U], True, np.ones(1))
     s = Settings(channels=(8, 16), zoom=1.5, crop=0.5)
     enc = new_encoder(fr, s)
-    assert enc.views == v.ViewSettings("rotzoom", 1.5, 0.5, True, 2) and not enc.circular
+    assert enc.views == v.ViewSettings("rotzoom", 1.5, 0.5, True, 2, True) and not enc.circular
     import pandas as pd
     save(tmp_path / "e", enc, fr, s, pd.DataFrame())
     back, meta = load(tmp_path / "e")
     assert back.views == enc.views and meta["circular"] is False
+    # saved before keep_vector_mean existed (2026-11-20): vectors and nematics centred as then
+    before = json.loads((tmp_path / "e" / "settings.json").read_text())
+    del before["settings"]["keep_vector_mean"]
+    (tmp_path / "e" / "settings.json").write_text(json.dumps(before))
+    assert load(tmp_path / "e")[0].views.keep_vector_mean is False
     assert np.allclose(embed(back, fr), embed(enc, fr), atol=1e-6)
     # an encoder saved before the views existed: no views in its settings, padding as the frame
     old = json.loads((tmp_path / "e" / "settings.json").read_text())
