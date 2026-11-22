@@ -1,0 +1,21 @@
+% Styles shared by TLDR.tex and overview.tex (colours of the phases: ../documentation/figs/styles.tex)
+\definecolor{cOK}{HTML}{1B8A5A}
+\definecolor{cBad}{HTML}{B23A39}
+\tikzset{
+  box/.style={draw=cInk2, rounded corners=3pt, line width=0.6pt, fill=white},
+  head/.style={font=\bfseries\small, anchor=north west},
+  say/.style={font=\footnotesize, anchor=north west, align=left},
+  num/.style={circle, fill=cInk, text=white, font=\bfseries\scriptsize, inner sep=1.5pt},
+  tile/.style={draw=cInk2, line width=0.4pt, minimum size=0.55cm, inner sep=0pt},
+  big/.style={->, line width=2pt, cInk2},
+}
+% a square of stripes: centre, half side, rotation, spacing, colour strength
+\newcommand{\stripes}[5]{%
+  \begin{scope}[shift={#1}, rotate=#3]
+    \fill[white] (-#2,-#2) rectangle (#2,#2);
+    \begin{scope} \clip (-#2,-#2) rectangle (#2,#2);
+      \pgfmathsetmacro{\stripestep}{-1.6+#4}
+      \foreach \s in {-1.6,\stripestep,...,1.6} \draw[cPos!#5, line width=1.3pt] (\s,-#2-0.2) -- (\s,#2+0.2);
+    \end{scope}
+    \draw[cInk2, line width=0.5pt] (-#2,-#2) rectangle (#2,#2);
+  \end{scope}}

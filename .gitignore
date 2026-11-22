@@ -42,6 +42,7 @@ docs/tldr/*.out
 docs/tldr/*.fls
 docs/tldr/*.fdb_latexmk
 docs/tldr/TLDR.pdf
+docs/tldr/overview.pdf
 
 # marimo session caches (outputs of local runs, with local paths) and local assistant settings
 __marimo__/

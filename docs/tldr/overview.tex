@@ -1,0 +1,19 @@
+% The figure at the top of the README: the problem picture and the four steps (page 1 of the TLDR).
+% Build: pdflatex overview.tex; pdftoppm -r 150 -png -singlefile overview.pdf ../figures/overview
+\documentclass[border=4mm]{standalone}
+\usepackage{amsmath,amssymb}
+\usepackage[scaled]{helvet}
+\renewcommand\familydefault{\sfdefault}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc}
+\input{../documentation/figs/styles.tex}
+\input{tldr_styles.tex}
+\newcommand\pagetwo{}\newcommand\belowref{}
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm,>={Stealth}]
+\input{overview_body.tex}
+\end{tikzpicture}
+\end{document}
