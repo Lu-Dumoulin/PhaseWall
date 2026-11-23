@@ -472,6 +472,12 @@ it is described. Otherwise the numerical noise of a uniformly polarised state (f
 $10^{-5}$, say) is described as a pattern: variance, divergence, curl and dynamics far above the
 floors of an exactly uniform field, so two runs of the same uniform state look different. Test: a
 uniform field and the same field with fluctuations of $2.5\times10^{-5}$ give the same descriptors.
+The same rule holds for the size alone: when $|\mathbf a|$ (or $S$) varies by less than
+\code{FLAT_RELATIVE} of its mean, its moments and domain counts are those of a uniform size. A
+polarity whose direction still turns slowly over the box while $|\mathbf p|=1$ to $10^{-4}$ would
+otherwise get domain counts and a kurtosis of pure noise, far from those of an exactly uniform state.
+Test: an orientation turning by $3^\circ$ with $|\mathbf p|=1\pm10^{-4}$ has zero moments and domains
+of the size, while its variance and Frank energy keep the turn; a size varying by 5\% keeps both.
 
 \textbf{Reading the same columns for a velocity and for a polarity.} For a velocity $\mathbf v$,
 $\avg{|\mathbf v|^2}$ (from \code{amp} and \code{mom}) is the kinetic energy, $S(k)$ its spectrum,
@@ -1758,7 +1764,8 @@ Right: reference labels, never seen by \pw{}.}\label{fig:phasemap}
 \begin{tech}
 \textbf{Agreement} (Fig.~\ref{fig:phasemap}). Five cuts are tried and two are kept
 (Figs.~\ref{fig:testsdata} and~\ref{fig:cuttree}): 3 phases; 235 of 240 points carry the most
-common reference label of their region. Uniform: 30 of 30; hexagons: 64 of 64; phase 0 holds 141
+common reference label of their region (236 of their phase after the reassignment near the walls,
+Sec.~\ref{sec:reassign}, which gives the hexagon point $(0.275,0.7)$ to the hexagons). Uniform: 30 of 30; hexagons: 64 of 64; phase 0 holds 141
 stripe points and 5 hexagon points. These 5 lie on the hexagon-stripe boundary ($(0.025,0.1)$,
 $(0.275,0.7)$ and $\varepsilon=0.325$ for $g=1.0$ to 1.2): at each of them the 8 runs split
 between hexagons (5 or 6 runs) and stripes (2 or 3), so the boundary passes through these points
@@ -1854,7 +1861,7 @@ crop & untrained & 2 & 171 & 0.89 & 1.11 & 2.09 & 0.93 \\
 crop & old views, seeds 0, 1 & 2, 2 & 171 & 0.88, 0.82 & 1.17, 1.08 & 2.25, 2.27 & 0.96, 0.94 \\
 \bottomrule
 \end{tabular}
-\caption{Encoders compared on Swift-Hohenberg (agree: of 240 points; relative jumps about 1
+\caption{Encoders compared on Swift-Hohenberg (agree: of 240 points, counted on the regions of the cuts, before the merge and the reassignment near the walls; relative jumps about 1
 inside a state: 0.96 to 0.99). Old views: the views used before 2026-11-19 ($D_4$, whole frame, not
 normalised), from the earlier run of the same script. Full table with walls, mixed points, robustness
 range, effective rank and times: \href{\repo/blob/main/docs/comparison/summary.md}{\code{docs/comparison/summary.md}}.}\label{tab:comparison}
@@ -1957,7 +1964,7 @@ kept.
 \toprule
 frame & description & method & groups & agree & ARI & ARI$_{\rm all}$ & pieces & noise \\
 \midrule
-periodic & hand-made & walls & 3 & 235 & 0.93 & 0.93 & 3 & 0 \\
+periodic & hand-made & walls & 3 & 236 & 0.94 & 0.94 & 3 & 0 \\
  & & mixture ($k=10$ by BIC) & 8 & 230 & 0.38 & 0.38 & 13 & 0 \\
  & & k-means ($k=7$ by silhouette) & 5 & 235 & 0.58 & 0.58 & 5 & 0 \\
  & & HDBSCAN, $m=10$ & 7 & 216 & 0.77 & 0.66 & 11 & 12\% \\
@@ -1968,7 +1975,7 @@ periodic & hand-made & walls & 3 & 235 & 0.93 & 0.93 & 3 & 0 \\
  & & k-means ($k=2$) & 2 & 203 & 0.60 & 0.60 & 2 & 0 \\
  & & HDBSCAN, $m=20$ & 4 & 117 & 0.90 & 0.51 & 7 & 44\% \\
 \addlinespace
-crop & hand-made & walls & 3 & 235 & 0.93 & 0.93 & 3 & 0 \\
+crop & hand-made & walls & 3 & 238 & 0.97 & 0.97 & 3 & 0 \\
  & & mixture ($k=10$) & 9 & 238 & 0.48 & 0.48 & 15 & 0 \\
  & & k-means ($k=2$) & 2 & 171 & 0.36 & 0.36 & 2 & 0 \\
  & & HDBSCAN, $m=20$ & 3 & 237 & 0.97 & 0.96 & 3 & 4\% \\
@@ -1994,14 +2001,14 @@ open grey circles: points that HDBSCAN calls noise.}\label{fig:methodsmaps}
 
 \begin{tech}
 \textbf{Result.} In the periodic box only the walls give the three states as three connected
-regions, on the hand-made (ARI 0.93) and on the learned description (0.96). The mixture asks for
+regions, on the hand-made (ARI 0.94) and on the learned description (0.96). The mixture asks for
 the top of its range ($k=10$ by BIC) and slices the phases into 13 to 16 pieces along the smooth
 drift of the description with $\varepsilon$ and $g$; its high agreement (230 to 238) only reflects
 many small pure groups, which ARI and the pieces expose. k-means chooses $k=7$ (hand-made) or $k=2$
 (learned) in the periodic box. HDBSCAN leaves 12--20\% (hand-made) and 27--49\% (learned) of the
 runs as noise; on the points it places it is close to the reference (0.77--0.90). In the crop,
 with sizes 10 to 40, HDBSCAN finds the three states on the hand-made description (ARI 0.97, 4\% of
-noise), slightly closer to the reference than the walls (0.93); on the learned description of the
+noise), as close to the reference as the walls (0.97); on the learned description of the
 crop, where the walls find two phases, HDBSCAN with size 40 reaches 0.92 (seed 0) and 0.99 (seed 1)
 with 5--11\% of noise.
 
@@ -2104,7 +2111,7 @@ the walls found in grey.}\label{fig:gsmap}
   the reference regions: the two uniform states, the moving region, stripes, spots and isolated
   spots. The uniform state lies in three places; the three are joined into one phase
   (Sec.~\ref{sec:merge}: gap between cores 0.57 and 1.46 times the larger spread), so 8 phases,
-  ARI 0.89 (0.80 without joining). Two of the three pieces are joined to the largest directly
+  ARI 0.89 (0.80 without joining; 0.95 with the reassignment near the walls, Sec.~\ref{sec:reassign}). Two of the three pieces are joined to the largest directly
   (ratios 0.57 and 1.46); between these two, both cores are flat (spread 0, so the floor sets the
   scale) and the ratio is 4.0, so they are joined only through the largest piece. Every pair of
   different states has a ratio of 2.3 to 7.4 and stays apart. Most of the stripe band is
@@ -2311,13 +2318,13 @@ localised and extended.}\label{fig:shlocmap}
 \end{figure}
 
 \begin{tech}
-\textbf{Results.} Walls: 3 phases, 103 of 105 points agree, ARI 0.96. Tree: 3 phases, all 105 points
+\textbf{Results.} Walls: 3 phases, all 105 points agree, ARI 1.00 (103 and 0.96 before the reassignment near the walls). Tree: 3 phases, all 105 points
 agree, ARI 1.00, with \code{u.amp.log10var} alone (flat, small for a patch, large for stripes
 everywhere). HDBSCAN finds the three states exactly (ARI 1.00) but leaves 13 to 41\% of the runs as
 noise. The learned description finds the three states too (105 of 105 points, ARI 1.00, both
 training seeds; k-means on it as well), with the views of Sec.~\ref{sec:learned}; before them it
 gave one phase although the probe recognised the states (1.00). The combined one gives the walls of
-the hand-made description (103 points, 0.96).
+the hand-made description (105 points, 1.00).
 \end{tech}
 
 %======================================================================
@@ -2338,43 +2345,43 @@ labels are used only for the scores. All numbers: \code{docs/examples/overview.m
 \toprule
 example & description & phases & agree & ARI & closest blind method (ARI, pieces, noise) & probe \\
 \midrule
-\multirow{4}{=}{\textbf{Swift-Hohenberg}\\ 240 points $\times$ 8 runs} & hand-made & 3 & 235 & 0.93 & HDBSCAN 20 (0.78, 10) & 1.00 \\
+\multirow{4}{=}{\textbf{Swift-Hohenberg}\\ 240 points $\times$ 8 runs} & hand-made & 3 & 236 & 0.94 & HDBSCAN 20 (0.78, 10) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & learned & 3 & 237 & 0.96 & HDBSCAN 20 (0.90, 7; 44\%) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & combined & 3 & 236 & 0.94 & HDBSCAN 20 (0.73, 10; 31\%) & 1.00 \\
+ & combined & 3 & 238 & 0.97 & HDBSCAN 20 (0.73, 10; 31\%) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 3 & 236 & 0.94 &  &  \\
 \midrule
-\multirow{4}{=}{\textbf{Gray-Scott}\\ 525 points $\times$ 4 runs} & hand-made & 8 & 482 & 0.89 & k-means, $k=7$ (0.99, 23) & 0.96 \\
+\multirow{4}{=}{\textbf{Gray-Scott}\\ 525 points $\times$ 4 runs} & hand-made & 8 & 498 & 0.95 & k-means, $k=7$ (0.99, 23) & 0.96 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & learned & 1 & 207 & 0 & k-means, $k=10$ (0.52, 137) & 0.95 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & combined & 4 & 440 & 0.86 & Gaussian mixture (0.73, 58) & 0.96 \\
+ & combined & 4 & 440 & 0.87 & Gaussian mixture (0.73, 58) & 0.96 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 10 & 499 & 0.94 &  &  \\
 \midrule
 \multirow{4}{=}{\textbf{FitzHugh-Nagumo}\\ 99 points $\times$ 4 runs} & hand-made & 1 & 33 & 0 & HDBSCAN 20 (0.71, 16; 23\%) & 0.77 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & learned & 2 & 44 & 0.19 & HDBSCAN 10 (0.61, 21; 12\%) & 0.75 \\
+ & learned & 2 & 44 & 0.21 & HDBSCAN 10 (0.61, 21; 12\%) & 0.75 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & combined & 1 & 33 & 0 & HDBSCAN 10 (0.75, 12; 21\%) & 0.79 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 1 & 33 & 0 &  &  \\
 \midrule
-\multirow{4}{=}{\textbf{Barkley}\\ 165 points $\times$ 4 runs} & hand-made & 2 & 132 & 0.59 & HDBSCAN 20 (0.84, 20; 14\%) & 0.99 \\
+\multirow{4}{=}{\textbf{Barkley}\\ 165 points $\times$ 4 runs} & hand-made & 2 & 132 & 0.58 & HDBSCAN 20 (0.84, 20; 14\%) & 0.99 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & learned & 1 & 90 & 0 & HDBSCAN 20 (0.58, 2; $<$1\%) & 0.95 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & combined & 2 & 132 & 0.59 & HDBSCAN 20 (0.88, 11; 21\%) & 0.99 \\
+ & combined & 2 & 132 & 0.58 & HDBSCAN 20 (0.88, 11; 21\%) & 0.99 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 2 & 131 & 0.58 &  &  \\
 \midrule
-\multirow{4}{=}{\textbf{localised SH}\\ 105 points $\times$ 4 runs} & hand-made & 3 & 103 & 0.96 & HDBSCAN 10 (1.00, 3; 13\%) & 1.00 \\
+\multirow{4}{=}{\textbf{localised SH}\\ 105 points $\times$ 4 runs} & hand-made & 3 & 105 & 1.00 & HDBSCAN 10 (1.00, 3; 13\%) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & learned & 3 & 105 & 1.00 & k-means, $k=3$ (1.00, 3) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & combined & 3 & 103 & 0.96 & k-means, $k=3$ (1.00, 3) & 1.00 \\
+ & combined & 3 & 105 & 1.00 & k-means, $k=3$ (1.00, 3) & 1.00 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 3 & 105 & 1.00 &  &  \\
 \bottomrule
@@ -2402,8 +2409,8 @@ where the hexagon and stripe clouds touch and drift, are the walls clearly ahead
 
 \textbf{The learned description, with its views.} With the default views (turned, zoomed and
 cropped, each field normalised; Sec.~\ref{sec:learned}) the learned description alone finds the
-phases of the static patterns: 3 on Swift-Hohenberg (ARI 0.96 and 0.93 for seeds 0 and 1,
-hand-made 0.93) and 3 on localised SH (ARI 1.00 for both seeds, hand-made 0.96). Before the views
+phases of the static patterns: 3 on Swift-Hohenberg (ARI 0.96 for seeds 0 and 1,
+hand-made 0.94) and 3 on localised SH (ARI 1.00 for both seeds, hand-made 1.00). Before the views
 it found 2 and 1. It still gives one phase on Gray-Scott and Barkley and two weak ones on
 FitzHugh-Nagumo, while the probe recognises the states (0.75 to 1.00). On Gray-Scott the states
 differ partly by the mean values of $u$ and $v$ (the uniform states), which the normalisation
@@ -2480,7 +2487,7 @@ choices too (documented in their docstrings).}
 \section{Tests}\label{sec:tests}
 %======================================================================
 
-\code{pytest} runs 220 tests in about a minute, all on small synthetic data with known
+\code{pytest} runs 221 tests in about a minute, all on small synthetic data with known
 answers (no data from any laboratory is in the repository). On every push, the
 continuous-integration workflow \srcref{.github/workflows/tests.yml} runs \code{ruff} and
 \code{pytest}.

@@ -126,7 +126,7 @@ $\bullet$ Swift-Hohenberg: 3 phases for 3 training seeds (same as hand-made).};
     \ifnum\s=0 \fill[cP0] (0.4*\i,0.4*\j) circle (1.8pt); \else \fill[cP1] (0.4*\i,0.4*\j) circle (1.8pt); \fi }
   \draw[wall] (1.0,-0.2) -- (1.0,0.6) -- (0.6,0.6) -- (0.6,1.0) -- (0.2,1.0) -- (0.2,1.4);
 \end{scope}
-\node[say, text width=5.6cm] at (3.3,-8.7) {\textbf{Walls} (this method): cuts along the parameter grid, each tested.\\[2pt]ARI 0.93 hand-made, 0.96 learned; 3 connected phases.};
+\node[say, text width=5.6cm] at (3.3,-8.7) {\textbf{Walls} (this method): cuts along the parameter grid, each tested.\\[2pt]ARI 0.94 hand-made, 0.96 learned; 3 connected phases.};
 % tree
 \begin{scope}[shift={(10.6,-8.85)}]
   \node[blk, font=\tiny] (r1) at (0,0) {variance of $u\approx0$?};
@@ -172,6 +172,6 @@ $\bullet$ snapshots: one per phase found (frame = phase colour)};
 $\bullet$ Why: at 52 of 165 points the runs end in different states (right). Spread within a point $\approx$ jump between points: no wall passes the test.\\[2pt]
 $\bullet$ Assumption broken: \emph{one state per point}. Next: describe a point as a mixture of states.};
 
-\node[anchor=north west, font=\tiny, cInk2, text width=28cm] at (0,-19.75) {PhaseWall, Ludovic Dumoulin, November 2026. Python (NumPy, SciPy, PyTorch); 220 tests; details in docs/documentation.pdf. ARI: adjusted Rand index against the known states (1: identical, 0: chance). The code, tests and documentation were written by Claude (Anthropic), an AI assistant; the author designed the method, chose the physics, the examples and the checks, directed the work and reviewed the results.};
+\node[anchor=north west, font=\tiny, cInk2, text width=28cm] at (0,-19.75) {PhaseWall, Ludovic Dumoulin, November 2026. Python (NumPy, SciPy, PyTorch); 221 tests; details in docs/documentation.pdf. ARI: adjusted Rand index against the known states (1: identical, 0: chance). The code, tests and documentation were written by Claude (Anthropic), an AI assistant; the author designed the method, chose the physics, the examples and the checks, directed the work and reviewed the results.};
 \end{tikzpicture}}
 \end{document}

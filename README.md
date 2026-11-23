@@ -32,7 +32,7 @@ against stripes, amplitude), which PhaseWall never sees.
 
 ![Phase map of the demo](docs/figures/phase_map.png)
 
-- 235 of 240 points carry the most common reference label of their region. The 5 others are on
+- 236 of 240 points carry the most common reference label of their phase. The 4 others are on
   the hexagon-stripe boundary, where the 8 runs end in different states (5 or 6 hexagons, 2 or 3
   stripes), often with spots and stripes side by side in one box.
 - These states are steady: continued to $t = 20\,000$, the patterns change by less than
@@ -151,8 +151,9 @@ as a non-periodic frame (`scripts/compare_describers.py`, [docs/comparison](docs
 | crop | untrained network | 2 | 171 | 1.1 | 0.93 |
 | crop | learned with the old views, 2 seeds | 2, 2 | 171, 171 | 1.2, 1.1 | 0.96, 0.94 |
 
-Relative jump: median jump of the links between a hexagon point and a stripe point, divided by the
-median of all jumps (about 1 inside a state). Probe: linear classifier of hexagons against stripes,
+Points agreeing are counted here on the regions of the cuts, before the merge and the reassignment
+near the walls. Relative jump: median jump of the links between a hexagon point and a stripe point,
+divided by the median of all jumps (about 1 inside a state). Probe: linear classifier of hexagons against stripes,
 tested on held-out parameter points.
 
 ![Phases found by each description](docs/comparison/phase_maps.png)
@@ -193,11 +194,11 @@ ceiling on how well a description separates the states, not a way to find them.
 
 | frame | description | method | groups | points agreeing (of 240) | ARI | pieces on the grid | runs left as noise |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| periodic | hand-made | walls | 3 | 235 | 0.93 | 3 | 0 |
+| periodic | hand-made | walls | 3 | 236 | 0.94 | 3 | 0 |
 | periodic | hand-made | Gaussian mixture ($k$ = 10) | 8 | 230 | 0.38 | 13 | 0 |
 | periodic | hand-made | k-means ($k$ = 7) | 5 | 235 | 0.58 | 5 | 0 |
 | periodic | hand-made | HDBSCAN (size 10) | 7 | 216 | 0.77 (0.66 with noise) | 11 | 12% |
-| crop | hand-made | walls | 3 | 235 | 0.93 | 3 | 0 |
+| crop | hand-made | walls | 3 | 238 | 0.97 | 3 | 0 |
 | crop | hand-made | HDBSCAN (size 20) | 3 | 237 | 0.97 (0.96 with noise) | 3 | 4% |
 | periodic | learned | walls | 3 | 237 | 0.96 | 3 | 0 |
 | periodic | learned | Gaussian mixture ($k$ = 10) | 10 | 235 | 0.30 | 16 | 0 |
@@ -213,9 +214,8 @@ reference). All methods and settings: [docs/comparison/summary.md](docs/comparis
   mixture picks the top of its range and cuts the phases into bands that follow the drift with
   $\varepsilon$ and $g$. k-means splits the patterned states into five groups. HDBSCAN leaves
   12-20% of the runs as noise and breaks the uniform state into small groups.
-- **Crop.** HDBSCAN (sizes 10 and 20) also finds the three states, slightly closer to the
-  reference than the walls (ARI 0.97 against 0.93), with 4% of the runs as noise. The mixture and
-  k-means do not.
+- **Crop.** HDBSCAN (sizes 10 and 20) also finds the three states, as close to the reference as
+  the walls (ARI 0.97 for both), with 4% of the runs as noise. The mixture and k-means do not.
 - **Learned description.** Only the walls give three pieces. HDBSCAN finds the states on the runs
   it places but leaves 27-49% as noise.
 - **Why.** The probe recognises the three states in 99.5-99.9% of held-out snapshots
@@ -255,21 +255,19 @@ snapshots and are only used for scoring. ARI is on points.
 
 | example | points x runs | walls, hand-made | tree, hand-made | walls, learned | walls, combined | closest blind method (hand-made) |
 | --- | --- | --- | --- | --- | --- | --- |
-| Swift-Hohenberg | 240 x 8 | 3 phases, ARI 0.93 | 3 phases, 0.94 | 3 phases, 0.96 | 3 phases, 0.94 | HDBSCAN 20: 0.78 (20% noise) |
-| Gray-Scott | 525 x 4 | 8 phases, 0.89 | 10 phases, 0.94 | 1 phase | 4 phases, 0.86 | k-means, $k$ = 7: 0.99 |
-| localised Swift-Hohenberg | 105 x 4 | 3 phases, 0.96 | 3 phases, 1.00 | 3 phases, 1.00 | 3 phases, 0.96 | HDBSCAN 10: 1.00 (13% noise) |
-| FitzHugh-Nagumo | 99 x 4 | 1 phase | 1 phase | 2 phases, 0.19 | 1 phase | HDBSCAN 20: 0.71 (23% noise) |
-| Barkley | 165 x 4 | 2 phases, 0.59 | 2 phases, 0.58 | 1 phase | 2 phases, 0.59 | HDBSCAN 20: 0.84 (14% noise) |
+| Swift-Hohenberg | 240 x 8 | 3 phases, ARI 0.94 | 3 phases, 0.94 | 3 phases, 0.96 | 3 phases, 0.97 | HDBSCAN 20: 0.78 (20% noise) |
+| Gray-Scott | 525 x 4 | 8 phases, 0.95 | 10 phases, 0.94 | 1 phase | 4 phases, 0.87 | k-means, $k$ = 7: 0.99 |
+| localised Swift-Hohenberg | 105 x 4 | 3 phases, 1.00 | 3 phases, 1.00 | 3 phases, 1.00 | 3 phases, 1.00 | HDBSCAN 10: 1.00 (13% noise) |
+| FitzHugh-Nagumo | 99 x 4 | 1 phase | 1 phase | 2 phases, 0.21 | 1 phase | HDBSCAN 20: 0.71 (23% noise) |
+| Barkley | 165 x 4 | 2 phases, 0.58 | 2 phases, 0.58 | 1 phase | 2 phases, 0.58 | HDBSCAN 20: 0.84 (14% noise) |
 
-The table and the figures are from before the points near the walls were reassigned (2026-11-23).
-With it, the hand-made walls give: Swift-Hohenberg ARI 0.94 (236 of 240 points), Gray-Scott 0.95
-(498 of 525), localised Swift-Hohenberg 1.00 (105 of 105), Barkley 0.62 (136 of 165, 8 runs per
-point); FitzHugh-Nagumo is unchanged.
+Reassigning the points near the walls (2026-11-23) raised the hand-made walls from ARI 0.93 to 0.94
+on Swift-Hohenberg, 0.89 to 0.95 on Gray-Scott and 0.96 to 1.00 on localised Swift-Hohenberg.
 
 ![Gray-Scott: walls on the hand-made description](docs/examples/gray-scott/phase_map_hand.png)
 
 - **One state per point.** Where every parameter point ends in one state, the walls and the tree
-  agree with the reference on 92-98% of the points. The rules of the tree can be read:
+  agree with the reference on 95-100% of the points. The rules of the tree can be read:
   - localised Swift-Hohenberg: the variance of $u$ alone (zero, small for a patch, large for
     stripes everywhere);
   - Gray-Scott: flat or not, which uniform state, moving or not, then the shape of $S(k)$.
@@ -281,11 +279,11 @@ point); FitzHugh-Nagumo is unchanged.
 - **Blind grouping** is sometimes closer (Gray-Scott: k-means). The walls are clearly ahead only
   on Swift-Hohenberg.
 - **Learned description** (views of 2026-11-19). It finds the static patterns on its own: 3 phases
-  on Swift-Hohenberg (ARI 0.96, 0.93) and on localised Swift-Hohenberg (1.00, 1.00); before, it
+  on Swift-Hohenberg (ARI 0.96, 0.96) and on localised Swift-Hohenberg (1.00, 1.00); before, it
   found 2 and 1. It finds one phase on Gray-Scott, where part of the difference is the mean value
   that the normalisation removes, and on Barkley; it finds two weak ones on FitzHugh-Nagumo.
 - **Combined table.** Every block has the same weight, so a few hand-made blocks count as much as
-  the whole of $h$. On Gray-Scott it gives 4 phases (0.86), what the variance and mean of the fields
+  the whole of $h$. On Gray-Scott it gives 4 phases (0.87), what the variance and mean of the fields
   give alone; with the learned description before the new views it gave 6 (0.95).
 - **Barkley.** Rest is separated from activity, but plane waves are not separated from spirals.
   At 52 of 165 points the runs end in different states (whether a spiral pair survives depends on
@@ -361,7 +359,9 @@ kind = "velocity"
   splay share, and $\ln F(t) - \ln F(t - \Delta t)$ over the pair of snapshots (negative while the
   orientation relaxes or coarsens, near 0 when steady, of either sign when it oscillates).
 - A vector or nematic field whose fluctuations are below $10^{-3}$ of its size is taken as exactly
-  uniform, so the numerical noise of a uniform state is not described as a pattern.
+  uniform, so the numerical noise of a uniform state is not described as a pattern. The same holds
+  for the size alone: when $|\mathbf p|$ varies by less than $10^{-3}$ of its mean while the direction
+  turns, its moments and domains are those of a uniform size.
 - The grid spacing can be given per run, as a column `dx` of the table of runs.
 - A whole periodic box is described with FFTs and periodic shifts. A crop or a non-periodic box
   ($L$ its side, $s$ = `max_shift`, by default $L/5$) is described without periodicity:
@@ -497,7 +497,7 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
 
 ## Tests
 
-`pytest` runs 220 tests on small synthetic fields with known answers, in about a minute:
+`pytest` runs 221 tests on small synthetic fields with known answers, in about a minute:
 
 - **Fields and files**: symmetry rules of vector and nematic fields, checked against the gradient
   of a scalar and the tensor of a director field; velocity and polarity turning as vectors; file
@@ -508,7 +508,7 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
   - curl-free and divergence-free flows; vortex cores of Gaussian vortices and of a cellular flow;
     $\pm1$ and $\pm\frac12$ winding defects; Frank energy of a turning orientation ($F = k^2$),
     of an aster (splay) and a vortex (bend), and its change over the lag; numerical noise on a
-    uniform vector or nematic ignored;
+    uniform vector or nematic ignored, and on a uniform size while the direction turns;
   - frozen, travelling and changing patterns; two states side by side (`parts`); blocks chosen
     per field;
   - invariance of every descriptor under the eight symmetries of the square and periodic shifts.

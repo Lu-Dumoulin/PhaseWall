@@ -4,14 +4,14 @@ Walls with the default settings (RATIO = 1.5). Agreement: points that carry the 
 
 | setting | describer | columns | phases | agree | points | walls | mixed | ratio_range | auc_boundary | nn_accuracy | effective_rank | jump_inner | jump_hex_stripes | jump_uniform_pattern | within_points | probe_hex_stripes | seconds |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| periodic box | hand | 28 | 3 | 235 | 240 | 34 | 0 | 1.2-2 | 0.981 | 0.974 | 13.2 | 0.972 | 1.92 | 4.41 | 0.298 | 0.999 | 3.55 |
+| periodic box | hand | 28 | 3 | 235 | 240 | 34 | 0 | 1.2-2 | 0.981 | 0.974 | 13.2 | 0.972 | 1.92 | 4.41 | 0.298 | 0.999 | 4.54 |
 | periodic box | cnn untrained | 174 | 2 | 171 | 240 | 15 | 0 | 1.2-2 | 0.927 | 0.983 | 113 | 0.985 | 1.14 | 2.38 | 0.718 | 0.931 | 0 |
-| periodic box | cnn seed 0 | 256 | 3 | 237 | 240 | 36 | 0 | 1.2-1.75 | 0.985 | 0.988 | 29.7 | 0.963 | 1.95 | 4.01 | 0.137 | 0.993 | 66.1 |
-| periodic box | cnn seed 1 | 256 | 3 | 235 | 240 | 34 | 2 | 1.2-2 | 0.976 | 0.993 | 33 | 0.957 | 1.97 | 3.94 | 0.137 | 0.996 | 64.8 |
-| crop (not periodic) | hand | 24 | 3 | 235 | 240 | 35 | 0 | 1.2-1.5 | 0.989 | 0.986 | 11.6 | 0.971 | 2.04 | 5 | 0.267 | 0.992 | 3.46 |
+| periodic box | cnn seed 0 | 256 | 3 | 237 | 240 | 36 | 0 | 1.2-1.75 | 0.985 | 0.988 | 29.7 | 0.963 | 1.95 | 4.01 | 0.137 | 0.993 | 73.1 |
+| periodic box | cnn seed 1 | 256 | 3 | 235 | 240 | 34 | 2 | 1.2-2 | 0.976 | 0.993 | 33 | 0.957 | 1.97 | 3.94 | 0.137 | 0.996 | 73.4 |
+| crop (not periodic) | hand | 24 | 3 | 235 | 240 | 35 | 0 | 1.2-1.5 | 0.989 | 0.986 | 11.6 | 0.971 | 2.04 | 5 | 0.267 | 0.992 | 4.05 |
 | crop (not periodic) | cnn untrained | 162 | 2 | 171 | 240 | 15 | 0 | 1.2-1.75 | 0.888 | 0.976 | 97.3 | 0.992 | 1.11 | 2.09 | 0.781 | 0.933 | 0 |
-| crop (not periodic) | cnn seed 0 | 256 | 2 | 171 | 240 | 15 | 0 | 1.5-3 | 0.97 | 0.986 | 28.1 | 0.973 | 1.76 | 3.13 | 0.44 | 0.985 | 49.6 |
-| crop (not periodic) | cnn seed 1 | 256 | 2 | 171 | 240 | 15 | 0 | 1.5-3 | 0.969 | 0.981 | 33 | 0.983 | 1.65 | 3.02 | 0.446 | 0.986 | 49.2 |
+| crop (not periodic) | cnn seed 0 | 256 | 2 | 171 | 240 | 15 | 0 | 1.5-3 | 0.97 | 0.986 | 28.1 | 0.973 | 1.76 | 3.13 | 0.44 | 0.985 | 59.9 |
+| crop (not periodic) | cnn seed 1 | 256 | 2 | 171 | 240 | 15 | 0 | 1.5-3 | 0.969 | 0.981 | 33 | 0.983 | 1.65 | 3.02 | 0.446 | 0.986 | 60 |
 
 Last epoch of each training:
 
@@ -28,7 +28,7 @@ groups: groups found (majority group of each point); agree: points that carry th
 
 | setting | describer | method | groups | noise_points | agree | points | ari | ari_all | pieces | noise_runs | k_chosen | components | probe_3_states |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| periodic box | hand | walls | 3 | 0 | 235 | 240 | 0.928 | 0.928 | 3 | 0 | nan | 7 | 0.999 |
+| periodic box | hand | walls | 3 | 0 | 236 | 240 | 0.942 | 0.942 | 3 | 0 | nan | 7 | 0.999 |
 | periodic box | hand | mixture | 8 | 0 | 230 | 240 | 0.384 | 0.384 | 13 | 0 | 10 | 7 | 0.999 |
 | periodic box | hand | kmeans | 5 | 0 | 235 | 240 | 0.583 | 0.583 | 5 | 0 | 7 | 7 | 0.999 |
 | periodic box | hand | hdbscan_5 | 37 | 42 | 196 | 240 | 0.752 | 0.606 | 50 | 0.198 | nan | 7 | 0.999 |
@@ -49,14 +49,14 @@ groups: groups found (majority group of each point); agree: points that carry th
 | periodic box | cnn seed 0 | hdbscan_10 | 6 | 133 | 106 | 240 | 0.774 | 0.304 | 13 | 0.491 | nan | 7 | 0.998 |
 | periodic box | cnn seed 0 | hdbscan_20 | 4 | 123 | 117 | 240 | 0.897 | 0.514 | 7 | 0.443 | nan | 7 | 0.998 |
 | periodic box | cnn seed 0 | hdbscan_40 | 4 | 100 | 139 | 240 | 0.872 | 0.609 | 8 | 0.367 | nan | 7 | 0.998 |
-| periodic box | cnn seed 1 | walls | 3 | 0 | 235 | 240 | 0.928 | 0.928 | 3 | 0 | nan | 7 | 0.997 |
+| periodic box | cnn seed 1 | walls | 3 | 0 | 237 | 240 | 0.956 | 0.956 | 3 | 0 | nan | 7 | 0.997 |
 | periodic box | cnn seed 1 | mixture | 10 | 0 | 236 | 240 | 0.263 | 0.263 | 16 | 0 | 10 | 7 | 0.997 |
 | periodic box | cnn seed 1 | kmeans | 8 | 0 | 234 | 240 | 0.33 | 0.33 | 14 | 0 | 8 | 7 | 0.997 |
 | periodic box | cnn seed 1 | hdbscan_5 | 14 | 110 | 129 | 240 | 0.638 | 0.26 | 17 | 0.37 | nan | 7 | 0.997 |
 | periodic box | cnn seed 1 | hdbscan_10 | 7 | 62 | 175 | 240 | 0.746 | 0.483 | 9 | 0.271 | nan | 7 | 0.997 |
 | periodic box | cnn seed 1 | hdbscan_20 | 5 | 102 | 137 | 240 | 0.82 | 0.477 | 6 | 0.396 | nan | 7 | 0.997 |
 | periodic box | cnn seed 1 | hdbscan_40 | 4 | 86 | 153 | 240 | 0.858 | 0.581 | 6 | 0.35 | nan | 7 | 0.997 |
-| crop (not periodic) | hand | walls | 3 | 0 | 235 | 240 | 0.928 | 0.928 | 3 | 0 | nan | 6 | 0.995 |
+| crop (not periodic) | hand | walls | 3 | 0 | 238 | 240 | 0.971 | 0.971 | 3 | 0 | nan | 6 | 0.995 |
 | crop (not periodic) | hand | mixture | 9 | 0 | 238 | 240 | 0.482 | 0.482 | 15 | 0 | 10 | 6 | 0.995 |
 | crop (not periodic) | hand | kmeans | 2 | 0 | 171 | 240 | 0.364 | 0.364 | 2 | 0 | 2 | 6 | 0.995 |
 | crop (not periodic) | hand | hdbscan_5 | 3 | 1 | 236 | 240 | 0.956 | 0.946 | 3 | 0.037 | nan | 6 | 0.995 |

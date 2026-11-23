@@ -8,7 +8,10 @@ For every field (arrays [x, y] or [x, y, component], grid spacing dx):
 - shape: the structure factor S(k) on shells of |k|, divided by its sum: which length scales
          are present, whatever the amplitude.
 - mom:   mean (scalars that are not relative), standard deviation, skewness and excess kurtosis
-         of the values (scalar), of |a| (vector) or of the scalar order 2|Q| (nematic).
+         of the values (scalar), of |a| (vector) or of the scalar order 2|Q| (nematic). A size that
+         varies by less than FLAT_RELATIVE of its mean is taken as uniform (here and in topo): the
+         direction of a polarity can turn slowly while |p| stays 1 to 1e-4, and that noise is no
+         distribution.
 - order: vectors and nematics: |<a>| / <|a|>, 1 when everything points the same way.
 - topo:  the number of connected domains (per unit area) where the values (as for mom) lie
          above, and below, the mean plus z standard deviations, for z in LEVELS: spots give
@@ -389,7 +392,8 @@ def parts(a: np.ndarray, values: np.ndarray, dx: float, periodic: bool = True,
 def prepared(a: np.ndarray, f: Field) -> np.ndarray:
     """The array that is described: (a - <a>) / <a> for a relative scalar; a vector or nematic
     whose fluctuations are below FLAT_RELATIVE of its size (rms of |a|) is replaced by its mean,
-    exactly uniform, so that numerical noise is not described as a pattern."""
+    exactly uniform, so that numerical noise is not described as a pattern (the size |a| alone is
+    handled in field_descriptors)."""
     if f.relative:
         m = a.mean()
         return (a - m) / m if m != 0 else a - m
@@ -422,6 +426,9 @@ def field_descriptors(a: np.ndarray, f: Field, dx: float, edges: np.ndarray,
     else:
         size = np.hypot(c[..., 0], c[..., 1])
         values = 2 * size if f.symmetry == "nematic" else size
+        # a size uniform to FLAT_RELATIVE: its numerical noise is not a distribution (mom, topo)
+        if values.std() < FLAT_RELATIVE * abs(values.mean()):
+            values = np.full_like(values, values.mean())
     if "topo" in use:
         area = values.shape[0] * values.shape[1] * dx**2
         out |= {f"{f.name}.topo.{k}": v for k, v in domain_counts(values, area, periodic).items()}

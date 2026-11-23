@@ -4,7 +4,8 @@ whose answer is known: Gaussian vortices, a cellular flow and a shear flow (Okub
 saddles of a polarity (+1, +1, -1), and +-1/2 defects of a nematic; the parts block (two states side by
 side against one state everywhere, its block sums, its invariance under the symmetries of the box); the
 frank block (Frank energy of known orientations, aster and vortex, its change over the lag), and the
-numerical noise of a uniform vector or nematic field not described as a pattern."""
+numerical noise of a uniform vector or nematic field not described as a pattern, nor that of a size that
+stays uniform while the direction turns."""
 
 import numpy as np
 import pandas as pd
@@ -232,3 +233,21 @@ def test_numerical_noise_on_a_uniform_field_is_not_a_pattern(kind):
             for a in (u, u + 2.5e-5 * rng.standard_normal(u.shape), u + 1e-2 * rng.standard_normal(u.shape))]
     assert max(abs(rows[0][c] - rows[1][c]) for c in rows[0]) < 1e-6
     assert abs(rows[0]["p.amp.log10var"] - rows[2]["p.amp.log10var"]) > 5
+
+
+def test_a_turning_polarity_of_uniform_size_has_uniform_size_descriptors():
+    """The direction of p turns slowly (by up to 3 degrees) while |p| = 1 with noise of 1e-4: the
+    moments and domains of |p| are those of a uniform size (0), the turn itself is kept (variance,
+    Frank energy above the floor); a size that varies by 5% keeps its moments and domains."""
+    f = Field("p", ("p",), "polarity")
+    theta = 0.05 * np.sin(2 * np.pi * X / L)
+    rng = np.random.default_rng(1)
+    size = 1 + 1e-4 * rng.standard_normal(X.shape)
+    p = np.stack([size * np.cos(theta), size * np.sin(theta)], -1)
+    row = d.describe_snapshot({"p": p}, [f], DX, before={"p": p})
+    assert row["p.mom.std"] < 1e-12 and row["p.mom.skew"] == 0 and row["p.mom.kurt"] == 0
+    assert all(row[c] == 0 for c in row if c.startswith("p.topo."))
+    assert row["p.amp.log10var"] > -5 and row["p.frank.log10F"] > -5
+    varying = np.stack([(1 + 0.05 * np.sin(2 * np.pi * Y / L)) * np.cos(theta), np.sin(theta)], -1)
+    row = d.describe_snapshot({"p": varying}, [f], DX)
+    assert row["p.mom.std"] > 0.01 and any(row[c] > 0 for c in row if c.startswith("p.topo."))

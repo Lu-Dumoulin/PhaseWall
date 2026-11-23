@@ -18,7 +18,7 @@ a,b,reference,runs,phase,phase_label,run_shown
 0.55,0.07,plane waves,"plane waves 3, rest 1",1,rest,249
 0.6,0.05,plane waves,plane waves 4,0,spirals,284
 0.6,0.06,plane waves,plane waves 4,0,spirals,288
-0.6,0.07,plane waves,"plane waves 3, rest 1",1,rest,293
+0.6,0.07,plane waves,"plane waves 3, rest 1",0,rest,293
 0.6,0.08,plane waves,plane waves 4,0,spirals,296
 0.65,0.06,plane waves,plane waves 4,0,spirals,332
 0.65,0.07,plane waves,plane waves 4,0,spirals,336
@@ -26,7 +26,7 @@ a,b,reference,runs,phase,phase_label,run_shown
 0.65,0.09,plane waves,plane waves 4,0,spirals,344
 0.7,0.08,plane waves,plane waves 4,0,spirals,384
 0.7,0.09,plane waves,plane waves 4,0,spirals,388
-0.7,0.1,plane waves,"plane waves 3, rest 1",1,rest,393
+0.7,0.1,plane waves,"plane waves 3, rest 1",0,rest,393
 0.75,0.08,plane waves,"plane waves 3, spirals 1",0,spirals,428
 0.75,0.09,plane waves,"plane waves 3, spirals 1",0,spirals,433
 0.75,0.1,plane waves,plane waves 4,0,spirals,436

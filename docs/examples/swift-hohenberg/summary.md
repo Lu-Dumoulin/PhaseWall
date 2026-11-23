@@ -1,6 +1,6 @@
 # swift-hohenberg
 
-1920 runs on 240 parameter points (eps, g); analysis 3 min.
+1920 runs on 240 parameter points (eps, g); analysis 2 min.
 
 Reference labels (runs): stripes 1131, hexagons 549, uniform 240
 
@@ -41,7 +41,7 @@ Each row: a description and a method; agree = points carrying the most common re
 
 | describer | method | groups | noise_points | agree | points | ari | ari_all | pieces | noise_runs |
 |---|---|---|---|---|---|---|---|---|---|
-| hand | walls | 3 | 0 | 235 | 240 | 0.928 | 0.928 | 3 | 0 |
+| hand | walls | 3 | 0 | 236 | 240 | 0.942 | 0.942 | 3 | 0 |
 | hand | mixture | 10 | 0 | 230 | 240 | 0.382 | 0.382 | 14 | 0 |
 | hand | kmeans | 5 | 0 | 235 | 240 | 0.583 | 0.583 | 5 | 0 |
 | hand | hdbscan_10 | 7 | 22 | 216 | 240 | 0.772 | 0.659 | 11 | 0.124 |
@@ -51,17 +51,17 @@ Each row: a description and a method; agree = points carrying the most common re
 | learned seed 0 | kmeans | 2 | 0 | 203 | 240 | 0.602 | 0.602 | 2 | 0 |
 | learned seed 0 | hdbscan_10 | 6 | 133 | 106 | 240 | 0.774 | 0.304 | 13 | 0.491 |
 | learned seed 0 | hdbscan_20 | 4 | 123 | 117 | 240 | 0.897 | 0.514 | 7 | 0.443 |
-| combined seed 0 | walls | 3 | 0 | 236 | 240 | 0.942 | 0.942 | 3 | 0 |
+| combined seed 0 | walls | 3 | 0 | 238 | 240 | 0.971 | 0.971 | 3 | 0 |
 | combined seed 0 | mixture | 9 | 0 | 230 | 240 | 0.547 | 0.547 | 20 | 0 |
 | combined seed 0 | kmeans | 5 | 0 | 235 | 240 | 0.577 | 0.577 | 5 | 0 |
 | combined seed 0 | hdbscan_10 | 10 | 56 | 182 | 240 | 0.695 | 0.427 | 23 | 0.289 |
 | combined seed 0 | hdbscan_20 | 6 | 67 | 172 | 240 | 0.73 | 0.398 | 10 | 0.305 |
-| learned seed 1 | walls | 3 | 0 | 235 | 240 | 0.928 | 0.928 | 3 | 0 |
+| learned seed 1 | walls | 3 | 0 | 237 | 240 | 0.956 | 0.956 | 3 | 0 |
 | learned seed 1 | mixture | 10 | 0 | 236 | 240 | 0.263 | 0.263 | 16 | 0 |
 | learned seed 1 | kmeans | 8 | 0 | 234 | 240 | 0.33 | 0.33 | 14 | 0 |
 | learned seed 1 | hdbscan_10 | 7 | 62 | 175 | 240 | 0.746 | 0.483 | 9 | 0.271 |
 | learned seed 1 | hdbscan_20 | 5 | 102 | 137 | 240 | 0.82 | 0.477 | 6 | 0.396 |
-| combined seed 1 | walls | 3 | 0 | 235 | 240 | 0.928 | 0.928 | 3 | 0 |
+| combined seed 1 | walls | 3 | 0 | 236 | 240 | 0.942 | 0.942 | 3 | 0 |
 | combined seed 1 | mixture | 10 | 0 | 228 | 240 | 0.341 | 0.341 | 20 | 0 |
 | combined seed 1 | kmeans | 5 | 0 | 235 | 240 | 0.572 | 0.572 | 5 | 0 |
 | combined seed 1 | hdbscan_10 | 8 | 40 | 198 | 240 | 0.719 | 0.575 | 15 | 0.205 |

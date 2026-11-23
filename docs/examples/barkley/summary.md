@@ -1,6 +1,6 @@
 # barkley
 
-660 runs on 165 parameter points (a, b); analysis 2 min.
+660 runs on 165 parameter points (a, b); analysis 1 min.
 
 Reference labels (runs): spirals 325, rest 198, plane waves 137
 
@@ -41,7 +41,7 @@ Each row: a description and a method; agree = points carrying the most common re
 
 | describer | method | groups | noise_points | agree | points | ari | ari_all | pieces | noise_runs |
 |---|---|---|---|---|---|---|---|---|---|
-| hand | walls | 2 | 0 | 132 | 165 | 0.586 | 0.586 | 2 | 0 |
+| hand | walls | 2 | 0 | 132 | 165 | 0.582 | 0.582 | 2 | 0 |
 | hand | mixture | 10 | 0 | 152 | 165 | 0.462 | 0.462 | 43 | 0 |
 | hand | kmeans | 2 | 0 | 131 | 165 | 0.566 | 0.566 | 3 | 0 |
 | hand | hdbscan_10 | 10 | 14 | 145 | 165 | 0.747 | 0.635 | 35 | 0.076 |
@@ -51,7 +51,7 @@ Each row: a description and a method; agree = points carrying the most common re
 | learned seed 0 | kmeans | 10 | 0 | 150 | 165 | 0.312 | 0.312 | 21 | 0 |
 | learned seed 0 | hdbscan_10 | 3 | 24 | 108 | 165 | 0.411 | 0.511 | 3 | 0.15 |
 | learned seed 0 | hdbscan_20 | 2 | 1 | 131 | 165 | 0.581 | 0.572 | 2 | 0.005 |
-| combined seed 0 | walls | 2 | 0 | 132 | 165 | 0.586 | 0.586 | 2 | 0 |
+| combined seed 0 | walls | 2 | 0 | 132 | 165 | 0.582 | 0.582 | 2 | 0 |
 | combined seed 0 | mixture | 10 | 0 | 158 | 165 | 0.407 | 0.407 | 35 | 0 |
 | combined seed 0 | kmeans | 2 | 0 | 131 | 165 | 0.566 | 0.566 | 3 | 0 |
 | combined seed 0 | hdbscan_10 | 8 | 10 | 148 | 165 | 0.811 | 0.727 | 32 | 0.052 |
@@ -61,7 +61,7 @@ Each row: a description and a method; agree = points carrying the most common re
 | learned seed 1 | kmeans | 9 | 0 | 145 | 165 | 0.293 | 0.293 | 26 | 0 |
 | learned seed 1 | hdbscan_10 | 3 | 24 | 108 | 165 | 0.399 | 0.502 | 4 | 0.158 |
 | learned seed 1 | hdbscan_20 | 3 | 37 | 95 | 165 | 0.39 | 0.355 | 4 | 0.224 |
-| combined seed 1 | walls | 2 | 0 | 132 | 165 | 0.586 | 0.586 | 2 | 0 |
+| combined seed 1 | walls | 2 | 0 | 132 | 165 | 0.582 | 0.582 | 2 | 0 |
 | combined seed 1 | mixture | 10 | 0 | 158 | 165 | 0.456 | 0.456 | 34 | 0 |
 | combined seed 1 | kmeans | 2 | 0 | 131 | 165 | 0.566 | 0.566 | 3 | 0 |
 | combined seed 1 | hdbscan_10 | 8 | 8 | 151 | 165 | 0.824 | 0.754 | 33 | 0.047 |

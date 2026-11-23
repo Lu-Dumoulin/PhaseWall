@@ -1,6 +1,6 @@
 # sh-localized
 
-420 runs on 105 parameter points (a, b); analysis 1 min.
+420 runs on 105 parameter points (a, b); analysis 0 min.
 
 Reference labels (runs): uniform 204, extended 167, localized 49
 
@@ -41,7 +41,7 @@ Each row: a description and a method; agree = points carrying the most common re
 
 | describer | method | groups | noise_points | agree | points | ari | ari_all | pieces | noise_runs |
 |---|---|---|---|---|---|---|---|---|---|
-| hand | walls | 3 | 0 | 103 | 105 | 0.96 | 0.96 | 3 | 0 |
+| hand | walls | 3 | 0 | 105 | 105 | 1 | 1 | 3 | 0 |
 | hand | mixture | 7 | 0 | 105 | 105 | 0.799 | 0.799 | 16 | 0 |
 | hand | kmeans | 6 | 0 | 105 | 105 | 0.983 | 0.983 | 7 | 0 |
 | hand | hdbscan_10 | 3 | 11 | 94 | 105 | 1 | 0.946 | 3 | 0.126 |
@@ -51,7 +51,7 @@ Each row: a description and a method; agree = points carrying the most common re
 | learned seed 0 | kmeans | 3 | 0 | 105 | 105 | 1 | 1 | 3 | 0 |
 | learned seed 0 | hdbscan_10 | 4 | 0 | 103 | 105 | 0.819 | 0.819 | 5 | 0.036 |
 | learned seed 0 | hdbscan_20 | 4 | 4 | 100 | 105 | 0.857 | 0.809 | 6 | 0.067 |
-| combined seed 0 | walls | 3 | 0 | 103 | 105 | 0.96 | 0.96 | 3 | 0 |
+| combined seed 0 | walls | 3 | 0 | 105 | 105 | 1 | 1 | 3 | 0 |
 | combined seed 0 | mixture | 6 | 0 | 105 | 105 | 0.79 | 0.79 | 18 | 0 |
 | combined seed 0 | kmeans | 3 | 0 | 105 | 105 | 1 | 1 | 3 | 0 |
 | combined seed 0 | hdbscan_10 | 3 | 17 | 88 | 105 | 1 | 0.826 | 5 | 0.19 |
@@ -61,7 +61,7 @@ Each row: a description and a method; agree = points carrying the most common re
 | learned seed 1 | kmeans | 3 | 0 | 105 | 105 | 1 | 1 | 3 | 0 |
 | learned seed 1 | hdbscan_10 | 5 | 0 | 104 | 105 | 0.911 | 0.911 | 6 | 0.048 |
 | learned seed 1 | hdbscan_20 | 4 | 0 | 105 | 105 | 0.971 | 0.971 | 4 | 0.012 |
-| combined seed 1 | walls | 3 | 0 | 103 | 105 | 0.96 | 0.96 | 3 | 0 |
+| combined seed 1 | walls | 3 | 0 | 105 | 105 | 1 | 1 | 3 | 0 |
 | combined seed 1 | mixture | 6 | 0 | 104 | 105 | 0.766 | 0.766 | 20 | 0 |
 | combined seed 1 | kmeans | 5 | 0 | 105 | 105 | 0.977 | 0.977 | 7 | 0 |
 | combined seed 1 | hdbscan_10 | 3 | 17 | 88 | 105 | 1 | 0.826 | 5 | 0.181 |

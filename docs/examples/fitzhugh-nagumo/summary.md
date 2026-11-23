@@ -1,6 +1,6 @@
 # fitzhugh-nagumo
 
-396 runs on 99 parameter points (eps, delta); analysis 2 min.
+396 runs on 99 parameter points (eps, delta); analysis 0 min.
 
 Reference labels (runs): uniform 134, dynamic 121, stripes 83, fronts 51, holes 7
 
@@ -46,7 +46,7 @@ Each row: a description and a method; agree = points carrying the most common re
 | hand | kmeans | 8 | 0 | 88 | 99 | 0.537 | 0.537 | 22 | 0 |
 | hand | hdbscan_10 | 6 | 18 | 75 | 99 | 0.699 | 0.515 | 17 | 0.205 |
 | hand | hdbscan_20 | 5 | 22 | 71 | 99 | 0.71 | 0.496 | 16 | 0.23 |
-| learned seed 0 | walls | 2 | 0 | 44 | 99 | 0.193 | 0.193 | 2 | 0 |
+| learned seed 0 | walls | 2 | 0 | 44 | 99 | 0.208 | 0.208 | 3 | 0 |
 | learned seed 0 | mixture | 10 | 0 | 89 | 99 | 0.426 | 0.426 | 25 | 0 |
 | learned seed 0 | kmeans | 10 | 0 | 89 | 99 | 0.426 | 0.426 | 25 | 0 |
 | learned seed 0 | hdbscan_10 | 8 | 14 | 78 | 99 | 0.614 | 0.483 | 21 | 0.116 |
@@ -56,7 +56,7 @@ Each row: a description and a method; agree = points carrying the most common re
 | combined seed 0 | kmeans | 8 | 0 | 88 | 99 | 0.552 | 0.552 | 21 | 0 |
 | combined seed 0 | hdbscan_10 | 7 | 20 | 73 | 99 | 0.75 | 0.519 | 12 | 0.215 |
 | combined seed 0 | hdbscan_20 | 5 | 18 | 75 | 99 | 0.72 | 0.55 | 16 | 0.177 |
-| learned seed 1 | walls | 2 | 0 | 42 | 99 | 0.168 | 0.168 | 2 | 0 |
+| learned seed 1 | walls | 2 | 0 | 42 | 99 | 0.182 | 0.182 | 3 | 0 |
 | learned seed 1 | mixture | 10 | 0 | 88 | 99 | 0.411 | 0.411 | 27 | 0 |
 | learned seed 1 | kmeans | 10 | 0 | 87 | 99 | 0.423 | 0.423 | 27 | 0 |
 | learned seed 1 | hdbscan_10 | 8 | 17 | 73 | 99 | 0.568 | 0.481 | 22 | 0.179 |

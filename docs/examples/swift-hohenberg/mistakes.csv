@@ -1,6 +1,6 @@
 eps,g,reference,runs,phase,phase_label,run_shown
-0.025,0.1,hexagons,"hexagons 5, stripes 3",0,stripes,248
-0.275,0.7,hexagons,"hexagons 6, stripes 2",0,stripes,897
+0.025,0.1,hexagons,"hexagons 5, stripes 3",1,stripes,248
+0.275,0.7,hexagons,"hexagons 6, stripes 2",1,stripes,897
 0.325,1.0,hexagons,"hexagons 5, stripes 3",0,stripes,1040
 0.325,1.1,hexagons,"hexagons 5, stripes 3",0,stripes,1050
 0.325,1.2,hexagons,"hexagons 5, stripes 3",0,stripes,1058
