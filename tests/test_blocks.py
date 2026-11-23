@@ -2,7 +2,9 @@
 a field's own choice, the checks of that choice, and the role-specific blocks against fields
 whose answer is known: Gaussian vortices, a cellular flow and a shear flow (Okubo-Weiss), asters, vortices and
 saddles of a polarity (+1, +1, -1), and +-1/2 defects of a nematic; the parts block (two states side by
-side against one state everywhere, its block sums, its invariance under the symmetries of the box)."""
+side against one state everywhere, its block sums, its invariance under the symmetries of the box); the
+frank block (Frank energy of known orientations, aster and vortex, its change over the lag), and the
+numerical noise of a uniform vector or nematic field not described as a pattern."""
 
 import numpy as np
 import pandas as pd
@@ -179,3 +181,54 @@ def test_parts_is_unchanged_by_the_symmetries_of_the_box():
                                             periodic=periodic)
                     for c in ref:
                         assert t[c] == pytest.approx(ref[c], rel=1e-9, abs=1e-9), (c, periodic, turns, mirror, shift)
+
+
+# ---------------------------------------------------------------- frank block
+K = 2 * np.pi * 3 / L                                  # three turns of the orientation across the box
+
+
+def test_frank_energy_of_known_fields():
+    """An orientation turning at rate k: F = k^2 (polarity, and nematic with S = 1), half splay and
+    half bend; an aster is splay and a vortex bend; a change of the size alone has no Frank energy."""
+    p = np.stack([np.cos(K * X), np.sin(K * X)], -1)
+    s, b = d.frank_density(p, "vector", DX)
+    assert np.mean(s + b) == pytest.approx(K**2, rel=1e-9) and np.mean(s) == pytest.approx(K**2 / 2, rel=1e-9)
+    q = 0.5 * np.stack([np.cos(2 * K * X), np.sin(2 * K * X)], -1)           # S = 2 |Q| = 1
+    s, b = d.frank_density(q, "nematic", DX)
+    assert np.mean(s + b) == pytest.approx(K**2, rel=1e-9)
+    c = L / 2
+    r = np.hypot(X - c, Y - c)
+    aster = np.stack([(X - c) / r, (Y - c) / r], -1)
+    vortex = np.stack([-(Y - c) / r, (X - c) / r], -1)
+    for a, splay in ((aster, 1.0), (vortex, 0.0)):
+        s, b = d.frank_density(a, "vector", DX, periodic=False)
+        assert np.mean(s) / np.mean(s + b) == pytest.approx(splay, abs=0.01)
+    size_only = np.stack([1 + 0.5 * np.sin(K * X), np.zeros_like(X)], -1)
+    s, b = d.frank_density(size_only, "vector", DX)
+    assert np.max(s + b) < 1e-20
+
+
+def test_frank_change_over_the_lag():
+    """Three times fewer turns at t - lag than at t: change = ln F(t) - ln F(t - lag) = ln 9;
+    the same field twice: 0."""
+    p = Field("p", ("p",), "polarity")
+    now = np.stack([np.cos(K * X), np.sin(K * X)], -1)
+    before = np.stack([np.cos(K * X / 3), np.sin(K * X / 3)], -1)
+    row = d.describe_snapshot({"p": now}, [p], DX, before={"p": before})
+    assert row["p.frank.change"] == pytest.approx(np.log(9), rel=1e-9)
+    assert row["p.frank.splay_share"] == pytest.approx(0.5)
+    assert d.describe_snapshot({"p": now}, [p], DX, before={"p": now})["p.frank.change"] == 0
+
+
+@pytest.mark.parametrize("kind", ["polarity", "nematic"])
+def test_numerical_noise_on_a_uniform_field_is_not_a_pattern(kind):
+    """A uniform field and the same field with fluctuations of 2.5e-5 of its size (numerical
+    noise) give the same descriptors; fluctuations of 1% do not."""
+    f = Field("p", ("p",), kind)
+    u = np.zeros((N, N, 2))
+    u[..., 0] = 1.0
+    rng = np.random.default_rng(0)
+    rows = [d.describe_snapshot({"p": a}, [f], DX, before={"p": a})
+            for a in (u, u + 2.5e-5 * rng.standard_normal(u.shape), u + 1e-2 * rng.standard_normal(u.shape))]
+    assert max(abs(rows[0][c] - rows[1][c]) for c in rows[0]) < 1e-6
+    assert abs(rows[0]["p.amp.log10var"] - rows[2]["p.amp.log10var"]) > 5

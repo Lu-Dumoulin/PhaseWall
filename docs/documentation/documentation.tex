@@ -100,6 +100,9 @@ more than a smooth variation and sampling noise can explain? The description is 
 an encoder; the question is answered by a method (Fig.~\ref{fig:overview}). No phase count,
 no label and no model of the system are given. The price is that the result depends on what
 the encoder can see: two states with the same description cannot be told apart.
+PhaseWall was built for scans of active polar fluids (density, flow and polarity fields), such as
+the compressible active polar fluids with renewal of Ref.~\cite{dumoulin2026}; the examples in this
+document are models with a known answer.
 \end{tech}
 
 \subsection{Encoders: from a snapshot to $h$}\label{sec:list-encoders}
@@ -323,6 +326,7 @@ Block & Observables (columns) & scalar & vector & velocity & polarity & nematic 
 \code{flow}  & $\log_{10}\avg{(\nabla\cdot\mathbf a)^2}$, $\log_{10}\avg{(\nabla\times\mathbf a)^2}$, curl share & & \yes & \yes & \yes & \\
 \code{vortex} & Okubo-Weiss vortex cores: area share, cores per unit area & & $\circ$ & \yes & & \\
 \code{defects} & winding-number defects per unit area: \code{plus}, \code{minus} ($\pm1$, nematic $\pm\frac12$) & & $\circ$ & & \yes & \yes \\
+\code{frank} & Frank energy of the orientation: $\log_{10}F$, splay share, its change $\ln F(t)-\ln F(t-\Delta t)$ & & $\circ$ & & \yes & \yes \\
 \code{parts} & spread of six local numbers over blocks of half the side: two states side by side (\code{log10H}) & $\circ$ & $\circ$ & $\circ$ & $\circ$ & $\circ$ \\
 \code{dyn}   & decorrelation over $\Delta t$ at the same place (\code{still}) and after the best shift (\code{moving}) & \yes & \yes & \yes & \yes & \yes \\
 \bottomrule
@@ -424,7 +428,7 @@ when both vanish.
 
 \textbf{dyn:} correlations summed over the components.
 
-\textbf{vortex} (velocity). The Okubo-Weiss parameter
+\textbf{vortex} (velocity). The Okubo-Weiss parameter~\cite{okubo1970,weiss1991}
 \[
 W=s_n^2+s_s^2-\omega^2,\qquad s_n=\partial_xv_x-\partial_yv_y,\quad s_s=\partial_xv_y+\partial_yv_x,\quad
 \omega=\partial_xv_y-\partial_yv_x,
@@ -441,6 +445,33 @@ winding number of the plaquette, $+1$ for an aster or a vortex, $-1$ for a saddl
 (Fig.~\ref{fig:winding}a,b). Columns: positive and negative defects per unit area. Every plaquette
 counts, also where $|\mathbf p|$ is small, so in a disordered region the count measures the disorder
 (a choice). A flat field has no defect.
+
+\textbf{frank} (polarity, nematic). The Frank energy~\cite{frank1958} of the orientation with one elastic constant
+($K=1$), weighted by the size $m$ of the order squared so that defect cores stay finite:
+splay $m^2(\nabla\cdot\mathbf n)^2$ and bend $m^2|\mathbf n\times(\nabla\times\mathbf n)|^2$, with
+$\mathbf n$ the direction of $\mathbf p$ ($m=|\mathbf p|$) or the director ($m=S=2|\mathsf Q|$). With
+$\mathbf a=(p_x,p_y)$ or $(Q_{xx},Q_{xy})$ and $\theta$ the angle of $\mathbf n$,
+\[
+\mathbf g=\frac{a_x\nabla a_y-a_y\nabla a_x}{|\mathbf a|}=m\nabla\theta,\qquad
+\text{splay}=\tfrac12\big[(1-c)g_x^2+(1+c)g_y^2-2s\,g_xg_y\big],\quad
+\text{bend}=\tfrac12\big[(1+c)g_x^2+(1-c)g_y^2+2s\,g_xg_y\big],
+\]
+$c=\cos2\theta$, $s=\sin2\theta$ (from the components, so no sign of $\mathbf n$ has to be chosen);
+splay $+$ bend $=m^2|\nabla\theta|^2=|\nabla\mathbf a|^2-|\nabla|\mathbf a||^2$: the distortion of the
+orientation, not of the size. Columns: $\log_{10}F$ with $F=\avg{\text{splay}+\text{bend}}$;
+\code{splay_share} $=\avg{\text{splay}}/F$ (0.5 when $F$ is at the floor); and, for a pair of snapshots,
+\code{change} $=\ln F(t)-\ln F(t-\Delta t)$: negative while the orientation relaxes or coarsens, near 0
+when steady, of either sign over the snapshots of a run when it oscillates. Tests: an orientation
+turning at rate $k$ gives $F=k^2$ (polarity, and nematic with $S=1$), half splay and half bend; an aster
+is splay, a vortex bend; a change of $|\mathbf p|$ alone gives $F=0$; three times fewer turns at
+$t-\Delta t$ give \code{change} $=\ln9$.
+
+\textbf{Uniform vectors and nematics.} A vector or nematic field whose fluctuations are below
+$10^{-3}$ of its size (\code{FLAT_RELATIVE}, rms of $|\mathbf a|$) is replaced by its mean before
+it is described. Otherwise the numerical noise of a uniformly polarised state (fluctuations of
+$10^{-5}$, say) is described as a pattern: variance, divergence, curl and dynamics far above the
+floors of an exactly uniform field, so two runs of the same uniform state look different. Test: a
+uniform field and the same field with fluctuations of $2.5\times10^{-5}$ give the same descriptors.
 
 \textbf{Reading the same columns for a velocity and for a polarity.} For a velocity $\mathbf v$,
 $\avg{|\mathbf v|^2}$ (from \code{amp} and \code{mom}) is the kinetic energy, $S(k)$ its spectrum,
@@ -495,8 +526,7 @@ block keeps the symmetries of the box. $H$ is the variance of these numbers over
 averaged over the six; the column is \code{log10H}. Block sums come from a cumulative table, so
 all positions cost a few passes over the frame.
 
-\emph{Physics parallel.} Binder's block distribution (K.~Binder, Z.\ Phys.\ B \textbf{43}, 119
-(1981)): in one phase, blocks larger than the correlation length differ only by finite-size
+\emph{Physics parallel.} Binder's block distribution~\cite{binder1981}: in one phase, blocks larger than the correlation length differ only by finite-size
 fluctuations, so $H$ is small and falls like $1/\ell^2$; at coexistence the blocks fall in one
 phase or the other and $H$ stays large. Active matter uses the same idea: the density in boxes
 becomes bimodal in motility-induced phase separation. On the Swift-Hohenberg demo the largest
@@ -551,7 +581,7 @@ C(\mathbf T)=\frac{\sum_{\mathbf r}y(\mathbf r)\,x(\mathbf r+\mathbf T)}
 \]
 the Pearson correlation of the frame with the window under it. The three sums over windows
 are computed for all shifts at once by FFT convolutions (fast normalised cross-correlation,
-Lewis 1995), so the cost hardly depends on $s$. $C_{\rm still}=C(\mathbf 0)$,
+Lewis~\cite{lewis1995}), so the cost hardly depends on $s$. $C_{\rm still}=C(\mathbf 0)$,
 $C_{\rm moving}=\max_{\mathbf T}C(\mathbf T)$. A pattern that moves by more than $s$ during
 $\Delta t$ is seen as changing.
 
@@ -671,9 +701,9 @@ $h$ change as much between neighbouring points as across the hexagon-stripe boun
 the normalisation. The views are the operations the description must not see; the loss can only be
 lowered by what survives them, the shape of the pattern.
 
-\textbf{Training (SimCLR).} A batch holds two views of each of $N$ runs, made from two different
+\textbf{Training (SimCLR~\cite{chen2020}).} A batch holds two views of each of $N$ runs, made from two different
 pairs of the run. With $z=g(h)/|g(h)|$, $g$ a two-layer perceptron
-($256\to256\to64$), the InfoNCE loss is
+($256\to256\to64$), the InfoNCE loss~\cite{oord2018} is
 \[
 \mathcal L=-\frac{1}{2N}\sum_{i=1}^{2N}\log\frac{e^{z_i\cdot z_{i^+}/T}}{\sum_{k\ne i}e^{z_i\cdot z_k/T}},\qquad T=0.2,
 \]
@@ -813,7 +843,7 @@ Euclidean distance is the same for every block.
 linked when all parameters but one are equal and they are consecutive along that one, among all
 nodes of the scan. A refined line therefore links to the coarse points around it.
 
-\textbf{Energy distance} (Fig.~\ref{fig:energy}). The snapshots of a point form a sample in
+\textbf{Energy distance}~\cite{szekely2013} (Fig.~\ref{fig:energy}). The snapshots of a point form a sample in
 descriptor space; neighbouring points are compared through their whole distributions, not only
 their means (a bistable point and a pure one may have the same mean). For samples $X\sim P$ and
 $Y\sim Q$ in $\mathbb R^d$ (Sz\'ekely and Rizzo),
@@ -911,12 +941,12 @@ with $\tilde J_1$ the median of $J_1$ over all links (the lower bound keeps the 
 across very strong walls). With the degrees $d_a=\sum_bW_{ab}$, the random walk $P=d^{-1}W$ and the
 normalised Laplacian $L=\mathbb I-d^{-1/2}Wd^{-1/2}$ have the same spectrum up to
 $\lambda\to1-\lambda$: a mode of eigenvalue $\lambda$ of $L$ decays as $(1-\lambda)^t$. $\lambda_0=0$
-is the stationary state ($\propto d$); the second eigenvalue $\lambda_1$ (the Fiedler value) is the
+is the stationary state ($\propto d$); the second eigenvalue $\lambda_1$ (the Fiedler value~\cite{fiedler1973,luxburg2007}) is the
 slowest relaxation, and its eigenvector $\mathbf v=d^{-1/2}\mathbf u_1$ orders the points across the
 strongest barrier.
 
 The points are sorted by $\mathbf v$; for each prefix $S$ (with at least \code{MIN_PHASE}=3
-points on each side) the normalised cut (Shi and Malik 2000)
+points on each side) the normalised cut \cite{shi2000}
 \[
 \mathrm{Ncut}(S)=\frac{\cut(S,\bar S)}{\vol(S)}+\frac{\cut(S,\bar S)}{\vol(\bar S)},\qquad
 \cut(S,\bar S)=\sum_{a\in S,b\in\bar S}W_{ab},\quad \vol(S)=\sum_{a\in S}d_a
@@ -958,7 +988,7 @@ largest noisy $J_1$. Right: the independent $J_2$ of the same link is ordinary.}
 The spectral cut always proposes a split, even inside a single phase. It is kept as a wall
 only if its crossing links jump more than the inner links, measured with $J_2$, which did not
 take part in placing it. Let $x_i=\log J_2$ on the $n_1$ crossing links and $y_j=\log J_2$ on the
-$n_2$ inner links of the region. The Mann-Whitney statistic
+$n_2$ inner links of the region. The Mann-Whitney statistic~\cite{mann1947}
 \[
 U=\sum_{i,j}\Big[\mathbf 1(x_i>y_j)+\tfrac12\,\mathbf 1(x_i=y_j)\Big],\qquad
 \mathrm{AUC}=U/(n_1n_2),
@@ -1028,7 +1058,7 @@ the uniform region (all its jumps at the floor), cuts 4 and 5 inside stripes and
 \code{scipy.sparse.csgraph.connected_components}), \code{best_cut} (dense \code{numpy.linalg.eigh},
 then the sweep), \code{test_cut} (\code{scipy.stats.mannwhitneyu}, \code{alternative="greater"}),
 \code{split_regions}, \code{find_walls} (everything), \code{phases_against_ratio} (robustness).
-Tables of the result: \code{nodes} (parameters, runs, snapshots, spread, mixed, region, phase),
+Tables of the result: \code{nodes} (parameters, runs, snapshots, halves, spread, mixed, region, phase),
 \code{edges} (\code{jump}, \code{jump_select} $=J_1$, \code{jump_test} $=J_2$, contrast, wall),
 \code{cuts} (every cut tried).
 
@@ -1039,6 +1069,26 @@ pure noise (5 seeds) or under a smooth drift; exactly the 8 links between $a=5$ 
 phases; the right 12 links for three phases on a smooth background; the count against
 \code{RATIO} is 2, 2, 1 for ratios 1.5, 2, $10^6$.
 \end{codebox}
+
+\subsection{Runs that ended early}\label{sec:ended}
+
+\begin{tech}
+A run whose last snapshot comes before \code{END_FRACTION} $=0.1$ of the median end time of all runs
+stopped long before the others: a simulation that crashed or became unstable. Its last snapshots are
+early transients, not a state to compare with steady ones, so the run is left out before the walls
+(\code{Walls.ended}). A point whose runs all ended early is an \emph{unstable} point, outside every
+phase (\code{Walls.unstable}; a cross on the phase map); the other points count their ended runs
+(column \code{ended_runs} of \code{nodes}). The end time is read from the table (the latest snapshot of
+each run), so no input changes; \code{end_fraction=None} keeps every run. The fraction is relative to
+all runs of the table, not to a group of them: runs of a scan that was meant to be shorter by a
+factor of 2 or 3 are kept. \textbf{Test:} on one phase with two runs per point, a point whose two runs
+stop at the first snapshot with a far state is unstable, a point with one such run is described by
+the other, and no wall appears; with \code{end_fraction=None} every point is kept.
+
+\emph{Physics parallel.} A simulation that blows up is itself an observation (an instability, or a
+time step too large for the dynamics there); it marks a region of the scan, but its last snapshots
+say nothing about the state the system would reach.
+\end{tech}
 
 \subsection{Mixed points}\label{sec:mixed}
 
@@ -1051,33 +1101,50 @@ halves hold them in different shares and differ much more than the halves of an 
 
 \begin{tech}
 Next to some transitions, runs at the same parameters end in different states depending on their
-random start; the two halves of such a point differ far more than those of an ordinary point, an
-independent sign of a boundary (Fig.~\ref{fig:mixed}). For each point the unclipped statistic
-$E_a=D^2(a_1,a_2)$ is compared with all points:
-$z_a=(E_a-\med E)/\max(1.4826\,\mathrm{MAD}(E),\,\text{floor}^2)$, and the point is mixed if
-$z_a>6$ (\code{MIXED_K}). The unclipped value scatters around 0 for an ordinary point, so the
-median and the median absolute deviation are meaningful (with clipped values half of them were 0
-and almost every point was flagged). The threshold is high because $E$ is right-skewed: on pure
-noise, ordinary points reach $z=5$ to 6.
+random start; the two halves of runs of such a point differ far more than those of an ordinary point,
+an independent sign of a boundary (Fig.~\ref{fig:mixed}). For each point with several runs the
+unclipped statistic $E_a=D^2(a_1,a_2)$ between its halves of runs is compared with the other points
+with several runs: $z_a=(E_a-\med E)/\max(1.4826\,\mathrm{MAD}(E),\,\text{floor}^2)$, and the point is
+mixed if $z_a>6$ (\code{MIXED_K}). The unclipped value scatters around 0 for an ordinary point, so the
+median and the median absolute deviation are meaningful. The threshold is high because $E$ is
+right-skewed: on pure noise, ordinary points reach $z=5$ to 6.
+
+Only points with several runs are judged, and only against each other (since 2026-11-23). At a point
+with one run the halves are the early and late snapshots of that run, which can be far more alike
+than two runs at the same parameters (a frozen pattern gives the same values twice). In a scan where
+most points have one run, a baseline set by all points then flags almost every point with several
+runs, deep inside phases. With fewer than \code{MIN_MIXED_GROUP} $=10$ points with several runs, no
+point is flagged.
+
+A second flag, comparing the early and the late snapshots of every point, was tried and dropped
+(2026-11-23): over a window of a few snapshots it cannot tell a run still converging from a steady
+state with slow dynamics (an oscillation or a correlation time longer than the window). How the
+pattern changes in time enters the description itself instead (\code{dyn}, \code{frank.change}).
 
 \emph{Physics parallel.} A first-order transition has a range of coexistence between two
 spinodals, where both states are locally stable and the one reached depends on the history
 (hysteresis). Runs from random initial conditions then split between two states, and the
-distribution of their descriptors is bimodal.
+distribution of their descriptors is bimodal. A run that has not reached its steady state is a
+different thing: the same run at two times.
 \end{tech}
 
 \begin{algobox}{mixed points}
 \begin{algorithmic}[1]
-\Require $E_a=D^2(a_1,a_2)$ of every point that has two halves; floor
-\State $m\gets\med E$; $\sigma\gets\max(1.4826\,\mathrm{MAD}(E),\ \text{floor}^2)$
-\State mixed$(a)\gets (E_a-m)/\sigma>$ \code{MIXED_K}
+\Require halves of runs of every point with several runs; floor
+\State $E_a\gets D^2(a_1,a_2)$ for the points with several runs
+\If{there are at least \code{MIN_MIXED_GROUP} of them}
+  \State mixed$(a)\gets (E_a-\med E)/\max(1.4826\,\mathrm{MAD}(E),\text{floor}^2)>$ \code{MIXED_K}
+\EndIf
 \end{algorithmic}
 \end{algobox}
 
 \begin{codebox}
-\textbf{Files.} \srcref{src/phasewall/walls.py}: \code{robust_outliers}, column \code{mixed}
-of \code{nodes}. \textbf{Test:} on a flat table where one of the two runs of one point is in
-another state, that point and only that point is flagged.
+\textbf{Files.} \srcref{src/phasewall/walls.py}: \code{robust_outliers}, columns
+\code{halves}, \code{mixed} of \code{nodes}. \textbf{Tests:} on a
+flat table where one of the two runs of one point is in another state, that point and only that point
+is flagged; with most points of one run and 15 of two runs that differ by ordinary run-to-run noise,
+none is flagged (a single baseline flagged most of them); a run that drifts in time is not
+mixed; with too few points of several runs nothing is flagged.
 \end{codebox}
 
 \subsection{Phases in separate places}\label{sec:merge}
@@ -1093,7 +1160,7 @@ them; their cores are compared, with the spread between the two halves of a core
 A phase can lie in two places with another phase between them: in Gray-Scott the uniform state
 lies on both sides of the pattern band (Sec.~\ref{sec:gs}). The cuts give two regions, and since
 no link joins them, the walls method never compares them. After the walls, every pair of phases
-of at least $2\,$\code{MIN_PHASE} points that share no link is compared (Fig.~\ref{fig:merge}).
+that share no link is compared (Fig.~\ref{fig:merge}).
 
 \textbf{Cores.} The core of a phase is the set of its points at least 2 grid steps (counted by
 rank of the parameter values, so that a logarithmic grid has equal steps; largest step over the
@@ -1107,7 +1174,11 @@ drift of the description across the phase. The two parts are one phase when
 \[
 \frac{\text{gap}(A_1,A_2)}{\max\big(s(A_1),\,s(A_2),\,\text{floor}\big)}<\text{\code{RATIO}}=1.5 :
 \]
-they differ no more than the two halves of one of them. Merges are joined transitively, they
+they differ no more than the two halves of one of them. A phase of fewer than $2\,$\code{MIN_PHASE}
+points cannot be split in two halves of at least \code{MIN_PHASE} points and has no spread of its
+own: the spread of the other phase is used, or the median spread of a point when neither has one.
+(Until 2026-11-23 such phases were not compared at all, and small pieces of one state could stay
+apart.) Merges are joined transitively, they
 only renumber phases (the walls stay), and the cores are chosen from the grid alone, without
 looking at the data.
 
@@ -1126,13 +1197,13 @@ one phase (a smooth dependence on the control parameters).
 \begin{algobox}{phases in separate places}
 \begin{algorithmic}[1]
 \Require phases after the walls; links; features of every snapshot; grid positions by rank; floor
-\For{each phase $P$ of at least $2\,$\code{MIN_PHASE} points}
+\For{each phase $P$}
   \State core$(P)\gets$ points of $P$ at least 2 grid steps from every other phase (all of $P$ if fewer than \code{MIN_PHASE})
-  \State $s(P)\gets D(\text{half}_1,\text{half}_2)$, halves of the core on either side of the median along its longest axis
+  \State $s(P)\gets D(\text{half}_1,\text{half}_2)$, halves of the core on either side of the median along its longest axis, if $P$ has at least $2\,$\code{MIN_PHASE} points
 \EndFor
-\For{each pair $(P,Q)$ of such phases that share no link}
-  \State gap $\gets D(\text{core}(P),\text{core}(Q))$
-  \If{gap $/\max(s(P),s(Q),\text{floor})<$ \code{RATIO}} \State join $P$ and $Q$ (union-find) \EndIf
+\For{each pair $(P,Q)$ of phases that share no link}
+  \State gap $\gets D(\text{core}(P),\text{core}(Q))$; $s\gets$ the larger of the spreads $P$ and $Q$ have (none: the median spread of a point)
+  \If{gap $/\max(s,\text{floor})<$ \code{RATIO}} \State join $P$ and $Q$ (union-find) \EndIf
 \EndFor
 \Ensure phases renumbered from the largest; the table of every pair tested
 \end{algorithmic}
@@ -1146,8 +1217,44 @@ merged) and the column \code{phase_unmerged} of \code{nodes}; \code{Methods(merg
 pipeline.
 
 \textbf{Tests.} A grid with levels 0, 8, 0 in three bands gives 3 phases without merging and 2
-with it, the outer bands as one phase, with the same walls; levels 0, 8, 16 stay 3 phases; grid
+with it, the outer bands as one phase, with the same walls; levels 0, 8, 16 stay 3 phases; a
+phase of three points is joined with the phase of its level and kept apart from another level; grid
 positions are ranks of the parameter values.
+\end{codebox}
+
+\subsection{Points near the walls}\label{sec:reassign}
+
+\begin{tech}
+The walls are cuts of the parameter grid: a phase is a connected region of at least \code{MIN_PHASE}
+points, and a cut follows the grid. Where the states alternate from one point to the next along a
+boundary (one run per point in a range where both states are possible), a single point in the state
+of the other side cannot become a phase of its own and stays with its region. After the merge,
+every point within \code{NEAR} $=2$ grid steps (counted by rank) of another phase is compared with
+the core of its own phase (Sec.~\ref{sec:merge}, without the point itself) and with the cores of the
+phases within \code{NEAR} steps of it; it joins the phase of the closest core when
+\[
+\frac{D(\text{point},\ \text{own core})}{D(\text{point},\ \text{other core})}>\text{\code{REASSIGN_RATIO}}=1.2 .
+\]
+Moves are decided from the phases before any move (no chain), and the walls stay where the cuts put
+them. The threshold was chosen on the examples: 1.2 is the smallest value that moves no correct point
+on Swift-Hohenberg (at 1.1 and 1.0 correct points start to move there).
+
+\emph{Physics parallel.} In a range of coexistence a run ends in one of two states; with one run per
+point the states alternate on the grid like domains of two phases. The cores play the role of the
+bulk states, each point is attributed to the bulk state it resembles, and a cluster of points moved
+along a boundary marks the range where both states are possible.
+\end{tech}
+
+\begin{codebox}
+\textbf{Files.} \srcref{src/phasewall/walls.py}: \code{reassign_near_walls}, \code{find_walls(...,
+reassign=True)} (default \code{REASSIGN}); columns \code{phase_walls} and \code{reassigned} of
+\code{nodes}, table \code{Walls.reassigned} (point, from, to, both distances, ratio).
+\textbf{Test:} two phases with a band where the states alternate as a checkerboard: the cut alone puts
+several points of the band in the wrong phase, the reassignment puts every one in the phase of its
+state; a point of the other state deep inside a phase is not moved; nothing moves in a clean table.
+\textbf{Examples} (hand-made, ARI before and after): Swift-Hohenberg 0.928 and 0.942 (one point),
+Gray-Scott 0.886 and 0.947 (38 points), localised Swift-Hohenberg 0.960 and 1.000, Barkley with 8 runs
+per point 0.576 and 0.620, FitzHugh-Nagumo no move.
 \end{codebox}
 
 \subsection{An unsupervised threshold tree}\label{sec:tree}
@@ -1182,7 +1289,7 @@ thresholds at quantiles of the point values split $R$ into $S$ (above) and $S'$,
 \text{score}=\eta^2\left(1-\tfrac12\mathrm{Ncut}\right),
 \]
 with $\cut$ and $\vol$ counted on the grid links of $R$ (unit weights). $\eta^2$, the share of the
-variance between the sides (Otsu's criterion), is close to 1 for two tight clouds and $3/4$ for a
+variance between the sides (Otsu's criterion~\cite{otsu1979}), is close to 1 for two tight clouds and $3/4$ for a
 uniform drift cut in the middle (Fig.~\ref{fig:utree}b); $\mathrm{Ncut}$ is small when the sides are
 two contiguous regions of the parameter plane and large for scattered points. The threshold is
 chosen anew in every region.
@@ -1284,11 +1391,11 @@ $\mathrm{tr}\,\Sigma$. The label of a point is then the most common group of its
 \textbf{Gaussian mixture} (Fig.~\ref{fig:emlloyd}, bottom).
 $p(\mathbf z)=\sum_{j=1}^k\pi_j\,\mathcal N(\mathbf z;\boldsymbol\mu_j,\Sigma_j)$, fitted by
 expectation-maximisation for $k=1\ldots10$ (full covariances, 10 starts); $k$ is the one with the
-smallest $\mathrm{BIC}=-2\ln\hat L+p\ln n$ ($p$ parameters, $n$ runs): likelihood penalised by model
+smallest $\mathrm{BIC}=-2\ln\hat L+p\ln n$~\cite{schwarz1978} ($p$ parameters, $n$ runs): likelihood penalised by model
 size.
 
 \textbf{k-means} (Fig.~\ref{fig:emlloyd}, top). Minimises $\sum_i|\mathbf z_i-\boldsymbol\mu_{c(i)}|^2$
-for $k=2\ldots10$ (Lloyd's algorithm, 10 starts); $k$ is the one with the largest mean silhouette
+for $k=2\ldots10$ (Lloyd's algorithm~\cite{lloyd1982}, 10 starts); $k$ is the one with the largest mean silhouette~\cite{rousseeuw1987}
 $s_i=(b_i-a_i)/\max(a_i,b_i)$ ($a_i$: mean distance of run $i$ to its own group, $b_i$: to the
 nearest other group).
 
@@ -1334,9 +1441,9 @@ called noise.}\label{fig:hdbscan}
 \begin{algorithmic}[1]
 \Require table of $h$; parameters
 \State $X\gets$ mean of the block-weighted features of each run; $Z\gets$ principal components keeping 95\% of the variance
-\State \textbf{mixture:} for $k=1..10$ fit by EM (10 starts); keep the $k$ of smallest BIC; group $=\arg\max_j$ responsibility
+\State \textbf{mixture:} for $k=1..10$ fit by EM~\cite{dempster1977} (10 starts); keep the $k$ of smallest BIC; group $=\arg\max_j$ responsibility
 \State \textbf{k-means:} for $k=2..10$ run Lloyd's algorithm (10 starts); keep the $k$ of largest mean silhouette
-\State \textbf{HDBSCAN} for each $m$: core distances, mutual reachability, minimum spanning tree, condensed tree, most stable branches; other runs $-1$ (noise)
+\State \textbf{HDBSCAN}~\cite{campello2013} for each $m$: core distances, mutual reachability, minimum spanning tree, condensed tree, most stable branches; other runs $-1$ (noise)
 \Ensure a group for every run and method; the group of a point is the most common group of its runs
 \end{algorithmic}
 \end{algobox}
@@ -1367,7 +1474,7 @@ $6\times4$ grid).}\label{fig:scores}
 Labels are used only here, to score a result that was found without them. The label of a point
 is the most common label of its runs, and its group the most common group (noise, $-1$, for
 HDBSCAN). \textbf{Agreement}: the number of points whose label is the most common label of their
-group. \textbf{Adjusted Rand index}: with $n_{ij}$ the contingency table of groups and labels,
+group. \textbf{Adjusted Rand index}~\cite{hubert1985}: with $n_{ij}$ the contingency table of groups and labels,
 row sums $a_i$, column sums $b_j$,
 \[
 \mathrm{ARI}=\frac{\sum_{ij}\binom{n_{ij}}2-\sum_i\binom{a_i}2\sum_j\binom{b_j}2\Big/\binom n2}
@@ -1564,7 +1671,7 @@ added from outside run through the pipeline and are scored.
 \[
 \partial_tu=\varepsilon u-(1+\nabla^2)^2u+gu^2-u^3 .
 \]
-A gradient flow with one scalar field and three states: uniform, hexagons, stripes. All
+A gradient flow with one scalar field and three states: uniform, hexagons, stripes~\cite{swift1977,cross1993,hoyle2006}. All
 patterns end frozen.
 
 \textbf{Linear stability.} For $u\propto e^{i\mathbf k\cdot\mathbf r+\sigma t}$,
@@ -1782,7 +1889,7 @@ the periodic box (44\% of the variance against 14\%; hand-made 27--30\%).
 
 \textbf{Why the old views failed} (scratch study, plan step 18 of the README). With rotations by
 $90^\circ$, the whole frame and the amplitude kept, the learned description found 2 phases for every
-seed, every network shape, more data, and VICReg instead of InfoNCE. Two causes were measured. A run
+seed, every network shape, more data, and VICReg~\cite{bardes2022} instead of InfoNCE. Two causes were measured. A run
 fingerprint: on a periodic box of 64 points a pattern can only take a few wavevectors (orientation
 and wavelength together), which $D_4$ leaves unchanged; in the old $h$ hexagons and stripes with the
 same wavevector were about as far apart as two stripe patterns with different ones (ratio 1.3,
@@ -1936,7 +2043,7 @@ negative kurtosis) and \code{u.topo.below+0}, ARI 0.90.
 \partial_tu=D_u\nabla^2u-uv^2+F(1-u),\qquad \partial_tv=D_v\nabla^2v+uv^2-(F+k)v .
 \]
 $u$ is a substrate fed at rate $F$, $v$ an autocatalyst removed at rate $F+k$. In the $(F,k)$
-plane (Pearson 1993): the uniform state $u=1$, $v=0$, a second uniform state with high $v$, spots,
+plane~\cite{pearson1993}: the uniform state $u=1$, $v=0$, a second uniform state with high $v$, spots,
 stripes and labyrinths, holes (spots of low $v$ in a high-$v$ background), self-replicating spots,
 travelling waves and spatio-temporal chaos. Unlike Swift-Hohenberg it is not a gradient flow:
 some states never stop moving. Two scalar fields, $u$ and $v$.
@@ -2026,7 +2133,7 @@ the walls found in grey.}\label{fig:gsmap}
 \partial_tu=u-u^3-v+\nabla^2u,\qquad \partial_tv=\varepsilon(u-a_1v-a_0)+\delta\nabla^2v,
 \qquad a_1=2,\ a_0=0,
 \]
-in the form studied by Hagberg and Meron (1994). The medium is bistable and symmetric under
+in the form studied by Hagberg and Meron~\cite{hagberg1994}. The medium is bistable and symmetric under
 $(u,v)\to(-u,-v)$: two equivalent uniform states, up and down. In the scanned $(\varepsilon,\delta)$
 plane: stationary straight fronts (large $\varepsilon$, small $\delta$), moving domains and front
 turbulence (small $\varepsilon$ and $\delta$), uniform states (a band in between, up or down at
@@ -2093,7 +2200,7 @@ learned, 0.79 combined). The learned description with its new views gives two we
 \partial_tu=\nabla^2u+\varepsilon^{-1}u(1-u)\Big(u-\frac{v+b}{a}\Big),\qquad \partial_tv=u-v,
 \qquad \varepsilon=0.02 .
 \]
-An excitable medium (Barkley 1991): $u$ is the fast excitation, $v$ the slow recovery, which does
+An excitable medium~\cite{barkley1991}: $u$ is the fast excitation, $v$ the slow recovery, which does
 not diffuse. In the $(a,b)$ plane waves die (low excitability), or travel as plane wave trains, or
 form rotating, meandering or breaking spirals. All sustained states move: this example tests the
 dynamics block.
@@ -2165,8 +2272,7 @@ old ones HDBSCAN on it reached 0.96, leaving a quarter of the runs as noise; wit
 \partial_tu=\varepsilon u-(1+\nabla^2)^2u+bu^3-u^5 .
 \]
 For $\varepsilon<0$ the uniform state is stable and coexists with large-amplitude stripes; a front
-between them is pinned to the pattern over a range of $\varepsilon$ (homoclinic snaking; Burke and
-Knobloch 2006: for $b=2$ in one dimension, $-0.675<\varepsilon<-0.604$), where a patch stays
+between them is pinned to the pattern over a range of $\varepsilon$ (homoclinic snaking~\cite{burke2006}: for $b=2$ in one dimension, $-0.675<\varepsilon<-0.604$), where a patch stays
 localised (a dissipative soliton). Below the range the patch disappears; above, it invades the
 box. The range moves with $b$ roughly as $b^2$, so the scan uses $a=\varepsilon/b^2$ and $b$.
 With the quadratic-cubic equation of Sec.~\ref{sec:demo} the pinning range of hexagon patches was
@@ -2325,6 +2431,7 @@ in the code saying it is a choice.
 Constant (file) & Value & Role and reason \\
 \midrule
 \code{FLAT} (describe) & $10^{-6}$ & fluctuations below this: flat field, descriptors at fixed floor values \\
+\code{FLAT_RELATIVE} (describe) & $10^{-3}$ & vectors and nematics with fluctuations below this share of their size are uniform \\
 \code{SHELL_RATIO} (describe) & 1.2 & width ratio of successive $|\mathbf k|$ shells (log spacing, no empty shell) \\
 \code{DECOR_FLOOR} (describe) & $10^{-3}$ & floor of $1-C$: round-off of a frozen pattern is not motion \\
 \code{LEVELS} (describe) & $-1,0,1$ & levels $z$ of the domain counts, in standard deviations \\
@@ -2341,7 +2448,7 @@ Constant (file) & Value & Role and reason \\
 \code{normalise} (nn) & on & every field of every view divided by its own standard deviation \\
 \code{keep_vector_mean} (nn) & on & vectors and nematics not centred by the normalisation (their mean is an order parameter) \\
 \code{STD_FLOOR} (views) & $10^{-8}$ & views flatter than this are only centred \\
-\code{Settings} (nn) & 40 epochs, batch 128 & AdamW, $10^{-3}$, warm-up 3 epochs, cosine decay, 4 draws per run and epoch \\
+\code{Settings} (nn) & 40 epochs, batch 128 & AdamW~\cite{loshchilov2019}, $10^{-3}$, warm-up 3 epochs, cosine decay, 4 draws per run and epoch \\
 \code{COMPONENT_NAME} (fields) & stem of 1--3 letters & names taken for components (\code{vx}, \code{Qxy}); \code{rho}, \code{phi} are not \\
 role names (io) & \code{v}, \code{p}, \code{Q}, \ldots & names that suggest a role in the inspector (suggestions only) \\
 \code{DECIMALS} (graph) & 9 & parameter values rounded to identify a point \\
@@ -2351,6 +2458,10 @@ role names (io) & \code{v}, \code{p}, \code{Q}, \ldots & names that suggest a ro
 \code{FLOOR_QUANTILE} (walls) & 0.1 & jumps below this quantile of the spreads count as no jump \\
 \code{MAX_PER_NODE} (walls) & 200 & snapshots per point used at most (cost of distances) \\
 \code{MIXED_K} (walls) & 6 & robust $z$ above which a point is mixed ($E$ is right-skewed) \\
+\code{MIN_MIXED_GROUP} (walls) & 10 & points with several runs needed to judge any of them mixed \\
+\code{END_FRACTION} (walls) & 0.1 & a run ended early if its last snapshot comes before this share of the median end time \\
+\code{NEAR} (walls) & 2 & points within this many grid steps of another phase are compared with the cores \\
+\code{REASSIGN_RATIO} (walls) & 1.2 & a point near a wall moves when another core is this many times closer than its own; the smallest value that moves no correct point on Swift-Hohenberg \\
 \code{MERGE}, \code{CORE_DEPTH}, \code{MAX_CORE} (walls) & on, 2, 400 & join separated parts of a phase; core depth in grid steps; snapshots per core \\
 \code{MIN_WEIGHT} (walls) & $10^{-8}$ & lower bound of link weights: strong walls keep the graph connected \\
 \code{N_THRESHOLDS}, \code{AGREE} (trees) & 32, 0.9 & candidate thresholds per descriptor; share of points on the same side with the other half \\
@@ -2369,7 +2480,7 @@ choices too (documented in their docstrings).}
 \section{Tests}\label{sec:tests}
 %======================================================================
 
-\code{pytest} runs 195 tests in about a minute, all on small synthetic data with known
+\code{pytest} runs 220 tests in about a minute, all on small synthetic data with known
 answers (no data from any laboratory is in the repository). On every push, the
 continuous-integration workflow \srcref{.github/workflows/tests.yml} runs \code{ruff} and
 \code{pytest}.
@@ -2388,11 +2499,11 @@ File & What is checked, against which known answer \\
 \code{test_architecture.py} & channels and receptive field of a network; constraints against the frame; weights against PyTorch; a chosen shape trains, is saved and is cached apart \\
 \code{test_nn.py} & augmentations against the field rules; shift invariance of a periodic encoder; loss at collapse and for perfect pairs; a short training separates stripes from spots; saving and loading; \code{learn} and \code{describe --encoder} (skipped without PyTorch) \\
 \code{test_views.py} & input side of the views; every field of every view normalised, vectors and nematics keep their mean; a turn by $90^\circ$ exact; wavelength kept at any angle, divided by the zoom; vectors and nematics turned with the grid (gradients of a turned scalar); views saved with the encoder, old encoders read with the old views \\
-\code{test_blocks.py} & default blocks of every kind; a field's own blocks; blocks that do not fit refused; blocks from the configuration; vortex cores of Gaussian vortices, a cellular and a shear flow; $\pm1$ and $\pm\frac12$ winding defects; no defect in a uniform field; parts: block sums, two states side by side, invariance under $D_4$ and shifts \\
+\code{test_blocks.py} & default blocks of every kind; a field's own blocks; blocks that do not fit refused; blocks from the configuration; vortex cores of Gaussian vortices, a cellular and a shear flow; $\pm1$ and $\pm\frac12$ winding defects; no defect in a uniform field; parts: block sums, two states side by side, invariance under $D_4$ and shifts; frank: $F=k^2$ for a turning orientation (polarity and nematic), aster splay and vortex bend, size alone gives 0, change $=\ln 9$; numerical noise on a uniform vector or nematic not described as a pattern \\
 \code{test_contracts.py} & every registered encoder and method: format, one phase in noise and two on a step, two far clouds apart, invariance of invariant encoders; settings described and checked; registration errors; a method and an encoder added from outside run through the pipeline \\
 \code{test_explain.py} & every block has a definition; every column of every kind of field is explained; examples of explanations \\
 \code{test_graph.py} & nodes merge rounding errors; links of a full grid, of a refined line, of one parameter; numbering of regions \\
-\code{test_walls.py} & energy distance; halves; feature matrix; cut of a chain; no wall in noise (5 seeds) or a smooth drift; two and three phases with the exact walls; mixed point; count against \code{RATIO}; one phase in two places joined, two different phases not \\
+\code{test_walls.py} & energy distance; halves; feature matrix; cut of a chain; no wall in noise (5 seeds) or a smooth drift; two and three phases with the exact walls; mixed point; mixed judged only among points with several runs; a drifting run not mixed; count against \code{RATIO}; one phase in two places joined, two different phases not; a phase of three points joined or not; runs that ended early left out, unstable points; a band of alternating states given to the phases of its states \\
 \code{test_trees.py} & no split in noise or under drifts; two and three phases with the right rules; halves swapped; splits found by both halves; one run per point (checkerboard): no split in noise or drift, two phases on a step; checkerboard colours and links; one phase in two places joined; principal components \\
 \code{test_baselines.py} & separated clouds found by the mixture, k-means and HDBSCAN; groups in two places counted as two pieces; probe on real and random labels; no ARI without placed points (skipped without scikit-learn) \\
 \code{test_toy.py} & states at six points; stripe amplitude $\sqrt{2\varepsilon/3}$; seeds differ; ensemble readable \\
@@ -2488,22 +2599,37 @@ The code, tests and documentation were written by Claude (Anthropic), an AI assi
 author designed the method, chose the physics, the examples and the checks, directed the work step
 by step and reviewed the results.
 
-\paragraph{References.}
-J.~Swift and P.~C.~Hohenberg, Phys.\ Rev.\ A \textbf{15}, 319 (1977).
-M.~C.~Cross and P.~C.~Hohenberg, Rev.\ Mod.\ Phys.\ \textbf{65}, 851 (1993).
-R.~Hoyle, \emph{Pattern Formation} (Cambridge University Press, 2006), hexagons and stripes.
-G.~J.~Sz\'ekely and M.~L.~Rizzo, J.\ Stat.\ Plann.\ Inference \textbf{143}, 1249 (2013), energy statistics.
-J.~Shi and J.~Malik, IEEE Trans.\ PAMI \textbf{22}, 888 (2000), normalised cuts.
-U.~von Luxburg, Stat.\ Comput.\ \textbf{17}, 395 (2007), spectral clustering.
-H.~B.~Mann and D.~R.~Whitney, Ann.\ Math.\ Stat.\ \textbf{18}, 50 (1947).
-N.~Otsu, IEEE Trans.\ Syst.\ Man Cybern.\ \textbf{9}, 62 (1979), thresholds.
-R.~J.~G.~B.~Campello, D.~Moulavi and J.~Sander, PAKDD 2013, 160, HDBSCAN.
-T.~Chen, S.~Kornblith, M.~Norouzi and G.~Hinton, ICML 2020, SimCLR.
-J.~P.~Lewis, Vision Interface 1995, 120, fast normalised cross-correlation.
-J.~E.~Pearson, Science \textbf{261}, 189 (1993), Gray-Scott patterns.
-A.~Hagberg and E.~Meron, Phys.\ Rev.\ Lett.\ \textbf{72}, 2494 (1994), FitzHugh-Nagumo fronts.
-D.~Barkley, Physica D \textbf{49}, 61 (1991), excitable media.
-J.~Burke and E.~Knobloch, Phys.\ Rev.\ E \textbf{73}, 056211 (2006), localised states.
-K.~Binder, Z.\ Phys.\ B \textbf{43}, 119 (1981), block distribution functions.
+\begin{thebibliography}{99}\small
+\bibitem{dumoulin2026} L.~Dumoulin, C.~Blanch-Mercader and K.~Kruse, Defect states in compressible active polar fluids with renewal, PRX Life \textbf{4}, 043009 (2026), doi:10.1103/bnx5-sryc.
+\bibitem{swift1977} J.~Swift and P.~C.~Hohenberg, Hydrodynamic fluctuations at the convective instability, Phys.\ Rev.\ A \textbf{15}, 319 (1977), doi:10.1103/PhysRevA.15.319.
+\bibitem{cross1993} M.~C.~Cross and P.~C.~Hohenberg, Pattern formation outside of equilibrium, Rev.\ Mod.\ Phys.\ \textbf{65}, 851 (1993), doi:10.1103/RevModPhys.65.851.
+\bibitem{hoyle2006} R.~Hoyle, \emph{Pattern Formation: An Introduction to Methods} (Cambridge University Press, 2006), ISBN 978-0-521-81750-9.
+\bibitem{szekely2013} G.~J.~Sz\'ekely and M.~L.~Rizzo, Energy statistics: a class of statistics based on distances, J.\ Stat.\ Plann.\ Inference \textbf{143}, 1249 (2013), doi:10.1016/j.jspi.2013.03.018.
+\bibitem{shi2000} J.~Shi and J.~Malik, Normalized cuts and image segmentation, IEEE Trans.\ Pattern Anal.\ Mach.\ Intell.\ \textbf{22}, 888 (2000), doi:10.1109/34.868688.
+\bibitem{fiedler1973} M.~Fiedler, Algebraic connectivity of graphs, Czech.\ Math.\ J.\ \textbf{23}, 298 (1973), doi:10.21136/CMJ.1973.101168.
+\bibitem{luxburg2007} U.~von Luxburg, A tutorial on spectral clustering, Stat.\ Comput.\ \textbf{17}, 395 (2007), doi:10.1007/s11222-007-9033-z.
+\bibitem{mann1947} H.~B.~Mann and D.~R.~Whitney, On a test of whether one of two random variables is stochastically larger than the other, Ann.\ Math.\ Stat.\ \textbf{18}, 50 (1947), doi:10.1214/aoms/1177730491.
+\bibitem{otsu1979} N.~Otsu, A threshold selection method from gray-level histograms, IEEE Trans.\ Syst.\ Man Cybern.\ \textbf{9}, 62 (1979), doi:10.1109/TSMC.1979.4310076.
+\bibitem{schwarz1978} G.~Schwarz, Estimating the dimension of a model, Ann.\ Stat.\ \textbf{6}, 461 (1978), doi:10.1214/aos/1176344136.
+\bibitem{dempster1977} A.~P.~Dempster, N.~M.~Laird and D.~B.~Rubin, Maximum likelihood from incomplete data via the EM algorithm, J.\ R.\ Stat.\ Soc.\ B \textbf{39}, 1 (1977), doi:10.1111/j.2517-6161.1977.tb01600.x.
+\bibitem{lloyd1982} S.~P.~Lloyd, Least squares quantization in PCM, IEEE Trans.\ Inf.\ Theory \textbf{28}, 129 (1982), doi:10.1109/TIT.1982.1056489.
+\bibitem{rousseeuw1987} P.~J.~Rousseeuw, Silhouettes: a graphical aid to the interpretation and validation of cluster analysis, J.\ Comput.\ Appl.\ Math.\ \textbf{20}, 53 (1987), doi:10.1016/0377-0427(87)90125-7.
+\bibitem{campello2013} R.~J.~G.~B.~Campello, D.~Moulavi and J.~Sander, Density-based clustering based on hierarchical density estimates, PAKDD 2013, Lecture Notes in Computer Science \textbf{7819}, 160 (Springer, 2013), doi:10.1007/978-3-642-37456-2\_14.
+\bibitem{hubert1985} L.~Hubert and P.~Arabie, Comparing partitions, J.\ Classif.\ \textbf{2}, 193 (1985), doi:10.1007/BF01908075.
+\bibitem{chen2020} T.~Chen, S.~Kornblith, M.~Norouzi and G.~Hinton, A simple framework for contrastive learning of visual representations, Proc.\ 37th ICML, PMLR \textbf{119}, 1597 (2020).
+\bibitem{oord2018} A.~van den Oord, Y.~Li and O.~Vinyals, Representation learning with contrastive predictive coding, arXiv:1807.03748 (2018).
+\bibitem{loshchilov2019} I.~Loshchilov and F.~Hutter, Decoupled weight decay regularization, ICLR 2019, arXiv:1711.05101.
+\bibitem{bardes2022} A.~Bardes, J.~Ponce and Y.~LeCun, VICReg: variance-invariance-covariance regularization for self-supervised learning, ICLR 2022, arXiv:2105.04906.
+\bibitem{he2022} K.~He, X.~Chen, S.~Xie, Y.~Li, P.~Doll\'ar and R.~Girshick, Masked autoencoders are scalable vision learners, Proc.\ IEEE/CVF CVPR, 16000 (2022), arXiv:2111.06377.
+\bibitem{lewis1995} J.~P.~Lewis, Fast template matching, Vision Interface 1995, 120 (1995); expanded as the report \emph{Fast normalized cross-correlation}.
+\bibitem{okubo1970} A.~Okubo, Horizontal dispersion of floatable particles in the vicinity of velocity singularities such as convergences, Deep-Sea Res.\ \textbf{17}, 445 (1970), doi:10.1016/0011-7471(70)90059-8.
+\bibitem{weiss1991} J.~Weiss, The dynamics of enstrophy transfer in two-dimensional hydrodynamics, Physica D \textbf{48}, 273 (1991), doi:10.1016/0167-2789(91)90088-Q.
+\bibitem{frank1958} F.~C.~Frank, On the theory of liquid crystals, Discuss.\ Faraday Soc.\ \textbf{25}, 19 (1958), doi:10.1039/DF9582500019.
+\bibitem{binder1981} K.~Binder, Finite size scaling analysis of Ising model block distribution functions, Z.\ Phys.\ B \textbf{43}, 119 (1981), doi:10.1007/BF01293604.
+\bibitem{pearson1993} J.~E.~Pearson, Complex patterns in a simple system, Science \textbf{261}, 189 (1993), doi:10.1126/science.261.5118.189.
+\bibitem{hagberg1994} A.~Hagberg and E.~Meron, From labyrinthine patterns to spiral turbulence, Phys.\ Rev.\ Lett.\ \textbf{72}, 2494 (1994), doi:10.1103/PhysRevLett.72.2494.
+\bibitem{barkley1991} D.~Barkley, A model for fast computer simulation of waves in excitable media, Physica D \textbf{49}, 61 (1991).
+\bibitem{burke2006} J.~Burke and E.~Knobloch, Localized states in the generalized Swift-Hohenberg equation, Phys.\ Rev.\ E \textbf{73}, 056211 (2006), doi:10.1103/PhysRevE.73.056211.
+\end{thebibliography}
 
 \end{document}

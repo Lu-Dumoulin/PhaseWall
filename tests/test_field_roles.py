@@ -73,7 +73,8 @@ def test_roles_share_the_common_blocks_and_add_their_own():
     vel = describe_snapshot(a, [Field("p", ("P",), "velocity")], 1.0, before=a)
     pol = describe_snapshot(a, [Field("p", ("P",), "polarity")], 1.0, before=a)
     assert set(vel) - set(base) == {"p.vortex.share", "p.vortex.cores"}
-    assert set(pol) - set(base) == {"p.defects.plus", "p.defects.minus"}
+    assert set(pol) - set(base) == {"p.defects.plus", "p.defects.minus", "p.frank.log10F", "p.frank.splay_share",
+                                    "p.frank.change"}
     for c in base:
         assert vel[c] == base[c] == pol[c]
 

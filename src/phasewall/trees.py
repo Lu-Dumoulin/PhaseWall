@@ -98,7 +98,8 @@ class Tree:
 
     def as_walls(self) -> Walls:
         """The tree as a walls.Walls object, for the plots of report.py."""
-        nodes = self.nodes.assign(region=self.nodes.leaf, mixed=False, runs=1, snapshots=1, spread=np.nan)
+        nodes = self.nodes.assign(region=self.nodes.leaf, mixed=False, runs=1, snapshots=1,
+                                  spread=np.nan)
         edges = self.edges.assign(jump=1.0, contrast=1.0)
         return Walls(nodes, edges, self.splits, float("nan"), float("nan"), self.parameters, self.columns,
                      {"tree": True})

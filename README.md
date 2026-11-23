@@ -73,11 +73,23 @@ against stripes, amplitude), which PhaseWall never sees.
 
 Then:
 
-- **Mixed points**: points whose two halves differ far more than usual. Next to a first-order
-  transition, runs at the same parameters can end in different states.
+- **Runs that ended early** (crashed or unstable simulations): a run whose last snapshot comes
+  before `END_FRACTION` = 0.1 of the median end time of all runs is left out, since its snapshots
+  are early transients. A point whose runs all ended early is an *unstable* point, outside every
+  phase (a cross on the phase map); `end_fraction=None` keeps every run.
+- **Mixed points**: points with several runs whose runs differ far more than at the other points
+  with several runs. Next to a first-order transition, runs at the same parameters can end in
+  different states. Points with one run are not judged: the two time halves of one run are far
+  more alike than two runs, so a common baseline flags almost every point with several runs.
 - **One phase in two places** (on by default, `merge=False` to switch off): two phases that share
   no link are joined when the gap between their cores (points at least 2 grid steps from other
-  phases) is below `RATIO` times the spread between the two halves of a core.
+  phases) is below `RATIO` times the spread between the two halves of a core. A phase too small to
+  split in two uses the spread of the other one.
+- **Points near the walls** (on by default, `reassign=False` to switch off): the walls are cuts of
+  the grid, so a single point in the state of the other side cannot be a phase of its own. Every
+  point within 2 grid steps of another phase joins that phase when the core of that phase is
+  `REASSIGN_RATIO` = 1.2 times closer to its snapshots than its own core. A cluster of moved points
+  along a boundary means that both states are possible there.
 
 ### Threshold tree
 
@@ -249,6 +261,11 @@ snapshots and are only used for scoring. ARI is on points.
 | FitzHugh-Nagumo | 99 x 4 | 1 phase | 1 phase | 2 phases, 0.19 | 1 phase | HDBSCAN 20: 0.71 (23% noise) |
 | Barkley | 165 x 4 | 2 phases, 0.59 | 2 phases, 0.58 | 1 phase | 2 phases, 0.59 | HDBSCAN 20: 0.84 (14% noise) |
 
+The table and the figures are from before the points near the walls were reassigned (2026-11-23).
+With it, the hand-made walls give: Swift-Hohenberg ARI 0.94 (236 of 240 points), Gray-Scott 0.95
+(498 of 525), localised Swift-Hohenberg 1.00 (105 of 105), Barkley 0.62 (136 of 165, 8 runs per
+point); FitzHugh-Nagumo is unchanged.
+
 ![Gray-Scott: walls on the hand-made description](docs/examples/gray-scott/phase_map_hand.png)
 
 - **One state per point.** Where every parameter point ends in one state, the walls and the tree
@@ -334,10 +351,17 @@ kind = "velocity"
   because a component alone is not invariant under rotations; add `single_component = true` if it
   really is a scalar of its own.
 - Each kind has default blocks of observables (velocity: vortex cores by the Okubo-Weiss
-  criterion; polarity: winding-number defects $\pm1$; nematic: defects $\pm\frac12$); `blocks`
-  replaces them. The block `parts` is opt-in. It compares square blocks of half the frame side and
+  criterion; polarity: winding-number defects $\pm1$; nematic: defects $\pm\frac12$; both: the
+  Frank energy of the orientation, below); `blocks` replaces them. The block `parts` is opt-in. It compares square blocks of half the frame side and
   is large when two states sit side by side in one frame (hexagons next to stripes, spots on a
   uniform background).
+- The block `frank` (polarity and nematic) is the Frank energy with one constant, weighted by the
+  order squared so that defect cores stay finite: splay $m^2(\nabla\cdot\mathbf n)^2$ and bend
+  $m^2|\mathbf n\times\nabla\times\mathbf n|^2$ ($m = |\mathbf p|$ or $S$). Columns: $\log_{10} F$, the
+  splay share, and $\ln F(t) - \ln F(t - \Delta t)$ over the pair of snapshots (negative while the
+  orientation relaxes or coarsens, near 0 when steady, of either sign when it oscillates).
+- A vector or nematic field whose fluctuations are below $10^{-3}$ of its size is taken as exactly
+  uniform, so the numerical noise of a uniform state is not described as a pattern.
 - The grid spacing can be given per run, as a column `dx` of the table of runs.
 - A whole periodic box is described with FFTs and periodic shifts. A crop or a non-periodic box
   ($L$ its side, $s$ = `max_shift`, by default $L/5$) is described without periodicity:
@@ -473,7 +497,7 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
 
 ## Tests
 
-`pytest` runs 210 tests on small synthetic fields with known answers, in about a minute:
+`pytest` runs 220 tests on small synthetic fields with known answers, in about a minute:
 
 - **Fields and files**: symmetry rules of vector and nematic fields, checked against the gradient
   of a scalar and the tensor of a director field; velocity and polarity turning as vectors; file
@@ -482,7 +506,9 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
 - **Descriptors**:
   - $S(k)$ of a single wave; domain counts of spots against stripes;
   - curl-free and divergence-free flows; vortex cores of Gaussian vortices and of a cellular flow;
-    $\pm1$ and $\pm\frac12$ winding defects;
+    $\pm1$ and $\pm\frac12$ winding defects; Frank energy of a turning orientation ($F = k^2$),
+    of an aster (splay) and a vortex (bend), and its change over the lag; numerical noise on a
+    uniform vector or nematic ignored;
   - frozen, travelling and changing patterns; two states side by side (`parts`); blocks chosen
     per field;
   - invariance of every descriptor under the eight symmetries of the square and periodic shifts.
@@ -490,7 +516,10 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
   windowed moving correlation; rotation and mirror invariance; the same descriptors at $\Delta x$
   and $\Delta x/2$ after coarsening; mixed grids refused without a common frame.
 - **Walls**: the links of a refined grid; no wall in pure noise or under a smooth drift; walls on
-  the right links for two and three phases; a bistable point flagged as mixed.
+  the right links for two and three phases; runs that ended early left out (unstable points); a
+  bistable point flagged as mixed; points in a band where the states alternate from point to point
+  given to the phase of their state; mixed judged only
+  among points with several runs; a drifting run not flagged as mixed.
 - **Swift-Hohenberg runs**: the state, and the stripe amplitude
   $\mathrm{std}(u) = \sqrt{2\varepsilon/3}$ of weakly nonlinear theory.
 - **Learned description**:
@@ -514,7 +543,7 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
 | 2b | Frames: crops, coarsening, per-run grid spacing, non-periodic boxes; errors for unknown settings | done |
 | 3 | Command-line tool `phasewall inspect \| toy \| describe \| learn \| walls \| demo`, report (summary, tables, figures) | done |
 | 4 | Documentation: method, mathematics, physics parallels, tests ([PDF](docs/documentation.pdf)) | done |
-| 5 | Check on real simulations of an active fluid, from their descriptors and from a learned description, against published phase diagrams. The data stay outside this repository | next |
+| 5 | Check on real simulations of an active fluid ([PRX Life 4, 043009](https://doi.org/10.1103/bnx5-sryc)), from their descriptors and from a learned description, against published phase diagrams. The data stay outside this repository | next |
 | 6 | Learned description (extra `[nn]`): contrastive encoder on snapshot pairs, augmentations from the field symmetries; on the demo 2 phases of 3, then 3 of 3 with the views of step 18 | done |
 | 6b | Comparison with blind grouping (Gaussian mixture, k-means, HDBSCAN) and a logistic probe, on both descriptions | done |
 | 6c | [Threshold tree](#threshold-tree), a method of the pipeline (`Methods(tree=True)`). Swift-Hohenberg 3 phases ARI 0.94, Gray-Scott 10 phases 0.94, localised Swift-Hohenberg 1.00 | done (2026-11-18) |
@@ -525,7 +554,7 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
 | 8b | Interactive interface ([apps/explore.py](apps/explore.py), marimo): sources, descriptions and methods chosen on the page; phase maps, comparison, snapshots, walls, training curves and export in tabs ([docs/plan_interface.md](docs/plan_interface.md)) | done |
 | 9 | Licence and public release, once step 5 shows that the method works on real data | planned |
 | 10 | Field roles (scalar, velocity, polarity, nematic); vectors and tensors from one dataset or from component datasets; `phasewall inspect` suggests roles that the user confirms | done (2026-11-18) |
-| 11 | Observable blocks switched on or off per field (`blocks`, `Describers(blocks=...)`); vortex cores (Okubo-Weiss), winding defects $\pm1$ and $\pm\frac12$ | done (2026-11-18; splay and bend of a director not yet) |
+| 11 | Observable blocks switched on or off per field (`blocks`, `Describers(blocks=...)`); vortex cores (Okubo-Weiss), winding defects $\pm1$ and $\pm\frac12$; Frank energy (splay, bend, change over the lag) for polarities and nematics (2026-11-23) | done (2026-11-18) |
 | 12 | Registries of encoders and methods, self-describing checked settings, entry points, contract tests; the pipeline runs everything through them (same results) | done (2026-11-18) |
 | 13 | Tunable CNN (`nn/architecture.py`, no PyTorch needed to check): shape checked against the frame, receptive field, weights, memory estimate; `phasewall learn --blocks --width --dim-h ...`; shapes compared by label-free diagnostics | done (2026-11-18) |
 | 14 | Interface for steps 10 to 13: field inspector (TOML written by `io.write_config`), blocks per field, network checked before training, tree and registered entries; checked in a browser | done (2026-11-18) |
@@ -554,7 +583,8 @@ Open questions:
 - **Power of the split-sample test.** The demo needs 6 to 8 runs per point to find the weak
   hexagon-stripe wall. Cross-fitting (place with one half, test with the other, then swap) could
   use all runs.
-- **Mixed points.** A split of 7 runs against 1 at a boundary point is not flagged; a test per
+- **Mixed points.** Since 2026-11-23 only points with several runs are judged, against each
+  other. A split of 7 runs against 1 at a boundary point is not flagged; a test per
   point (for example bimodality of its runs) could replace the robust threshold.
 - **Several states per point** (FitzHugh-Nagumo, Barkley): describe each point as a mixture of
   states (steps 23, 24).
@@ -563,6 +593,53 @@ Open questions:
 - **Scans that are not grids**: links between nearest neighbours.
 - **Bistable regions** that runs from one kind of initial condition never reach (Section 8 of the
   documentation): runs from several initial conditions per point.
+
+## References
+
+Every entry was checked against the publisher's or the author's page (2026-11-23). The full list with
+DOIs is at the end of [docs/documentation.pdf](docs/documentation.pdf).
+
+**The system the method was built for**
+- L. Dumoulin, C. Blanch-Mercader and K. Kruse, Defect states in compressible active polar fluids with renewal, *PRX Life* **4**, 043009 (2026). [doi:10.1103/bnx5-sryc](https://doi.org/10.1103/bnx5-sryc)
+
+**The method**
+- G. J. Székely and M. L. Rizzo, Energy statistics: a class of statistics based on distances, *J. Stat. Plann. Inference* **143**, 1249 (2013). [doi:10.1016/j.jspi.2013.03.018](https://doi.org/10.1016/j.jspi.2013.03.018)
+- J. Shi and J. Malik, Normalized cuts and image segmentation, *IEEE Trans. PAMI* **22**, 888 (2000). [doi:10.1109/34.868688](https://doi.org/10.1109/34.868688)
+- M. Fiedler, Algebraic connectivity of graphs, *Czech. Math. J.* **23**, 298 (1973). [doi:10.21136/CMJ.1973.101168](https://doi.org/10.21136/CMJ.1973.101168)
+- U. von Luxburg, A tutorial on spectral clustering, *Stat. Comput.* **17**, 395 (2007). [doi:10.1007/s11222-007-9033-z](https://doi.org/10.1007/s11222-007-9033-z)
+- H. B. Mann and D. R. Whitney, On a test of whether one of two random variables is stochastically larger than the other, *Ann. Math. Stat.* **18**, 50 (1947). [doi:10.1214/aoms/1177730491](https://doi.org/10.1214/aoms/1177730491)
+- N. Otsu, A threshold selection method from gray-level histograms, *IEEE Trans. Syst. Man Cybern.* **9**, 62 (1979). [doi:10.1109/TSMC.1979.4310076](https://doi.org/10.1109/TSMC.1979.4310076)
+
+**Learned description**
+- T. Chen, S. Kornblith, M. Norouzi and G. Hinton, A simple framework for contrastive learning of visual representations (SimCLR), *Proc. ICML*, PMLR **119**, 1597 (2020). [proceedings](https://proceedings.mlr.press/v119/chen20j.html)
+- A. van den Oord, Y. Li and O. Vinyals, Representation learning with contrastive predictive coding (InfoNCE), [arXiv:1807.03748](https://arxiv.org/abs/1807.03748) (2018).
+- I. Loshchilov and F. Hutter, Decoupled weight decay regularization (AdamW), ICLR 2019, [arXiv:1711.05101](https://arxiv.org/abs/1711.05101).
+- A. Bardes, J. Ponce and Y. LeCun, VICReg, ICLR 2022, [arXiv:2105.04906](https://arxiv.org/abs/2105.04906).
+- K. He, X. Chen, S. Xie, Y. Li, P. Dollár and R. Girshick, Masked autoencoders are scalable vision learners, *Proc. CVPR*, 16000 (2022), [arXiv:2111.06377](https://arxiv.org/abs/2111.06377).
+
+**Comparisons and scores**
+- A. P. Dempster, N. M. Laird and D. B. Rubin, Maximum likelihood from incomplete data via the EM algorithm, *J. R. Stat. Soc. B* **39**, 1 (1977). [doi:10.1111/j.2517-6161.1977.tb01600.x](https://doi.org/10.1111/j.2517-6161.1977.tb01600.x)
+- G. Schwarz, Estimating the dimension of a model (BIC), *Ann. Stat.* **6**, 461 (1978). [doi:10.1214/aos/1176344136](https://doi.org/10.1214/aos/1176344136)
+- S. P. Lloyd, Least squares quantization in PCM (k-means), *IEEE Trans. Inf. Theory* **28**, 129 (1982). [doi:10.1109/TIT.1982.1056489](https://doi.org/10.1109/TIT.1982.1056489)
+- P. J. Rousseeuw, Silhouettes, *J. Comput. Appl. Math.* **20**, 53 (1987). [doi:10.1016/0377-0427(87)90125-7](https://doi.org/10.1016/0377-0427(87)90125-7)
+- R. J. G. B. Campello, D. Moulavi and J. Sander, Density-based clustering based on hierarchical density estimates (HDBSCAN), PAKDD 2013, LNCS **7819**, 160. [doi:10.1007/978-3-642-37456-2_14](https://doi.org/10.1007/978-3-642-37456-2_14)
+- L. Hubert and P. Arabie, Comparing partitions (adjusted Rand index), *J. Classif.* **2**, 193 (1985). [doi:10.1007/BF01908075](https://doi.org/10.1007/BF01908075)
+
+**Observables**
+- A. Okubo, Horizontal dispersion of floatable particles in the vicinity of velocity singularities such as convergences, *Deep-Sea Res.* **17**, 445 (1970). [doi:10.1016/0011-7471(70)90059-8](https://doi.org/10.1016/0011-7471(70)90059-8)
+- J. Weiss, The dynamics of enstrophy transfer in two-dimensional hydrodynamics, *Physica D* **48**, 273 (1991). [doi:10.1016/0167-2789(91)90088-Q](https://doi.org/10.1016/0167-2789(91)90088-Q)
+- F. C. Frank, On the theory of liquid crystals, *Discuss. Faraday Soc.* **25**, 19 (1958). [doi:10.1039/DF9582500019](https://doi.org/10.1039/DF9582500019)
+- K. Binder, Finite size scaling analysis of Ising model block distribution functions, *Z. Phys. B* **43**, 119 (1981). [doi:10.1007/BF01293604](https://doi.org/10.1007/BF01293604)
+- J. P. Lewis, Fast template matching, Vision Interface 1995, 120 (expanded as *Fast normalized cross-correlation*).
+
+**Examples**
+- J. Swift and P. C. Hohenberg, Hydrodynamic fluctuations at the convective instability, *Phys. Rev. A* **15**, 319 (1977). [doi:10.1103/PhysRevA.15.319](https://doi.org/10.1103/PhysRevA.15.319)
+- M. C. Cross and P. C. Hohenberg, Pattern formation outside of equilibrium, *Rev. Mod. Phys.* **65**, 851 (1993). [doi:10.1103/RevModPhys.65.851](https://doi.org/10.1103/RevModPhys.65.851)
+- R. Hoyle, *Pattern Formation: An Introduction to Methods* (Cambridge University Press, 2006).
+- J. E. Pearson, Complex patterns in a simple system, *Science* **261**, 189 (1993). [doi:10.1126/science.261.5118.189](https://doi.org/10.1126/science.261.5118.189)
+- A. Hagberg and E. Meron, From labyrinthine patterns to spiral turbulence, *Phys. Rev. Lett.* **72**, 2494 (1994). [doi:10.1103/PhysRevLett.72.2494](https://doi.org/10.1103/PhysRevLett.72.2494)
+- D. Barkley, A model for fast computer simulation of waves in excitable media, *Physica D* **49**, 61 (1991).
+- J. Burke and E. Knobloch, Localized states in the generalized Swift-Hohenberg equation, *Phys. Rev. E* **73**, 056211 (2006). [doi:10.1103/PhysRevE.73.056211](https://doi.org/10.1103/PhysRevE.73.056211)
 
 ## Acknowledgements
 

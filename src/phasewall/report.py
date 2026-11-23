@@ -94,9 +94,25 @@ def summary(w: Walls, curve: pd.DataFrame | None = None, notes: str = "") -> str
         "",
         "## Mixed points",
         "",
-        "Points whose two halves differ far more than usual (bistability, or runs not yet steady):",
+        "Points with several runs whose runs differ far more than at the other such points (bistability):",
         "",
         _markdown(mixed[[*w.parameters, "runs", "spread", "phase"]]) if len(mixed) else "None.",
+        "",
+        "## Points moved near the walls",
+        "",
+        ("Points within a few grid steps of another phase whose snapshots are much closer to that phase's core "
+         "than to their own (a cluster of them along a boundary: both states are possible there):"),
+        "",
+        (_markdown(w.reassigned.round(3)) if len(getattr(w, "reassigned", [])) else "None."),
+        "",
+        "## Runs that ended early",
+        "",
+        (f"Runs whose last snapshot comes before {w.settings.get('end_fraction')} of the median end time of all runs "
+         "(crashed or unstable simulations) are left out. Points where every run ended early (unstable):"),
+        "",
+        _markdown(w.unstable) if len(getattr(w, "unstable", [])) else "None.",
+        "",
+        (f"Runs left out in all: {len(w.ended)}." if len(getattr(w, "ended", [])) else "No run ended early."),
         "",
     ]
     if curve is not None:
@@ -189,7 +205,8 @@ def plot_jumps(ax, w: Walls) -> None:
 
 
 def plot_phases(ax, w: Walls) -> None:
-    """Phases found, with the walls and the mixed points."""
+    """Phases found, with the walls, the mixed points (rings) and the unstable points (crosses:
+    every run there ended early)."""
     x, y = w.parameters
     n = w.nodes
     _points_by_class(ax, n[x].to_numpy(), n[y].to_numpy(), n.phase.to_numpy(),
@@ -198,6 +215,14 @@ def plot_phases(ax, w: Walls) -> None:
     m = n[n.mixed]
     if len(m):
         ax.scatter(m[x], m[y], s=90, facecolors="none", edgecolors=INK, linewidths=1.0, label="mixed", zorder=5)
+    r = n[n.reassigned] if "reassigned" in n else n.iloc[:0]
+    if len(r):
+        ax.scatter(r[x], r[y], s=60, marker="s", facecolors="none", edgecolors=INK, linewidths=0.8,
+                   label="moved near a wall", zorder=5)
+    u = getattr(w, "unstable", None)
+    if u is not None and len(u):
+        ax.scatter(u[x], u[y], s=30, marker="x", color=INK, linewidths=1.0, label="unstable (runs ended early)",
+                   zorder=5)
     ax.plot([], [], color=INK, lw=1.6, label="wall")
     _style(ax, x, y)
     _title(ax, f"Phases found: {w.n_phases}")

@@ -22,6 +22,15 @@ For every field (arrays [x, y] or [x, y, component], grid spacing dx):
 - defects: polarities and nematics: topological defects counted by their winding number, the
          turn of the angle of the field around each 2 x 2 plaquette of grid points (+-1 for a
          polarity, +-1/2 for a nematic), per unit area: `plus` and `minus`.
+- frank: polarities and nematics: the Frank energy of the orientation with one elastic constant
+         (K = 1), weighted by the size of the order squared so that defect cores stay finite:
+         splay m^2 (div n)^2 and bend m^2 |n x curl n|^2, n the direction of the polarity (m = |p|)
+         or the director (m = S = 2|Q|). Columns: log10F, log10 of the mean of splay + bend
+         (= <|grad a|^2 - |grad |a||^2>: the distortion of the orientation, not of the size);
+         splay_share, <splay> / <splay + bend> (0.5 when F is at the floor); and, for a pair of
+         snapshots, change = ln F(t) - ln F(t - pair_dt): negative while the orientation relaxes
+         or coarsens, near 0 when steady, of either sign when it oscillates (over the snapshots
+         of a run). Computed from the components without choosing a sign of n (see frank_density).
 - parts: compares the parts of the frame with each other (Binder's block distribution idea,
          Binder 1981): in every square block of side PARTS_SIDE of the frame side (all
          positions; wrapped in a periodic box), six local numbers: log10 of the variance and
@@ -66,7 +75,7 @@ for the moving correlation. A frame that is not periodic (a crop, or a non-perio
   max_shift during pair_dt looks as if it changed.
 
 Which blocks are computed for a field is set by Field.blocks, by default the blocks of its kind
-(fields.DEFAULT_BLOCKS: the common ones for every kind, vortex for a velocity, defects for a
+(fields.DEFAULT_BLOCKS: the common ones for every kind, vortex for a velocity, defects and frank for a
 polarity or a nematic). Column names are field.block.name, for example rho.shape.k07;
 walls.py weights the blocks.
 """
@@ -90,6 +99,9 @@ DECOR_FLOOR = 1e-3    # correlations above 1 - DECOR_FLOOR count as frozen (a ch
 LEVELS = (-1.0, 0.0, 1.0)   # topo: levels in standard deviations from the mean (a choice)
 TUKEY_ALPHA = 0.5     # non-periodic S(k): tapered share of the window (a choice: 4x less leakage
                       # than no window on Swift-Hohenberg crops, 2026-11-17)
+FLAT_RELATIVE = 1e-3  # vectors and nematics whose fluctuations are below 0.1% of their size are uniform
+                      # (a choice: the numerical noise of a uniformly polarised state would otherwise be
+                      # described as a pattern, far from the floors of an exactly uniform one)
 PARTS_SIDE = 0.5            # parts: block side as a fraction of the frame side (a choice)
 PARTS_VAR_FLOOR = 1e-6      # parts: a block whose variance is below this share of the frame
                             # variance is flat (a choice)
@@ -221,6 +233,42 @@ def defect_counts(a: np.ndarray, symmetry: str, dx: float, periodic: bool = True
     return {"plus": float(np.sum(q > unit / 2)) / area, "minus": float(np.sum(q < -unit / 2)) / area}
 
 
+def frank_density(a: np.ndarray, symmetry: str, dx: float, periodic: bool = True
+                  ) -> tuple[np.ndarray, np.ndarray]:
+    """Splay and bend densities m^2 (div n)^2 and m^2 |n x curl n|^2 of a polarity or a nematic
+    (frank block, module docstring), on the points where the derivatives are taken. With
+    a = (p_x, p_y) or (Q_xx, Q_xy) and theta the angle of n: g = (a_x grad a_y - a_y grad a_x) / |a|
+    = m grad theta (polarity: a = m (cos theta, sin theta); nematic: a = |Q| (cos 2 theta,
+    sin 2 theta) and S = 2 |Q|), and with c = cos 2 theta, s = sin 2 theta (polarity: from a_x^2 - a_y^2
+    and 2 a_x a_y over |a|^2; nematic: a / |a|):
+    splay = ((1 - c) g_x^2 + (1 + c) g_y^2 - 2 s g_x g_y) / 2,
+    bend  = ((1 + c) g_x^2 + (1 - c) g_y^2 + 2 s g_x g_y) / 2, splay + bend = |g|^2.
+    Points where |a| < FLAT count 0 (no orientation)."""
+    dxax, dyax, dxay, dyay = gradients(a, dx, periodic)
+    if not periodic:
+        a = a[1:-1, 1:-1]
+    ax, ay = a[..., 0], a[..., 1]
+    size2 = ax**2 + ay**2
+    ok = size2 > FLAT**2
+    size = np.sqrt(np.where(ok, size2, 1.0))
+    gx = np.where(ok, (ax * dxay - ay * dxax) / size, 0.0)
+    gy = np.where(ok, (ax * dyay - ay * dyax) / size, 0.0)
+    if symmetry == "nematic":
+        c, s = ax / size, ay / size
+    else:
+        c, s = (ax**2 - ay**2) / size**2, 2 * ax * ay / size**2
+    c, s = np.where(ok, c, 0.0), np.where(ok, s, 0.0)
+    splay = 0.5 * ((1 - c) * gx**2 + (1 + c) * gy**2 - 2 * s * gx * gy)
+    bend = 0.5 * ((1 + c) * gx**2 + (1 - c) * gy**2 + 2 * s * gx * gy)
+    return splay, bend
+
+
+def frank_energy(a: np.ndarray, f: Field, dx: float, periodic: bool = True) -> tuple[float, float]:
+    """(F, mean splay) of one field (prepared as for every block)."""
+    splay, bend = frank_density(prepared(a, f), f.symmetry, dx, periodic)
+    return float(np.mean(splay + bend)), float(np.mean(splay))
+
+
 def moments(v: np.ndarray) -> tuple[float, float, float, float]:
     """Mean, standard deviation, skewness, excess kurtosis; 0 for the last two when the
     values do not vary (a choice)."""
@@ -339,10 +387,17 @@ def parts(a: np.ndarray, values: np.ndarray, dx: float, periodic: bool = True,
 
 # ---------------------------------------------------------------- one field
 def prepared(a: np.ndarray, f: Field) -> np.ndarray:
-    """The array that is described: (a - <a>) / <a> for a relative scalar."""
+    """The array that is described: (a - <a>) / <a> for a relative scalar; a vector or nematic
+    whose fluctuations are below FLAT_RELATIVE of its size (rms of |a|) is replaced by its mean,
+    exactly uniform, so that numerical noise is not described as a pattern."""
     if f.relative:
         m = a.mean()
         return (a - m) / m if m != 0 else a - m
+    if f.symmetry != "scalar" and a.ndim == 3:
+        size = np.sqrt(np.mean(np.sum(a**2, axis=-1)))
+        fluct = np.sqrt(np.sum(a.var(axis=(0, 1))))
+        if size > 0 and fluct < FLAT_RELATIVE * size:
+            return np.broadcast_to(a.mean(axis=(0, 1)), a.shape).copy()
     return a
 
 
@@ -386,6 +441,11 @@ def field_descriptors(a: np.ndarray, f: Field, dx: float, edges: np.ndarray,
         out[f"{f.name}.flow.log10curl2"] = _log10(w2)
         # 0.5 when neither is present (a choice): no preference for splay or bend
         out[f"{f.name}.flow.curl_share"] = w2 / (d2 + w2) if d2 + w2 > FLAT**2 else 0.5
+    if "frank" in use:
+        F, splay = frank_energy(a, f, dx, periodic)
+        out[f"{f.name}.frank.log10F"] = _log10(F)
+        # 0.5 when there is no distortion (a choice): no preference for splay or bend
+        out[f"{f.name}.frank.splay_share"] = splay / F if F > FLAT**2 else 0.5
     if "vortex" in use:
         out |= {f"{f.name}.vortex.{k}": v for k, v in vortex_cores(a, dx, periodic).items()}
     if "defects" in use:
@@ -454,6 +514,12 @@ def describe_snapshot(snapshot: dict[str, np.ndarray], fields: list[Field], dx: 
         out |= field_descriptors(snapshot[f.name], f, dx, edges, periodic)
         if before is not None and "dyn" in f.selected:
             out |= pair_descriptors(before[f.name], snapshot[f.name], f, None if periodic else shift)
+        if before is not None and "frank" in f.selected:
+            b = before[f.name]
+            if not periodic and shift > 0:                 # the frame inside the extended one
+                b = b[shift:-shift, shift:-shift]
+            now, earlier = (max(frank_energy(x, f, dx, periodic)[0], FLAT**2) for x in (snapshot[f.name], b))
+            out[f"{f.name}.frank.change"] = float(np.log(now) - np.log(earlier))
     return out
 
 
@@ -580,6 +646,14 @@ def explain(column: str, fields: list[Field] | None = None) -> str:
         what = {"log10div2": f"log10 of the mean square divergence of {f}",
                 "log10curl2": f"log10 of the mean square curl of {f}",
                 "curl_share": f"share of the curl in the derivatives of {f}: 0 splay or sources, 1 bend or vortices"}
+        if name in what:
+            return what[name]
+    if block == "frank":
+        what = {"log10F": f"log10 of the Frank energy of the orientation of {f} (one constant, weighted by the order "
+                          "squared): how distorted the orientation is",
+                "splay_share": f"share of splay in the Frank energy of {f}: 0 pure bend, 1 pure splay",
+                "change": f"change of the Frank energy of {f} over the lag, ln F(t) - ln F(t - lag): negative while "
+                          "it relaxes or coarsens, near 0 when steady"}
         if name in what:
             return what[name]
     if block == "vortex":
