@@ -179,3 +179,13 @@ def test_description_text(nb):
     assert "learned encoder" in nb.description_text("learned-seed0", t)
     assert "side by side" in nb.description_text("combined-seed0", t)
     assert "2 columns" in nb.description_text("other", t)
+
+
+def test_notebook_runs_the_quick_1d_demo(nb, tmp_path, monkeypatch):
+    # --1d: the dimension chosen at the top is 1D (kymographs); the quick Ginzburg-Landau ensemble
+    monkeypatch.setattr(sys, "argv", ["explore.py", "--run", "--1d", "--quick", "--tree", "--cache", str(tmp_path)])
+    outputs, defs = nb.app.run()
+    page = " ".join(str(getattr(o, "text", o)) for o in outputs)
+    assert defs["dimension"].value == 1 and defs["example_choice"].value == "ginzburg-landau-1d"
+    assert "The run stopped" not in page and "Traceback" not in page and "phase 0" in page
+    assert "Kymographs" in page

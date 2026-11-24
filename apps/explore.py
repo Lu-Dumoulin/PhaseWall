@@ -27,6 +27,7 @@ with app.setup:
     import io
     import os
     import time
+    from html import escape
     from importlib.util import find_spec
     from pathlib import Path
 
@@ -36,21 +37,28 @@ with app.setup:
 
     from phasewall import pipeline as pl
     from phasewall import registry, report
-    from phasewall.builtins import TreeSettings
+    from phasewall.builtins import JepaSettings, TreeSettings
     from phasewall.describe import explain
-    from phasewall.examples import EXAMPLES, example, fields_of
+    from phasewall.examples import EXAMPLES, dims_of, example, fields_of
     from phasewall.fields import BLOCK_HELP, BLOCKS, KINDS, Field
-    from phasewall.io import inspect_snapshot, list_snapshots, load_ensemble, suggest_fields, write_config
+    from phasewall.io import inspect_snapshot, list_snapshots, load_any, suggest_fields, write_config
     from phasewall.nn.architecture import Network
     from phasewall.nn.architecture import check as check_network
     from phasewall.nn.architecture import summary as network_summary
+    from phasewall.oned.describe1d import ALLOWED as ALLOWED_1D
+    from phasewall.oned.describe1d import BLOCK_HELP as BLOCK_HELP_1D
+    from phasewall.oned.describe1d import BLOCKS as BLOCKS_1D
+    from phasewall.oned.kymo import SHARE as KYMO_SHARE
+    from phasewall.oned.kymo import WINDOWS as KYMO_WINDOWS
     from phasewall.trees import rules_text
 
     HAS_TORCH = find_spec("torch") is not None          # learned description (extra [nn])
     HAS_SKLEARN = find_spec("sklearn") is not None      # blind grouping and probe (extra [baselines])
     HDBSCAN_SIZES = (5, 10, 20, 40)                     # offered sizes, as phasewall.baselines.HDBSCAN_SIZES
-    BUILTIN_ENCODERS = ("hand", "learned")               # have their own controls below
+    BUILTIN_ENCODERS = ("hand", "learned", "jepa")       # have their own controls below
     BUILTIN_METHODS = ("walls", "tree", "mixture", "kmeans", "hdbscan")
+    OP_SHOWN = 3                                         # order parameters shown per comparison (a choice;
+                                                         # order_parameters.csv keeps orderparams.TOP)
     APPS = mo.notebook_dir() or Path.cwd()               # the folder of this notebook
     DEFAULT_CACHE = APPS.parent / "data" / "cache_app"   # its own cache (data/ is git-ignored), apart from
                                                          # the command line and scripts, which may run at the same time
@@ -64,6 +72,8 @@ with app.setup:
         "t_relax": "time before the first snapshot",
         "every": "time between snapshots",
         "n_save": "snapshots per run",
+        "length": "length of the line",
+        "rows": "rows saved per run (kymograph)",
     }
 
 
@@ -262,11 +272,13 @@ def columns(*items):
 def block_grid(block_inputs, fields):
     """The checkboxes of the blocks as a grid: one row per field, one column per block (a box only
     where the block fits the kind of the field), the definition of each block on hover and below."""
-    used = [b for b in BLOCKS if any(b in block_inputs[f.name] for f in fields)]
+    one_d = any(not hasattr(f, "symmetry") for f in fields)          # fields of a 1D system
+    order, help_ = (BLOCKS_1D, BLOCK_HELP_1D) if one_d else (list(BLOCKS), BLOCK_HELP)
+    used = [b for b in order if any(b in block_inputs[f.name] for f in fields)]
     widths = [2] + [1] * len(used)
 
     def head(b):
-        return mo.Html(f'<span title="{BLOCK_HELP[b]}" style="cursor: help; border-bottom: 1px dotted; '
+        return mo.Html(f'<span title="{escape(help_[b])}" style="cursor: help; border-bottom: 1px dotted; '
                        f'font-family: var(--monospace-font, monospace); font-size: 0.85em">{b}</span>')
     rows = [mo.hstack([mo.md(" "), *[head(b) for b in used]], widths=widths, justify="start")]
     for f in fields:
@@ -274,7 +286,7 @@ def block_grid(block_inputs, fields):
         rows.append(mo.hstack([mo.md(f"**{f.name}** <span style='opacity: 0.6'>{f.kind}</span>"),
                                *[boxes[b] if b in boxes else mo.md("") for b in used]],
                               widths=widths, justify="start"))
-    legend = mo.md("  \n".join(f"`{b}`: {BLOCK_HELP[b]}" for b in used)).style(
+    legend = mo.md("  \n".join(f"`{b}`: {escape(help_[b])}" for b in used)).style(
         {"font-size": "0.82em", "opacity": "0.75", "margin-top": "0.4rem"})
     return mo.vstack([*rows, legend], gap=0.3)
 
@@ -286,12 +298,14 @@ def description_text(name: str, table) -> str:
 
     n = len(descriptor_columns(table))
     if name.startswith("hand"):
-        return f"Hand-made observables of every field: **{n} descriptors** per snapshot."
+        return f"Hand-made observables of every field: **{n} descriptors** per sample (snapshot, or window in 1D)."
     if name.startswith("learned"):
-        return f"h of the learned encoder (CNN, self-supervised): **{n} dimensions** per snapshot."
+        return f"h of the learned encoder (CNN, contrastive): **{n} dimensions** per sample."
+    if name.startswith("jepa"):
+        return f"h of the predictive encoder (CNN, JEPA): **{n} dimensions** per sample."
     if name.startswith("combined"):
-        return f"Hand-made observables and learned h side by side: **{n} columns** per snapshot."
-    return f"**{n} columns** per snapshot."
+        return f"Hand-made observables and learned h side by side: **{n} columns** per sample."
+    return f"**{n} columns** per sample."
 
 
 @app.function
@@ -333,8 +347,8 @@ def _():
     # PhaseWall explorer
 
     PhaseWall finds the phases of a simulated system from runs on a grid of parameters: it
-    describes every snapshot (encoders), then finds the phases from the descriptions (methods),
-    without labels. Choose each step below, then press **Run**; steps already computed with the
+    describes every snapshot (2D) or every time window of a kymograph (1D) with encoders, then finds
+    the phases from the descriptions with methods, without labels. Choose each step below, then press **Run**; steps already computed with the
     same settings are read from the cache.
 
     <div class="pw-steps"><span class="pw-pill">1 System</span><span class="pw-arrow">→</span>
@@ -348,14 +362,31 @@ def _():
 
 @app.cell
 def _():
+    # The dimension of the system, first: it decides the sources, fields, observables and figures.
+    dimension = mo.ui.radio(
+        {"2D: snapshots of fields on a plane": 2, "1D: kymographs of fields on a line": 1},
+        value="1D: kymographs of fields on a line" if "1d" in mo.cli_args() else "2D: snapshots of fields on a plane",
+        label="Dimension of the system", inline=True)
+    card("Dimension", dimension)
+    return (dimension,)
+
+
+@app.cell
+def _(dimension):
     # Source of the runs. mo.ui.radio is PlutoUI's Radio; its .value is read in other cells.
+    # 1D runs come from an example, an ensemble ([kymograph] TOML file) or a table of descriptors.
     _own = mo.cli_args().get("runs")
+    _choices = {"an example": "example", "your runs (CSV of runs and their snapshot files)": "runs",
+                "an ensemble (TOML file)": "config", "a table of descriptors (CSV)": "table"}
+    if dimension.value == 1:
+        _choices.pop("your runs (CSV of runs and their snapshot files)")
     source_kind = mo.ui.radio(
-        {"an example": "example", "your runs (CSV of runs and their snapshot files)": "runs",
-         "an ensemble (TOML file)": "config", "a table of descriptors (CSV)": "table"},
-        value="your runs (CSV of runs and their snapshot files)" if _own else "an example", label="Runs from",
+        _choices, value="your runs (CSV of runs and their snapshot files)" if _own and dimension.value == 2
+        else "an example", label="Runs from",
     )
-    example_choice = mo.ui.dropdown(list(EXAMPLES), value="swift-hohenberg", label="example")
+    _examples = [n for n in EXAMPLES if dims_of(n) == dimension.value]
+    example_choice = mo.ui.dropdown(_examples, value="swift-hohenberg" if dimension.value == 2 else _examples[0],
+                                    label="example")
     quick = mo.ui.checkbox(value="quick" in mo.cli_args(),
                            label="quick: small grid and box, seconds (too coarse for all states)")
     runs_path = mo.ui.text(value=str(_own or ""), placeholder="path/to/runs.csv", full_width=True,
@@ -468,7 +499,7 @@ def _(config_path, example_choice, extra_fields, field_rows, source_kind, usable
         if source_kind.value == "example":
             known_fields = fields_of(example_choice.value)
         elif source_kind.value == "config" and Path(config_path.value).is_file():
-            known_fields = list(load_ensemble(config_path.value).fields)
+            known_fields = list(load_any(config_path.value).fields)
         elif source_kind.value == "runs":
             for _s, _row in zip(usable_suggestions, field_rows.value):
                 if not _row["use"]:
@@ -489,20 +520,62 @@ def _(config_path, example_choice, extra_fields, field_rows, source_kind, usable
 
 
 @app.cell
-def _():
-    # Frame: which part of each box is described, at which resolution. Empty: as the ensemble.
-    crop_input = mo.ui.text(placeholder="whole box", label="crop side (physical units)")
-    dx_target_input = mo.ui.text(placeholder="as simulated", label="coarsen to dx")
-    max_shift_input = mo.ui.text(placeholder="box / 5", label="max shift of the moving correlation")
-    min_wavelengths_input = mo.ui.number(
-        start=1, stop=20, step=0.5, value=pl.FrameSettings().min_wavelengths,
-        label="non-periodic S(k): frame / longest wavelength",
+def _(config_path, source_kind):
+    # 2D frame: which part of each box is described, at which resolution, as sliders in shares of the box
+    # side and a coarsening factor (pipeline.frame_from_shares turns them into physical units; a value equal
+    # to what the ensemble does already is passed as None, so the cache of the default frame is kept). They
+    # start at the frame of the TOML file when one is given, else at the whole box, as simulated.
+    from phasewall.frames import MAX_SHIFT_FRACTION
+    _crop, _factor, _shift = 1.0, 1, MAX_SHIFT_FRACTION
+    if source_kind.value == "config" and Path(config_path.value).is_file():
+        _geo = pl.frame_geometry(pl.Source(example=None, config=config_path.value))
+        if _geo is not None:
+            _L = _geo.side * _geo.dx
+            _crop = 1.0 if _geo.crop is None else _geo.crop / _L
+            _factor = 1 if _geo.dx_target is None else max(1, round(_geo.dx_target / _geo.dx))
+            _shift = MAX_SHIFT_FRACTION if _geo.max_shift is None else _geo.max_shift / _L
+    crop_input = mo.ui.slider(start=0.1, stop=1.0, step=0.05, value=min(max(round(_crop, 2), 0.1), 1.0),
+                              show_value=True,
+                              label="part of the box described: a centred square of this share of the side "
+                                    "(1: the whole box, 0.5: a square of half the side)")
+    dx_target_input = mo.ui.slider(start=1, stop=max(8, _factor), step=1, value=_factor, show_value=True,
+                                   label="coarsening: grid points merged per side (1: as simulated, "
+                                         "2: each 2 x 2 block averaged into one point)")
+    max_shift_input = mo.ui.slider(start=0.0, stop=0.5, step=0.05, value=min(max(round(_shift, 2), 0.0), 0.5),
+                                   show_value=True,
+                                   label="moving correlation, non-periodic frames: largest shift tried, as a share "
+                                         "of the box side (0.2: a fifth)")
+    min_wavelengths_input = mo.ui.slider(
+        start=1, stop=10, step=0.5, value=pl.FrameSettings().min_wavelengths, show_value=True,
+        label="non-periodic frames: S(k) kept for wavelengths up to the frame side divided by this (3: a third)",
     )
     periodic_input = mo.ui.dropdown(
         {"as the ensemble": None, "periodic": True, "not periodic": False},
-        value="as the ensemble", label="boundaries",
+        value="as the ensemble", label="boundaries of the box (periodic: the pattern wraps around)",
     )
     return crop_input, dx_target_input, max_shift_input, min_wavelengths_input, periodic_input
+
+
+@app.cell
+def _(config_path, source_kind):
+    # 1D: which part of each run is described, and in how many time windows (each window is one row of the
+    # table, like a snapshot in 2D). They start at the values of the TOML file when one is given, else at the
+    # defaults of oned.kymo (SHARE, WINDOWS), which the examples use; this cell runs again when the file changes.
+    _share, _windows = KYMO_SHARE, KYMO_WINDOWS
+    if source_kind.value == "config" and Path(config_path.value).is_file():
+        try:
+            _ens = load_any(config_path.value)
+            if hasattr(_ens, "windows"):
+                _share, _windows = float(_ens.share), int(_ens.windows)
+        except (ValueError, KeyError, OSError):
+            pass
+    share_input = mo.ui.slider(start=0.1, stop=1.0, step=0.05, value=min(max(_share, 0.1), 1.0), show_value=True,
+                               label="part of each run described, counted from its end (1: the whole run, "
+                                     "0.1: its last 10%)")
+    windows_input = mo.ui.slider(start=1, stop=max(16, _windows), step=1, value=_windows, show_value=True,
+                                 label="time windows that part is cut into (each window is one sample, "
+                                       "a row of the table)")
+    return share_input, windows_input
 
 
 @app.cell
@@ -521,9 +594,13 @@ def _():
     hand_input = mo.ui.checkbox(value=True, label="hand-made descriptors")
     learned_input = mo.ui.checkbox(label="learned (CNN, one per seed)", disabled=not HAS_TORCH)
     combined_input = mo.ui.checkbox(label="combined (hand-made + learned)", disabled=not HAS_TORCH)
+    jepa_input = mo.ui.checkbox(label="predictive (JEPA, one per seed; being tested)", disabled=not HAS_TORCH)
     epochs_input = mo.ui.number(start=1, stop=1000, step=1, value=pl.Describers().epochs, label="epochs")
     nn_seeds_input = mo.ui.text(value="0", label="training seeds")
-    device_input = mo.ui.dropdown(_devices, value="fastest available", label="device")
+    _fastest = next((k for k in ("CUDA GPU", "Apple GPU (mps)") if k in _devices), "CPU")
+    _devices = {f"fastest available ({_fastest})": None, **{k: v for k, v in _devices.items() if v is not None}}
+    device_input = mo.ui.dropdown(_devices, value=f"fastest available ({_fastest})",
+                                  label="device that trains the learned encoders (CNN, JEPA)")
     network_inputs = spec_controls(Network)
     plugin_encoder_inputs = mo.ui.dictionary({
         _name: mo.ui.dictionary({"use": mo.ui.checkbox(label=f"{_name}: {_e.help}",
@@ -536,6 +613,7 @@ def _():
         device_input,
         epochs_input,
         hand_input,
+        jepa_input,
         learned_input,
         network_inputs,
         nn_seeds_input,
@@ -547,9 +625,13 @@ def _():
 def _(known_fields):
     # Blocks of observables of the hand-made encoder: one checkbox per field and block, only
     # where the block fits the kind of the field; the defaults of the kind are ticked.
+    def _offered(f):
+        if not hasattr(f, "symmetry"):                     # a field of a 1D system (oned.kymo.Field1D)
+            return [b for b in BLOCKS_1D if b in ALLOWED_1D[f.kind] and not (f.kind == "complex" and b == "kinks")]
+        return [b for b, kinds in BLOCKS.items() if f.kind in kinds]
+
     block_inputs = mo.ui.dictionary({
-        _f.name: mo.ui.dictionary({b: mo.ui.checkbox(value=b in _f.selected) for b, kinds in BLOCKS.items()
-                                   if _f.kind in kinds})
+        _f.name: mo.ui.dictionary({b: mo.ui.checkbox(value=b in _f.selected) for b in _offered(_f)})
         for _f in known_fields
     })
     return (block_inputs,)
@@ -602,8 +684,10 @@ def _():
 @app.cell
 def _():
     workers_input = mo.ui.number(start=1, stop=os.cpu_count() or 1, step=1, value=min(8, os.cpu_count() or 1),
-                                 label="processes")
-    cache_input = mo.ui.text(value=str(mo.cli_args().get("cache") or DEFAULT_CACHE), label="cache folder",
+                                 label=f"CPU cores used in parallel to simulate and describe the runs "
+                                       f"(this computer has {os.cpu_count()})")
+    cache_input = mo.ui.text(value=str(mo.cli_args().get("cache") or DEFAULT_CACHE),
+                             label="cache folder (simulations, descriptions and trainings are kept here)",
                              full_width=True)
     run_button = mo.ui.run_button(label="Run", kind="success", full_width=True)
     return cache_input, run_button, workers_input
@@ -632,6 +716,7 @@ def _(
     hdbscan_input,
     inspection,
     inspection_problem,
+    jepa_input,
     julia_input,
     kmeans_input,
     known_fields,
@@ -658,6 +743,7 @@ def _(
     runs_path,
     seeds_input,
     setting_inputs,
+    share_input,
     snapshots_input,
     source_kind,
     table_label,
@@ -669,6 +755,7 @@ def _(
     tree_input,
     tree_inputs,
     walls_input,
+    windows_input,
     workers_input,
 ):
     # The settings of the pipeline, from the controls. Mistakes are collected as messages, shown
@@ -717,6 +804,7 @@ def _(
                          label=table_label.value or None, prefix=table_prefix.value or None)
 
     settings, settings_problems, settings_notes = None, [], []
+    frame_note = ""
     try:
         _learned = learned_input.value or combined_input.value
         _blocks = {}
@@ -733,15 +821,22 @@ def _(
             _others_m["tree"] = settings_from(TreeSettings, tree_inputs.value)
         _others_e = {n: settings_from(registry.encoders()[n].settings, v["settings"])
                      for n, v in plugin_encoder_inputs.value.items() if v["use"]}
+        if jepa_input.value:
+            _others_e["jepa"] = JepaSettings(int(epochs_input.value), parse_ints(nn_seeds_input.value) or (0,))
+        _one_d = pl.dims_for(_src := _source()) == 1
         _network = settings_from(Network, network_inputs.value)
+        _geo = None if _one_d else pl.frame_geometry(_src)
+        _frame = (None, None, None) if _geo is None else pl.frame_from_shares(
+            _geo, float(crop_input.value), int(dx_target_input.value), float(max_shift_input.value),
+            periodic_input.value)
         settings = pl.Settings(
-            source=_source(),
+            source=_src,
             frame=pl.FrameSettings(
-                crop=optional_float(crop_input.value, "crop"),
-                dx_target=optional_float(dx_target_input.value, "coarsen to dx"),
-                max_shift=optional_float(max_shift_input.value, "max shift"),
+                crop=_frame[0], dx_target=_frame[1], max_shift=_frame[2],
                 min_wavelengths=float(min_wavelengths_input.value),
                 periodic=periodic_input.value,
+                share=float(share_input.value) if _one_d else None,
+                windows=int(windows_input.value) if _one_d else None,
             ),
             describers=pl.Describers(
                 hand=hand_input.value, learned=learned_input.value, combined=combined_input.value,
@@ -753,10 +848,13 @@ def _(
                 min_phase=int(min_phase_input.value), merge=merge_input.value, robustness=robustness_input.value,
                 mixture=mixture_input.value, kmeans=kmeans_input.value,
                 hdbscan=tuple(sorted(int(k) for k, on in hdbscan_input.value.items() if on)), probe=probe_input.value,
-                learning_curve=parse_ints(curve_input.value) if _learned else (), others=_others_m,
+                learning_curve=parse_ints(curve_input.value) if _learned and pl.dims_for(_src) == 2 else (),
+                others=_others_m,
             ),
             execution=pl.Execution(workers=int(workers_input.value), cache=cache_input.value),
         )
+        if _geo is not None:
+            frame_note = pl.frame_text(_geo, settings.frame)
         for _st in [*_others_m.values(), *_others_e.values()]:
             registry.check_settings(_st)
         if _learned:
@@ -768,7 +866,9 @@ def _(
                 settings_notes.append(
                     f"views {_network.views}{' normalised' if _network.normalise else ''}, input {_info['input']} "
                     f"of {_side} points; network: channels {_info['channels']}, last map {_info['last_map']} points, "
-                    f"receptive field {_info['receptive_field']} points, {_info['weights_f']:,} weights")
+                    f"receptive field {_info['receptive_field']} points, {_info['weights_f']:,} weights; memory of one "
+                    f"training step about {_info['memory_gb_rough']:.1f} GB on the device that trains (a rough "
+                    f"estimate, not measured)")
     except ValueError as _e:
         settings_problems.append(str(_e))
         settings = None
@@ -788,7 +888,9 @@ def _(
         settings_notes.append("the probe needs a label column; without one it is skipped")
     if curve_input.value.strip() and not (learned_input.value or combined_input.value):
         settings_notes.append("the learning curve needs the learned description; it is skipped")
-    return settings, settings_notes, settings_problems
+    if curve_input.value.strip() and settings is not None and pl.dims_for(settings.source) == 1:
+        settings_notes.append("the learning curve is not available for 1D systems yet; it is skipped")
+    return frame_note, settings, settings_notes, settings_problems
 
 
 @app.cell
@@ -797,8 +899,11 @@ def _(settings, settings_notes, settings_problems):
     if settings_problems:
         status = mo.callout(mo.md("\n".join(f"- {p}" for p in settings_problems)), kind="danger")
     else:
-        _est = pl.estimate(settings)
-        _lines = [f"- {step}: {seconds_text(s)}" for step, s in _est.items()]
+        _rows = pl.estimate_details(settings)
+        _lines = [f"- **{r['step']}**: {seconds_text(r['seconds']) if r['seconds'] is not None else 'not estimated'}"
+                  f" · on {r['where']}  \n  <span style='color: #6b6a66'>{r['alternative']}</span>"
+                  for r in _rows]
+        _est = {r["step"]: r["seconds"] for r in _rows if r["seconds"] is not None}
         _total = sum(_est.values())
         _text = ("**Estimated cost** (steps in the cache take seconds):\n\n" + "\n".join(_lines)
                  + f"\n\n**total**: {seconds_text(_total)}") if _est else "No simulation: the cost depends on your runs."
@@ -898,8 +1003,10 @@ def _(
     block_inputs,
     combined_input,
     device_input,
+    dimension,
     epochs_input,
     hand_input,
+    jepa_input,
     learned_input,
     network_inputs,
     nn_seeds_input,
@@ -907,7 +1014,7 @@ def _(
     plugin_encoder_inputs,
     source_kind,
 ):
-    # 3. Encoders: from a snapshot to a vector h.
+    # 3. Encoders: from a snapshot (2D) or a window of a kymograph (1D) to a vector h.
     if source_kind.value == "table":
         _body = mo.md("The table already holds the description.")
     else:
@@ -916,12 +1023,17 @@ def _(
                                     "of the field; hover a name for its definition):"),
                               block_grid(block_inputs, known_fields)] if len(block_inputs) else [])])
         _nn = [] if HAS_TORCH else [mo.md("*PyTorch is not installed: `pip install -e \".[nn]\"`*")]
-        _learned = mo.vstack([mo.md("**Learned** (convolutional network)"), learned_input, combined_input, *_nn,
+        _learned = mo.vstack([mo.md("**Learned** (convolutional network)"), learned_input, combined_input,
+                              jepa_input, *_nn,
                               mo.accordion({"training and network shape": mo.vstack(
-                                  [epochs_input, nn_seeds_input, device_input, *network_inputs.values()])})])
+                                  [epochs_input, nn_seeds_input, *network_inputs.values()])})])
         _plugins = [mo.vstack([v["use"], v["settings"]]) for v in plugin_encoder_inputs.values()]
         _body = mo.vstack([_hand, mo.md("---"), columns(_learned, *(
             [mo.vstack([mo.md("**Registered by other packages**"), *_plugins])] if _plugins else []))], gap=1)
+        if dimension.value == 1:
+            _body = mo.vstack([_body, mo.md("*1D: the network uses its channels, head and temperature; the views "
+                                            "are crops of the window and the mirror (rotation and zoom do not "
+                                            "apply).*").style({"font-size": "0.85em", "opacity": "0.75"})])
     card("3 · Encoders", _body)
     return
 
@@ -952,7 +1064,8 @@ def _(
         mo.vstack([mo.md("**Threshold tree**"), tree_input,
                    mo.accordion({"tree settings": mo.vstack(list(tree_inputs.values()))})]),
         mo.vstack([mo.md("**Blind grouping**"), *_sk, mixture_input, kmeans_input,
-                   mo.hstack([mo.md("HDBSCAN, minimum sizes"), *hdbscan_input.values()], justify="start"),
+                   mo.vstack([mo.md("HDBSCAN, minimum sizes"),
+                              mo.hstack(list(hdbscan_input.values()), justify="start", wrap=True)]),
                    *([mo.md("**Registered by other packages**"), *_plugins] if _plugins else [])]),
         mo.vstack([mo.md("**Checks** (labels only to score)"), probe_input, curve_input]),
     ))
@@ -963,23 +1076,40 @@ def _(
 def _(
     cache_input,
     crop_input,
+    device_input,
+    dimension,
     dx_target_input,
+    frame_note,
     max_shift_input,
     min_wavelengths_input,
     periodic_input,
     run_button,
+    share_input,
     source_kind,
     status,
+    windows_input,
     workers_input,
 ):
-    # 5. Frame and execution (rarely changed, folded), then the run bar: estimate or problems, Run.
-    _frame = [] if source_kind.value == "table" else [mo.vstack([
-        mo.md("**Frame** (empty: as the ensemble)"), crop_input, dx_target_input, max_shift_input,
-        min_wavelengths_input, periodic_input])]
+    # 5. Frame (2D) or windows (1D), folded; then the run bar: execution on the left, the estimate (or the
+    # problems) and the Run button on the right. While anything runs, explore.css greys the button out and
+    # makes it unclickable (marimo shows an hourglass, .running-app-icon, while a cell runs).
+    _parts = []
+    if source_kind.value != "table" and dimension.value == 1:
+        _parts = [card("5 · Windows of each kymograph", mo.accordion({"show": mo.vstack([
+            share_input, windows_input, periodic_input])}))]
+    elif source_kind.value != "table":
+        _parts = [card("5 · Frame of each snapshot", mo.accordion({"show": mo.vstack([
+            mo.md("Which part of each box the encoders see, at which resolution. The sliders start at the "
+                  "frame of the ensemble (the whole box, as simulated, unless its TOML file says otherwise)."),
+            crop_input, dx_target_input, max_shift_input, min_wavelengths_input, periodic_input,
+            *([mo.callout(mo.md(frame_note), kind="neutral")] if frame_note else [])])}))]
+    _button = mo.Html(f'<div class="pw-run-button">{run_button.text}</div>')
     mo.vstack([
-        card("5 · Frame and execution", mo.accordion({"show": columns(
-            *_frame, mo.vstack([mo.md("**Execution**"), workers_input, cache_input]))})),
-        card("Run", columns(status, mo.vstack([run_button]))),
+        *_parts,
+        card("Run", columns(mo.vstack([mo.md("**Execution**"), workers_input, device_input,
+                                       mo.md("Simulations and hand-made descriptions use the CPU cores; only "
+                                             "the learned encoders (CNN, JEPA) use the GPU."), cache_input]),
+                            mo.vstack([status, _button], gap=1))),
     ], gap=1.2)
     return
 
@@ -1015,7 +1145,10 @@ def _(run_button, set_results, settings):
 @app.cell
 def _(get_results, settings):
     results = get_results()
-    mo.stop(results is None, mo.callout(mo.md("Choose the settings above and press **Run**."), kind="info"))
+    # the hint is hidden by explore.css while a cell runs (.pw-idle-hint)
+    mo.stop(results is None, mo.Html('<div class="pw-idle-hint">'
+                                     + mo.callout(mo.md("Choose the settings above and press **Run**."),
+                                                  kind="info").text + "</div>"))
     res = results["res"]
     _stale = settings is not None and results["settings"] != settings
     _n_runs = len(res.runs)
@@ -1051,6 +1184,7 @@ def _(res):
 def _(description, map_method, open_tab, res, snapshot_field):
     # The results, in tabs. Each tab is a function, drawn only when the tab is opened (lazy).
     _name = description.value
+    _one_d = res.ensemble is not None and hasattr(res.ensemble, "windows")
     _walls = res.walls.get(_name)
     _tree = res.extras.get((_name, "tree"))
     _shown = _tree.as_walls() if (map_method.value == "tree" and _tree is not None) else _walls
@@ -1090,28 +1224,59 @@ def _(description, map_method, open_tab, res, snapshot_field):
             return mo.md("Neither the walls nor the tree were run.")
         what = "tree" if _shown is not _walls else "walls"
         if what == "walls":
-            panels = ("Left: jump across each link. Middle: phases and walls; a ring marks a mixed point. "
-                      "Right: labels, if known (never seen by PhaseWall).")
+            panels = ("Left: jump across each link. Middle: phases and walls; a ring marks a mixed point (its "
+                      "runs end in different states), a square a point reassigned to the next phase (its snapshots "
+                      "look more like that phase than like its own). Right: labels, if known (never seen by "
+                      "PhaseWall).")
         else:
             panels = ("Left: phases and the walls between them (the tree places its splits by thresholds "
                       "on descriptors, see the Rules tab, so there is no jump to show). Right: labels, if "
                       "known (never seen by PhaseWall).")
-        return mo.vstack([
+        parts = [
             map_method,
             mo.md(f"**{_shown.n_phases} phase{'' if _shown.n_phases == 1 else 's'}** found by the **{what}** "
                   f"on **{_name}**. {panels}"),
             _figure(lambda: report.make_phase_map(_shown, _reference(_shown))),
-        ])
+        ]
+        if what == "walls" and _shown.n_phases > 1:
+            _fields = res.ensemble.fields if res.ensemble is not None else None
+            _obs = report.wall_observables_table(_shown, res.tables[_name], fields=_fields)
+            parts += [mo.md("**What changes across each wall**: for each pair of neighbouring phases, the "
+                            "descriptors whose jump across their wall is largest compared with their jumps inside "
+                            "the two phases (**ratio**), and their median value on each side of the wall. They "
+                            "describe the walls found; they play no part in finding them."),
+                      mo.ui.table(_obs.round(3), selection=None, pagination=False)]
+        if _shown.n_phases > 1:
+            # written on the hand-made descriptors when the phases were found on a learned description
+            from phasewall.describe import descriptor_columns
+            _table = res.tables[_name]
+            if all(c.startswith("cnn.") for c in descriptor_columns(_table)) and "hand" in res.tables:
+                _table = res.tables["hand"]
+            _fields = res.ensemble.fields if res.ensemble is not None else None
+            _ops = report.order_parameters_table(_shown, _table, top=OP_SHOWN, fields=_fields)
+            if not _ops.empty:
+                _pairs = report.order_parameters_shown(_ops[_ops.a >= 0])
+                _rest = report.order_parameters_shown(_ops[_ops.a < 0]).drop(columns="shared neighbour")
+                parts += [mo.md("**Candidate order parameters**. " + report.ORDER_PARAMETERS_NOTE),
+                          mo.md("*Between pairs of phases* (a | b: the rule names b)"),
+                          mo.ui.table(_pairs, selection=None, pagination=False)]
+                if len(_rest):
+                    parts += [mo.md("*Each phase against all the others*"),
+                              mo.ui.table(_rest, selection=None, pagination=False)]
+        return mo.vstack(parts)
 
     def _snapshots():
         if _shown is None or res.ensemble is None:
             return mo.md("Snapshots need the walls or the tree, and runs (not a table).")
         _field = next(f for f in res.ensemble.fields if f.name == snapshot_field.value)
-        return mo.vstack([
-            mo.hstack([map_method, snapshot_field], justify="start"),
-            mo.md("The last snapshot of one run at the central point of each phase, on a common colour scale."),
-            _figure(lambda: report.make_snapshots(_shown, res.ensemble, _field)),
-        ])
+        if _one_d:
+            from phasewall.oned.report1d import make_kymographs
+            text, make = ("The described part of one run at the central point of each phase (x across, t up), "
+                          "on a common colour scale."), lambda: make_kymographs(_shown, res.ensemble, _field)
+        else:
+            text, make = ("The last snapshot of one run at the central point of each phase, on a common colour "
+                          "scale."), lambda: report.make_snapshots(_shown, res.ensemble, _field)
+        return mo.vstack([mo.hstack([map_method, snapshot_field], justify="start"), mo.md(text), _figure(make)])
 
     def _rules():
         if _tree is None:
@@ -1151,12 +1316,15 @@ def _(description, map_method, open_tab, res, snapshot_field):
     def _learned_tab():
         parts = []
         net = res.settings.describers.network
-        if res.training is not None:
+        if res.training is not None and "alignment" in res.training.columns:
             parts += [mo.md(f"Network: channels {net.channels}, head {net.hidden} and {net.projection}, "
                             f"temperature {net.temperature}. Training: InfoNCE loss (dotted: its value at collapse) "
                             "and effective rank of h. Choose a network by these label-free diagnostics, not by "
                             "the scores."),
                       _figure(res.training_plot)]
+        elif res.training is not None:
+            parts += [mo.md("Predictive training (JEPA): loss and spread of h per epoch."),
+                      mo.ui.table(res.training.round(4), selection=None)]
         if res.learning_curve is not None:
             parts += [mo.md("Learning curve: phases found against training runs per parameter point."),
                       _figure(res.learning_curve_plot)]
@@ -1190,7 +1358,7 @@ def _(description, map_method, open_tab, res, snapshot_field):
     _tabs = {
         "Phase map": _phase_map,
         "Comparison": _comparison,
-        "Snapshots": _snapshots,
+        "Kymographs" if _one_d else "Snapshots": _snapshots,
         "Rules (tree)": _rules,
         "Walls": _walls_tab,
         "Learned description": _learned_tab,

@@ -50,3 +50,15 @@ h3 {
 .pw-arrow {
   opacity: 0.5;
 }
+
+/* while a cell runs (marimo shows its hourglass, .running-app-icon): the Run button greyed out and
+   not clickable, and the "press Run" hint hidden */
+body:has(.running-app-icon) .pw-run-button {
+  pointer-events: none;
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+body:has(.running-app-icon) .pw-idle-hint {
+  display: none;
+}

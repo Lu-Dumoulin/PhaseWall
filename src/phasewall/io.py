@@ -136,6 +136,28 @@ def list_snapshots(run_dir: str | Path, pattern: str, time_regex: str,
     return sorted(found)
 
 
+def load_any(path: str | Path):
+    """The ensemble of a TOML file: io.Ensemble for snapshots ([ensemble]), oned.kymo.Ensemble1D
+    for kymographs ([kymograph])."""
+    text = Path(path).read_text()
+    if "kymograph" in tomllib.loads(text):
+        from .oned.kymo import load_ensemble1d
+        return load_ensemble1d(path)
+    return load_ensemble(path)
+
+
+def dims(ens) -> int:
+    """1 for a 1D ensemble (kymographs), 2 for snapshots."""
+    return 1 if hasattr(ens, "windows") else 2
+
+
+def read_dataset(f: h5py.File, key: str, julia_order: bool = True) -> np.ndarray:
+    """One dataset of an open HDF5 file as float64, transposed if written by Julia (column-major).
+    Shared by the snapshots (2D) and the kymographs (1D, oned/kymo.py)."""
+    a = np.asarray(f[key][...], dtype=float)
+    return a.T if julia_order else a
+
+
 def read_snapshot(path: str | Path, fields: list[Field], julia_order: bool = True) -> dict[str, np.ndarray]:
     """The listed fields of one snapshot file, as float64 arrays indexed [x, y] (scalar) or
     [x, y, component]. For each field the first of its `keys` found in the file is used;
@@ -147,14 +169,12 @@ def read_snapshot(path: str | Path, fields: list[Field], julia_order: bool = Tru
                 missing = [k for k in fl.components if not (k in f and isinstance(f[k], h5py.Dataset))]
                 if missing:
                     raise KeyError(f"{path}: components {missing} not found (field {fl.name})")
-                parts = [np.asarray(f[k][...], dtype=float) for k in fl.components]
-                out[fl.name] = np.stack([p.T if julia_order else p for p in parts], axis=-1)
+                out[fl.name] = np.stack([read_dataset(f, k, julia_order) for k in fl.components], axis=-1)
             else:
                 key = next((k for k in fl.keys if k in f and isinstance(f[k], h5py.Dataset)), None)
                 if key is None:
                     raise KeyError(f"{path}: none of {list(fl.keys)} found (field {fl.name})")
-                a = np.asarray(f[key][...], dtype=float)
-                out[fl.name] = a.T if julia_order else a
+                out[fl.name] = read_dataset(f, key, julia_order)
             fl.check(out[fl.name])
     return out
 

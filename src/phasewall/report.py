@@ -11,7 +11,8 @@ Files written by write_report into one folder:
   middle, the phases found with the walls drawn across the cut links; right, reference
   labels when they are given (the demo).
 - robustness.png: the robustness curve.
-- snapshots.png (when the ensemble is given): one snapshot from inside each phase.
+- snapshots.png (when the ensemble is given): one snapshot from inside each phase; for a 1D
+  ensemble kymographs.png, the described part of one run from inside each phase.
 
 Figures use matplotlib's object interface (Figure, no pyplot), so nothing needs a screen.
 Colours: one fixed colour and marker per phase, in the same order every time; boundary
@@ -98,10 +99,11 @@ def summary(w: Walls, curve: pd.DataFrame | None = None, notes: str = "") -> str
         "",
         _markdown(mixed[[*w.parameters, "runs", "spread", "phase"]]) if len(mixed) else "None.",
         "",
-        "## Points moved near the walls",
+        "## Points reassigned to the next phase",
         "",
-        ("Points within a few grid steps of another phase whose snapshots are much closer to that phase's core "
-         "than to their own (a cluster of them along a boundary: both states are possible there):"),
+        ("Points within a few grid steps of another phase whose snapshots look much more like that phase "
+         "(its core) than like their own: they are given to that phase. A cluster of them along a boundary "
+         "means both states are possible there:"),
         "",
         (_markdown(w.reassigned.round(3)) if len(getattr(w, "reassigned", [])) else "None."),
         "",
@@ -218,7 +220,7 @@ def plot_phases(ax, w: Walls) -> None:
     r = n[n.reassigned] if "reassigned" in n else n.iloc[:0]
     if len(r):
         ax.scatter(r[x], r[y], s=60, marker="s", facecolors="none", edgecolors=INK, linewidths=0.8,
-                   label="moved near a wall", zorder=5)
+                   label="reassigned: closer to the next phase", zorder=5)
     u = getattr(w, "unstable", None)
     if u is not None and len(u):
         ax.scatter(u[x], u[y], s=30, marker="x", color=INK, linewidths=1.0, label="unstable (runs ended early)",
@@ -336,37 +338,61 @@ def make_snapshots(w: Walls, ens: Ensemble, field: Field | None = None) -> Figur
     so that amplitudes can be compared (a uniform state looks flat): centred on 0 for a field
     that changes sign, from its minimum to its maximum otherwise."""
     f = field or ens.fields[0]
-    picks = central_points(w)
-    runs = ens.runs.set_index("run")
-    params = runs[ens.parameters].round(9)
     images = {}
-    for ph, node in picks.items():
-        values = w.nodes.loc[node, ens.parameters].to_numpy(dtype=float).round(9)
-        run = params.index[(params.to_numpy() == values).all(axis=1)][0]
-        _, file = run_snapshots(ens, runs.loc[run, "path"])[-1]
-        images[ph] = (values, _picture(read_snapshot(file, [f], ens.julia_order)[f.name], f))
-    lo = min(img.min() for _, img in images.values()) if images else 0.0
-    hi = max(img.max() for _, img in images.values()) if images else 1.0
-    if f.symmetry == "scalar" and lo < 0 < hi:
+    for ph, (values, run) in central_runs(w, ens.runs, ens.parameters).items():
+        _, file = run_snapshots(ens, ens.runs.set_index("run").loc[run, "path"])[-1]
+        images[ph] = (values, _picture(read_snapshot(file, [f], ens.julia_order)[f.name], f), None)
+    label = {"scalar": f.name, "vector": f"|{f.name}|", "nematic": f"2|{f.name}|"}[f.symmetry]
+    return make_phase_images(images, ens.parameters, label, signed=f.symmetry == "scalar")
+
+
+def central_runs(w: Walls, runs: pd.DataFrame, parameters: list[str]) -> dict[int, tuple[np.ndarray, int]]:
+    """For each phase, the parameter values of its central point (central_points) and the first
+    run there."""
+    by = runs.set_index("run")[parameters].round(9)
+    out = {}
+    for ph, node in central_points(w).items():
+        values = w.nodes.loc[node, parameters].to_numpy(dtype=float).round(9)
+        out[ph] = (values, by.index[(by.to_numpy() == values).all(axis=1)][0])
+    return out
+
+
+def make_phase_images(images: dict, parameters: list[str], label: str, signed: bool = True,
+                      axes: tuple[str, str] | None = None) -> Figure:
+    """One image per phase ({phase: (parameter values, image [x, y], extent or None)}), framed in
+    the colour of its phase, on one colour scale: centred on 0 when `signed` and the values change
+    sign, from the minimum to the maximum otherwise. axes: names of the two axes (then shown, e.g.
+    x and t for a kymograph), or None (no ticks, as for a snapshot)."""
+    lo = min(img.min() for _, img, _ in images.values()) if images else 0.0
+    hi = max(img.max() for _, img, _ in images.values()) if images else 1.0
+    if signed and lo < 0 < hi:
         lim = max(-lo, hi)
         cmap, vmin, vmax = FIELD, -lim, lim
     else:
         cmap, vmin, vmax = JUMPS, lo, hi if hi > lo else lo + 1.0
-    fig = Figure(figsize=(2.6 * max(len(picks), 1) + 0.6, 3.0), facecolor=SURFACE, layout="constrained")
-    axes = np.atleast_1d(fig.subplots(1, max(len(picks), 1)))
-    for ax, (ph, (values, img)) in zip(axes, images.items()):
-        im = ax.imshow(img.T, origin="lower", cmap=cmap, vmin=vmin, vmax=vmax, interpolation="nearest")
-        ax.set_xticks([])
-        ax.set_yticks([])
+    n = max(len(images), 1)
+    fig = Figure(figsize=(2.6 * n + 0.6 + (0.2 * n if axes else 0), 3.0 + (0.4 if axes else 0)), facecolor=SURFACE,
+                 layout="constrained")
+    ax_list = np.atleast_1d(fig.subplots(1, n))
+    im = None
+    for ax, (ph, (values, img, extent)) in zip(ax_list, images.items()):
+        im = ax.imshow(img.T, origin="lower", cmap=cmap, vmin=vmin, vmax=vmax, interpolation="nearest",
+                       extent=extent, aspect="auto" if axes else "equal")
+        if axes:
+            ax.tick_params(colors=INK_2, labelsize=7)
+            ax.set_xlabel(axes[0], color=INK, fontsize=8)
+            ax.set_ylabel(axes[1], color=INK, fontsize=8)
+        else:
+            ax.set_xticks([])
+            ax.set_yticks([])
         for side in ax.spines.values():
             side.set_color(PHASE_COLOURS[ph] if ph < len(PHASE_COLOURS) else OTHER)
             side.set_linewidth(3)
-        where = ", ".join(f"{p} = {v:g}" for p, v in zip(ens.parameters, values))
+        where = ", ".join(f"{p} = {v:g}" for p, v in zip(parameters, values))
         _title(ax, f"phase {ph}\n{where}")
-    if images:
-        cb = fig.colorbar(im, ax=list(axes), location="right", fraction=0.04, aspect=25)
-        cb.set_label({"scalar": f.name, "vector": f"|{f.name}|", "nematic": f"2|{f.name}|"}[f.symmetry],
-                     color=INK, fontsize=8)
+    if im is not None:
+        cb = fig.colorbar(im, ax=list(ax_list), location="right", fraction=0.04, aspect=25)
+        cb.set_label(label, color=INK, fontsize=8)
         cb.ax.tick_params(colors=INK_2, labelsize=7)
         cb.outline.set_visible(False)
     return fig
@@ -467,9 +493,13 @@ def make_learning_curve(curve: pd.DataFrame) -> Figure:
 
 # ---------------------------------------------------------------- everything
 def write_report(w: Walls, out: str | Path, curve: pd.DataFrame | None = None,
-                 reference: pd.Series | None = None, ens: Ensemble | None = None, notes: str = "") -> Path:
+                 reference: pd.Series | None = None, ens: Ensemble | None = None, notes: str = "",
+                 table: pd.DataFrame | None = None) -> Path:
     """Write the tables, summary.md and the figures into the folder `out`; returns it.
-    reference: a label per node (index of w.nodes), drawn next to the phases found."""
+    reference: a label per node (index of w.nodes), drawn next to the phases found. table: the
+    descriptors the walls were found on; with it, wall_observables.csv and a section of summary.md
+    say which descriptors change most across each wall, and order_parameters.csv and another
+    section which descriptors, with one threshold, tell the phases apart (orderparams.py)."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     w.nodes.to_csv(out / "nodes.csv", index_label="node")
@@ -481,6 +511,65 @@ def write_report(w: Walls, out: str | Path, curve: pd.DataFrame | None = None,
     if len(w.parameters) == 2:
         phase_map_figure(w, out / "phase_map.png", reference)
     if ens is not None and w.n_phases:
-        snapshots_figure(w, ens, out / "snapshots.png")
+        if hasattr(ens, "windows"):                          # a 1D ensemble: kymographs (oned/report1d.py)
+            from .oned.report1d import make_kymographs
+            make_kymographs(w, ens).savefig(out / "kymographs.png", dpi=DPI, facecolor=SURFACE)
+        else:
+            snapshots_figure(w, ens, out / "snapshots.png")
+    if table is not None and w.n_phases > 1:
+        obs = wall_observables_table(w, table)
+        obs.to_csv(out / "wall_observables.csv", index=False)
+        notes = (notes + "\n\n" if notes else "") + "## What changes across each wall\n\n" + _markdown(obs.round(3))
+        ops = order_parameters_table(w, table)
+        ops.to_csv(out / "order_parameters.csv", index=False)
+        notes += ("\n\n## Candidate order parameters\n\n" + ORDER_PARAMETERS_NOTE + "\n\n"
+                  + _markdown(order_parameters_shown(ops)))
     (out / "summary.md").write_text(summary(w, curve, notes))
     return out
+
+
+ORDER_PARAMETERS_NOTE = (
+    "For every pair of phases, and every phase against all the others, the descriptors that best tell "
+    "them apart with one threshold. **held_out**: % of parameter points the rule puts on the right side "
+    "(balanced between the two groups; 50: chance), on half of the runs that did not choose its threshold; "
+    "**placing**: the same on the half that chose it; **rank** shows the held-out % too. **shared neighbour**: "
+    "the two phases touch on the grid (they share a wall). "
+    "**value_a**, **value_b**: median of the descriptor in each group. A **combination** (rank 0) of "
+    "standardised descriptors z = (value - mean) / std is shown only when it clearly beats the best single one. "
+    "With one run per point the two halves are the two halves in time of that run: optimistic.")
+
+
+def significant(df: pd.DataFrame, columns=("value_a", "value_b")) -> pd.DataFrame:
+    """Values written with 4 significant digits (a structure factor share of 1e-7 is not 0)."""
+    return df.assign(**{c: [f"{x:.4g}" for x in df[c]] for c in columns if c in df.columns})
+
+
+def order_parameters_shown(ops: pd.DataFrame) -> pd.DataFrame:
+    """The table as shown (summary.md, interface): rank with its held-out %, "1 (98 %)", the
+    combination as "combination (100 %)"; shared neighbour as yes or no; values with 4 digits."""
+    rank = [f"{'combination' if r == 0 else int(r)} ({h:.0f} %)" for r, h in zip(ops["rank"], ops.held_out)]
+    shown = ops.assign(rank=rank, shared_neighbour=["yes" if x else "no" for x in ops.shared_neighbour])
+    cols = ["comparison", "shared_neighbour", "rank", "rule", "held_out", "placing", "value_a", "value_b", "meaning"]
+    return significant(shown[cols]).rename(columns={"shared_neighbour": "shared neighbour"})
+
+
+def order_parameters_table(w: Walls, table: pd.DataFrame, top: int | None = None, fields=None) -> pd.DataFrame:
+    """orderparams.order_parameters with scores in % and the meaning of each descriptor."""
+    from .describe import explain
+    from .orderparams import TOP, order_parameters
+    ops = order_parameters(w, table, top or TOP)
+    if ops.empty:
+        return ops
+    ops[["held_out", "placing"]] = (100 * ops[["held_out", "placing"]]).round(0)
+    ops["meaning"] = ["combination of standardised descriptors" if c == "combination" else explain(c, fields)
+                      for c in ops.column]
+    return ops
+
+
+def wall_observables_table(w: Walls, table: pd.DataFrame, top: int = 3, fields=None) -> pd.DataFrame:
+    """walls.wall_observables with the meaning of each descriptor (describe.explain)."""
+    from .describe import explain
+    from .walls import wall_observables
+    obs = wall_observables(w, table, top)
+    obs.insert(4, "meaning", [explain(c, fields) for c in obs.column])
+    return obs

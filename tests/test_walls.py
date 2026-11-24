@@ -294,3 +294,23 @@ def test_points_near_a_wall_join_the_phase_they_belong_to():
     assert not clean.nodes.reassigned.any() and len(clean.reassigned) == 0
     off = w.find_walls(t, ["a", "b"], reassign=False)
     assert "phase_walls" not in off.nodes and not off.nodes.reassigned.any()
+
+
+def test_wall_observables_name_the_column_that_jumps():
+    # three phases along a: column x0 jumps at a = 3, column x1 at a = 7; the others are noise
+    def mean_of(a, b):
+        m = np.zeros(DIM)
+        m[0] = 6.0 if a >= 3 else 0.0
+        m[1] = 6.0 if a >= 7 else 0.0
+        return m
+    t = table(mean_of)
+    res = w.find_walls(t, ["a", "b"])
+    assert res.n_phases == 3
+    obs = w.wall_observables(res, t, top=1)
+    assert len(obs) == 2
+    first = {tuple(sorted(r)) for r in obs[["phase_a", "phase_b"]].to_numpy()}
+    assert len(first) == 2
+    tops = set(obs.column)
+    assert tops == {"f.blk.x0", "f.blk.x1"} and (obs.ratio > 5).all()
+    row = obs[obs.column == "f.blk.x0"].iloc[0]
+    assert abs(row.value_a - row.value_b) == pytest.approx(6.0, abs=1.0)    # in the units of the column

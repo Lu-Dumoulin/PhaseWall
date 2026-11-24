@@ -138,7 +138,13 @@ def available(entry: Entry) -> bool:
 def cache_key(*parts) -> str:
     """A short hash of settings (dataclasses, dicts, values), for names of cached results."""
     def plain(x):
-        return asdict(x) if dataclasses.is_dataclass(x) else x
+        if not dataclasses.is_dataclass(x):
+            return x
+        d = asdict(x)
+        for k in getattr(x, "OPTIONAL_KEYS", ()):       # settings added later: left out while unset, so
+            if d.get(k) is None:                        # that results cached before them are still found
+                d.pop(k, None)
+        return d
     text = json.dumps([plain(p) for p in parts], sort_keys=True, default=str)
     return hashlib.sha1(text.encode()).hexdigest()[:12]
 

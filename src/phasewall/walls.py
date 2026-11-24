@@ -84,6 +84,12 @@ A flag per point (it does not change the walls):
    (nodes.reassigned, Walls.reassigned): a cluster of them along a boundary is a sign that both
    states are possible there.
 
+After the walls, wall_observables tells what changes across each of them: for every pair of
+neighbouring phases, the descriptors whose median jump across the links of their wall is largest
+compared with their median jump across the links inside the two phases (a ratio per descriptor,
+as the test of step 3 but one column at a time). It describes the walls found; it plays no part
+in finding them.
+
 Physics parallel: domain walls are found where the order parameter changes abruptly in
 space. Here "space" is the parameter grid and the "order parameter" is the distribution of
 the descriptors at each point; the diffusion is the walker exploring the grid, slowed down
@@ -126,6 +132,8 @@ REASSIGN_RATIO = 1.2   # step 5: a point moves when another core is 1.2 times cl
 NEAR = 2               # step 5: points within 2 grid steps of another phase are compared with the cores (a choice)
 MAX_CORE = 400         # merge test: at most this many snapshots per core, drawn at random (cost; a choice)
 SEED = 0
+INNER_FLOOR = 0.01     # wall_observables: inner jumps below 0.01 standard deviation count as 0.01, so that a
+                       # descriptor flat inside both phases is not ranked by a division by ~0 (a choice)
 
 
 # ---------------------------------------------------------------- features
@@ -591,3 +599,40 @@ def phases_against_ratio(table: pd.DataFrame, parameters: list[str],
         out.append({"ratio": r, "phases": w.n_phases, "walls": int(w.edges["wall"].sum()),
                     "boundary_points": int((w.nodes["phase"] < 0).sum())})
     return pd.DataFrame(out)
+
+
+def wall_observables(w: Walls, table: pd.DataFrame, top: int = 3) -> pd.DataFrame:
+    """For every pair of phases that share a wall, the `top` descriptors that change most across
+    it (module docstring): one row per pair and descriptor, with the number of crossing links,
+    ratio = median |jump| across the wall / median |jump| inside the two phases (descriptors
+    standardised over all snapshots, inner jumps floored at INNER_FLOOR), and the median value of
+    the descriptor on each side of the wall (points at the ends of its links, in the units of
+    the descriptor). Empty without walls."""
+    cols = [c for c in w.features if c in table.columns]
+    keys = pd.MultiIndex.from_frame(table[w.parameters].round(9))
+    node_of = pd.Series(w.nodes.index, index=pd.MultiIndex.from_frame(w.nodes[w.parameters].round(9)))
+    node = node_of.reindex(keys).to_numpy()
+    keep = ~np.isnan(node)
+    raw = table.loc[keep, cols].astype(float)
+    raw = raw.fillna(raw.median())
+    med = raw.groupby(node[keep].astype(int)).median().reindex(w.nodes.index)
+    std = raw.std().replace(0, 1.0)
+    v = ((med - raw.mean()) / std).to_numpy()
+    phase = w.nodes["phase"].to_numpy()
+    a, b = w.edges["a"].to_numpy(), w.edges["b"].to_numpy()
+    pa, pb = phase[a], phase[b]
+    out = []
+    pairs = sorted({(min(x, y), max(x, y)) for x, y in zip(pa, pb) if x != y and x >= 0 and y >= 0})
+    for p, q in pairs:
+        cross = ((pa == p) & (pb == q)) | ((pa == q) & (pb == p))
+        inner = ((pa == pb) & np.isin(pa, (p, q)))
+        jc = np.nanmedian(np.abs(v[a[cross]] - v[b[cross]]), axis=0)
+        ji = np.nanmedian(np.abs(v[a[inner]] - v[b[inner]]), axis=0) if inner.any() else np.zeros(len(cols))
+        ratio = jc / np.maximum(ji, INNER_FLOOR)
+        side_p = np.where(pa[cross] == p, a[cross], b[cross])
+        side_q = np.where(pa[cross] == q, a[cross], b[cross])
+        for j in np.argsort(-ratio)[:top]:
+            out.append({"phase_a": int(p), "phase_b": int(q), "links": int(cross.sum()), "column": cols[j],
+                        "ratio": float(ratio[j]), "value_a": float(np.median(med.to_numpy()[side_p, j])),
+                        "value_b": float(np.median(med.to_numpy()[side_q, j]))})
+    return pd.DataFrame(out, columns=["phase_a", "phase_b", "links", "column", "ratio", "value_a", "value_b"])

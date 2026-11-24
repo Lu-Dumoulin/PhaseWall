@@ -94,6 +94,19 @@ def test_estimate(tmp_path):
     assert pl.estimate(settings(tmp_path, source=pl.Source(example=None, table="x.csv", parameters=("a",)))) == {}
 
 
+def test_estimate_says_where_each_step_runs(tmp_path):
+    s = settings(tmp_path, describers=pl.Describers(learned=True, device="cpu"))
+    s.execution = pl.Execution(workers=2, cache=str(tmp_path / "cache"))
+    rows = {r["step"]: r for r in pl.estimate_details(s, cores=8)}
+    assert rows["simulate"]["where"] == "2 CPU cores in parallel (CPU only)" and "all 8 cores" in rows["simulate"]["alternative"]
+    assert rows["train"]["where"] == "the CPU (GPU possible)"
+    assert rows["train"]["seconds"] == pytest.approx(pl.estimate(s)["train"] * pl.CPU_TRAIN_SLOWER)
+    assert rows["methods"]["seconds"] is None
+    s.describers = pl.Describers(learned=True, device="mps")
+    rows = {r["step"]: r for r in pl.estimate_details(s, cores=2)}
+    assert "on the CPU" in rows["train"]["alternative"] and rows["simulate"]["alternative"].startswith("already")
+
+
 def test_blocks_chosen_per_field(tmp_path):
     s = settings(tmp_path, methods=pl.Methods(walls=False))
     full = pl.run(s).tables["hand"]
@@ -126,5 +139,27 @@ def test_a_configuration_keeps_its_own_frame(tmp_path):
     cfg.write_text(cfg.read_text().replace("periodic = true", f"crop = {16 * dx!r}\nperiodic = false", 1))
     s = pl.Settings(source=pl.Source(example=None, config=str(cfg)))
     assert pl.frame_side(s) == 16
-    ens = pl.framed(pl.load_ensemble(cfg), s.frame)
+    ens = pl.framed(pl.load_any(cfg), s.frame)
     assert ens.crop == 16 * dx and ens.periodic is False         # empty frame settings keep the file's own
+    geo = pl.frame_geometry(s.source)                             # the interface's sliders start at the file's
+    assert geo.side == 32 and geo.crop == 16 * dx                 # frame, which is then passed on as None
+    assert pl.frame_from_shares(geo, 0.5, 1, 0.2) == (None, None, None)
+
+
+def test_frame_from_the_sliders():
+    """Shares of the box side and a coarsening factor turn into physical units; the ensemble's own
+    frame (whole periodic box, as simulated, max shift a fifth of the side) is passed as None."""
+    geo = pl.frame_geometry(pl.Source(example="swift-hohenberg"))
+    L = 64 * geo.dx
+    assert geo.side == 64 and geo.periodic
+    assert pl.frame_from_shares(geo, 1.0, 1, 0.2) == (None, None, None)
+    crop, dx_target, shift = pl.frame_from_shares(geo, 0.5, 2, 0.1)
+    assert crop == pytest.approx(32 * geo.dx) and dx_target == pytest.approx(2 * geo.dx) and shift == pytest.approx(0.1 * L)
+    f = pl.FrameSettings(crop=crop, dx_target=dx_target, max_shift=shift)
+    assert pl.frame_side(pl.Settings(source=pl.Source(example="swift-hohenberg"), frame=f)) == 16
+    assert "16 x 16 points" in pl.frame_text(geo, f)
+    small = pl.frame_geometry(pl.Source(example="swift-hohenberg")).__class__((20, 20), 1.0, False)
+    crop, _, _ = pl.frame_from_shares(small, 1.0, 1, 0.25, periodic=False)
+    assert crop is None                                            # the ensemble's own: largest centred crop
+    crop, _, _ = pl.frame_from_shares(small, 0.9, 1, 0.25, periodic=False)
+    assert crop == 10.0                                            # 18 asked, shrunk to fit 2 x 5 of margin

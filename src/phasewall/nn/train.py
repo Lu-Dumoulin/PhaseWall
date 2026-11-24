@@ -40,9 +40,10 @@ PREFIX = "cnn.h"     # columns of the learned description: cnn.h.d000, ...
 
 
 @dataclass
-class Settings:
-    """Settings of a training (choices; common SimCLR values except epochs and draws,
-    which are scaled to small ensembles)."""
+class TrainingSettings:
+    """Settings of a contrastive training of any kind of sample (choices; common SimCLR values
+    except epochs and draws, which are scaled to small ensembles). The 1D trainings use it as it
+    is (oned/nn1d.py); Settings adds the views of 2D frames."""
 
     epochs: int = 40
     batch: int = 128          # runs per batch (2 views each)
@@ -55,6 +56,12 @@ class Settings:
     seed: int = 0
     hidden: int = HIDDEN      # head g: hidden layer
     projection: int = OUT     # head g: dimension of z
+
+
+@dataclass
+class Settings(TrainingSettings):
+    """Settings of a training on 2D frames: TrainingSettings and the views of views.py."""
+
     views: str = "rotzoom"    # views.py (defaults: architecture.Network)
     zoom: float = 1.25
     crop: float = 0.75
@@ -128,10 +135,24 @@ def train(frames: FrameSet, settings: Settings | None = None, dev: torch.device 
     s = settings or Settings()
     np.random.seed(s.seed)
     encoder = new_encoder(frames, s).to(dev)
-    head = ProjectionHead(encoder.dim, s.hidden, s.projection).to(dev)
     vs = encoder.views
     dataset = PairViews(frames, draws=s.draws, seed=s.seed, augment=vs.kind == "d4")
-    gen = torch.Generator().manual_seed(s.seed)          # draws of the rotzoom views
+
+    def views(v1, v2, gen):
+        return training_views(torch.cat([v1, v2]).to(dev), frames.fields, vs, gen, frames.periodic)
+
+    log = fit_contrastive(encoder, dataset, views, lambda: embed(encoder, frames, dev), s, dev, verbose, progress)
+    return encoder.cpu(), log
+
+
+def fit_contrastive(encoder, dataset: PairViews, views, embed_fn, s, dev: torch.device, verbose: bool = True,
+                    progress=None) -> pd.DataFrame:
+    """The training loop of the module docstring, for any kind of sample (2D pairs, 1D windows):
+    dataset gives two samples of a run, views(v1, v2, gen) their views on the device (both batches
+    together), embed_fn() the h of every sample (for the effective rank). s: the settings (epochs,
+    batch, lr, weight_decay, warmup, temperature, seed, hidden, projection). Returns the log."""
+    head = ProjectionHead(encoder.dim, s.hidden, s.projection).to(dev)
+    gen = torch.Generator().manual_seed(s.seed)          # draws of the views made on the device
     batch = min(s.batch, len(dataset.rows))
     loader = DataLoader(dataset, batch_size=batch, shuffle=True, drop_last=True,
                         generator=torch.Generator().manual_seed(s.seed))
@@ -143,8 +164,7 @@ def train(frames: FrameSet, settings: Settings | None = None, dev: torch.device 
         dataset.epoch = epoch
         t0, losses, aligns, unifs = time.perf_counter(), [], [], []
         for v1, v2 in loader:
-            x = training_views(torch.cat([v1, v2]).to(dev), frames.fields, vs, gen, frames.periodic)
-            z = head(encoder(x))
+            z = head(encoder(views(v1, v2, gen)))
             loss = info_nce(z, s.temperature)
             opt.zero_grad(set_to_none=True)
             loss.backward()
@@ -153,7 +173,7 @@ def train(frames: FrameSet, settings: Settings | None = None, dev: torch.device 
             losses.append(float(loss.detach()))
             aligns.append(alignment(z.detach()))
             unifs.append(uniformity(z.detach()))
-        rank = effective_rank(torch.from_numpy(embed(encoder, frames, dev)))
+        rank = effective_rank(torch.from_numpy(embed_fn()))
         row = {"epoch": epoch + 1, "loss": float(np.mean(losses)), "alignment": float(np.mean(aligns)),
                "uniformity": float(np.mean(unifs)), "effective_rank_h": rank,
                "collapse_loss": math.log(2 * batch - 1), "seconds": time.perf_counter() - t0}
@@ -164,7 +184,7 @@ def train(frames: FrameSet, settings: Settings | None = None, dev: torch.device 
             print(f"epoch {epoch + 1}/{s.epochs}: loss {row['loss']:.3f} (collapse {row['collapse_loss']:.2f}), "
                   f"alignment {row['alignment']:.3f}, uniformity {row['uniformity']:.2f}, "
                   f"rank of h {rank:.1f}, {row['seconds']:.1f} s", flush=True)
-    return encoder.cpu(), pd.DataFrame(log)
+    return pd.DataFrame(log)
 
 
 # ---------------------------------------------------------------- saving

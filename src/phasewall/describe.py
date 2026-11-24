@@ -289,6 +289,14 @@ def count_domains(mask: np.ndarray, periodic: bool = True) -> int:
     lab, n = ndimage.label(mask)
     if not periodic or n == 0:
         return int(n)
+    pairs = [*zip(lab[0, :], lab[-1, :]), *zip(lab[:, 0], lab[:, -1])]
+    return len(set(joined_labels(n, pairs)[1:]))
+
+
+def joined_labels(n: int, pairs) -> np.ndarray:
+    """Union-find of labels 1..n (0: background): the root of every label once the labels of each
+    pair (i, j) are joined (domains that continue through a periodic edge). Used in 2D (domains)
+    and 1D (space-time domains of a kymograph)."""
     parent = np.arange(n + 1)
 
     def root(i):
@@ -297,13 +305,12 @@ def count_domains(mask: np.ndarray, periodic: bool = True) -> int:
             i = parent[i]
         return i
 
-    for a, b in ((lab[0, :], lab[-1, :]), (lab[:, 0], lab[:, -1])):
-        for i, j in zip(a, b):
-            if i and j:
-                ri, rj = root(i), root(j)
-                if ri != rj:
-                    parent[ri] = rj
-    return len({root(i) for i in range(1, n + 1)})
+    for i, j in pairs:
+        if i and j:
+            ri, rj = root(i), root(j)
+            if ri != rj:
+                parent[ri] = rj
+    return np.array([root(i) for i in range(n + 1)])
 
 
 def domain_counts(values: np.ndarray, area: float, periodic: bool = True) -> dict[str, float]:
@@ -579,20 +586,26 @@ def describe_ensemble(ens: Ensemble, workers: int = 1, progress: Progress | None
     dxs = ens.runs["dx"] if "dx" in ens.runs else [ens.dx] * len(ens.runs)
     jobs = [(ens, int(r.run), r.path, float(d)) for r, d in zip(ens.runs.itertuples(), dxs)]
     results = run_jobs(_describe_one, jobs, workers, progress, "describe")
+    return assemble_table(results, ens.runs, ens.parameters,
+                          "set `crop` and `dx_target` in the configuration so that every run is described on the "
+                          "same frame")
+
+
+def assemble_table(results: list, runs: pd.DataFrame, parameters: list[str], advice: str = ""
+                   ) -> tuple[pd.DataFrame, list[str]]:
+    """The table of descriptors from the (rows, error) of every run (2D snapshots or 1D windows):
+    columns run, time, the parameters, then the descriptors; and the errors. ValueError when
+    the runs give different S(k) shells (their columns would not mean the same wavenumbers)."""
     shells = {tuple(c for c in rows[0] if ".shape." in c) for rows, _ in results if rows}
     if len(shells) > 1:
-        raise ValueError("the runs give different S(k) shells (frames of different sizes or grid "
-                         "spacings), so their columns would not mean the same wavenumbers: set "
-                         "`crop` and `dx_target` in the configuration so that every run is described "
-                         "on the same frame")
+        raise ValueError("the runs give different S(k) shells (frames of different sizes or grid spacings), so "
+                         f"their columns would not mean the same wavenumbers{': ' + advice if advice else ''}")
     rows = [row for res, _ in results for row in res]
     errors = [e for _, e in results if e]
     table = pd.DataFrame(rows)
     if len(table):
-        params = ens.runs[["run", *ens.parameters]]
-        table = params.merge(table, on="run")
-        table = table[["run", "time", *ens.parameters,
-                       *[c for c in table.columns if c not in ("run", "time", *ens.parameters)]]]
+        table = runs[["run", *parameters]].merge(table, on="run")
+        table = table[["run", "time", *parameters, *[c for c in table.columns if c not in ("run", "time", *parameters)]]]
     return table, errors
 
 
@@ -630,7 +643,11 @@ def explain(column: str, fields: list[Field] | None = None) -> str:
         return f"component {int(name[1:])} of h, the learned description" if name[1:].isdigit() else column
     if f == "table":
         return f"column {name} of the table of descriptors given"
-    kind = next((x.symmetry for x in fields or [] if x.name == f), None)
+    field = next((x for x in fields or [] if x.name == f), None)
+    if field is not None and not hasattr(field, "symmetry"):    # a field of a 1D system (oned.kymo.Field1D)
+        from .oned.describe1d import BLOCK_HELP as HELP_1D
+        return f"{name} of {f}, block {block}: {HELP_1D[block]}" if block in HELP_1D else column
+    kind = getattr(field, "symmetry", None)
     v = _VALUES[kind].format(f=f) if kind else f"the values of {f}"
     if block == "amp":
         return f"log10 of the variance of {f} (how strong the pattern is)"
@@ -680,4 +697,7 @@ def explain(column: str, fields: list[Field] | None = None) -> str:
                 "moving": f"change of {f} over the lag, following the pattern (best shift): log10(1 - C + 0.001)"}
         if name in what:
             return what[name]
+    from .oned.describe1d import BLOCK_HELP as HELP_1D  # blocks of 1D windows (kymographs)
+    if block in HELP_1D:
+        return f"{name} of {f}, block {block}: {HELP_1D[block]}"
     return column

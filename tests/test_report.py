@@ -89,3 +89,23 @@ def test_phase_map_of_a_tree_has_no_jumps_panel(two_phases):
     tree_titles = titles(report.make_phase_map(tree, labels))
     assert len(tree_titles) == 2 and not any("Jump" in s for s in tree_titles)
     assert len(titles(report.make_phase_map(tree))) == 1
+
+
+def test_report_says_what_changes_across_the_wall(two_phases, tmp_path):
+    t, w = two_phases
+    report.write_report(w, tmp_path, table=t)
+    obs = pd.read_csv(tmp_path / "wall_observables.csv")
+    assert len(obs) == 3 and {"column", "ratio", "meaning"} <= set(obs.columns)
+    assert "What changes across each wall" in (tmp_path / "summary.md").read_text()
+
+
+def test_report_lists_candidate_order_parameters(two_phases, tmp_path):
+    t, w = two_phases
+    report.write_report(w, tmp_path, table=t)
+    ops = pd.read_csv(tmp_path / "order_parameters.csv")
+    first = ops[ops["rank"] == 1].iloc[0]
+    assert first.column.startswith("f.blk.x") and first.held_out == 100 and first.shared_neighbour   # every column jumps
+    assert {"rule", "placing", "value_a", "value_b", "meaning"} <= set(ops.columns)
+    assert not ops.comparison.str.startswith("others").any()        # two phases: the pair is enough
+    text = (tmp_path / "summary.md").read_text()
+    assert "Candidate order parameters" in text and "| 1 (100 %) |" in text and "shared neighbour" in text

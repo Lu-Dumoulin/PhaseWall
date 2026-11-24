@@ -23,6 +23,12 @@
 \newcommand\pagetwo{ (page 2)}\newcommand\belowref{ (below)}
 \input{overview_body.tex}
 
+% ---------------- what tells the phases apart
+\node[say, text width=8.3cm] at (19.6,-5.75) {\textbf{What tells the phases apart} (candidate order parameters): one descriptor, one threshold, \% of points on the right side, counted on runs that did not choose the threshold.\\[3pt]
+$\bullet$ hexagons vs stripes: skewness of $u > 0.40$ (98\,\%)\\[2pt]
+$\bullet$ uniform vs the rest: variance of $u$ (100\,\%)\\[2pt]
+$\bullet$ stripes vs the rest: kurtosis of $u$ (98\,\%)};
+
 % ---------------- the key trick
 \node[anchor=north west, font=\bfseries\normalsize] at (0,-15.25) {The key trick: place the wall with half of the runs, test it with the other half};
 \begin{scope}[shift={(0.3,-18.95)}]
@@ -49,6 +55,10 @@
 $\bullet$ Price: some power (a weak wall can be missed).\\[3pt]
 $\bullet$ Tables with 2 or 3 true phases are still found.\\[3pt]
 $\bullet$ Two thresholds only ($p<10^{-3}$, jump ratio $\ge1.5$); same result for ratios 1.2 to 2.};
+\node[say, text width=12.4cm] at (15.7,-17.95) {\textbf{Also in the package}\\[3pt]
+$\bullet$ 1D systems: kymographs $u(x,t)$, described over a time window (travelling waves, drift, defects).\\[2pt]
+$\bullet$ A second learned description, JEPA (predict hidden parts of a snapshot), being tested.\\[2pt]
+$\bullet$ An interactive interface: choose the system, the descriptions and the methods, then read the maps.};
 \end{tikzpicture}}
 
 \newpage
@@ -172,6 +182,6 @@ $\bullet$ snapshots: one per phase found (frame = phase colour)};
 $\bullet$ Why: at 52 of 165 points the runs end in different states (right). Spread within a point $\approx$ jump between points: no wall passes the test.\\[2pt]
 $\bullet$ Assumption broken: \emph{one state per point}. Next: describe a point as a mixture of states.};
 
-\node[anchor=north west, font=\tiny, cInk2, text width=28cm] at (0,-19.75) {PhaseWall, Ludovic Dumoulin, November 2026. Python (NumPy, SciPy, PyTorch); 221 tests; details in docs/documentation.pdf. ARI: adjusted Rand index against the known states (1: identical, 0: chance). The code, tests and documentation were written by Claude (Anthropic), an AI assistant; the author designed the method, chose the physics, the examples and the checks, directed the work and reviewed the results.};
+\node[anchor=north west, font=\tiny, cInk2, text width=28cm] at (0,-19.75) {PhaseWall, Ludovic Dumoulin, November 2026. Python (NumPy, SciPy, PyTorch); 277 tests; details in docs/documentation.pdf. ARI: adjusted Rand index against the known states (1: identical, 0: chance). The code, tests and documentation were written by Claude (Anthropic), an AI assistant; the author designed the method, chose the physics, the examples and the checks, directed the work and reviewed the results.};
 \end{tikzpicture}}
 \end{document}

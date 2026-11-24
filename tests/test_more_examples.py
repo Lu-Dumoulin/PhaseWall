@@ -16,7 +16,8 @@ X, Y = np.meshgrid(np.arange(N), np.arange(N), indexing="ij")
 
 
 def test_registry_holds_every_example():
-    assert set(EXAMPLES) == {"swift-hohenberg", "gray-scott", "fitzhugh-nagumo", "sh-localized", "barkley"}
+    assert set(EXAMPLES) == {"swift-hohenberg", "gray-scott", "fitzhugh-nagumo", "sh-localized", "barkley",
+                             "ginzburg-landau-1d"}
     for m in EXAMPLES.values():
         assert {"make_ensemble", "simulate", "reference_label", "GRID", "SETTINGS", "SEEDS", "QUICK", "N_FIELDS",
                 "seconds_per_run"} <= set(dir(m))

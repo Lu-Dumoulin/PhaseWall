@@ -1,11 +1,15 @@
 """The command-line tool `phasewall` (installed by pip from pyproject.toml).
 
     phasewall inspect SNAPSHOT.h5      list the datasets of a file and suggest the [[fields]] blocks
-    phasewall toy FOLDER               write a demo ensemble (Swift-Hohenberg, or --example gray-scott)
-    phasewall describe CONFIG.toml     descriptors of every snapshot -> descriptors.csv
+    phasewall toy FOLDER               write a demo ensemble (Swift-Hohenberg, or --example gray-scott,
+                                       ginzburg-landau-1d, ...)
+    phasewall describe CONFIG.toml     descriptors of every snapshot (2D) or window (1D) -> descriptors.csv
     phasewall learn CONFIG.toml        train the learned description (CNN, extra [nn]) -> its table
     phasewall walls TABLE.csv          walls and phases -> a report folder
     phasewall demo FOLDER              the three steps on the demo, checked against its reference labels
+
+A CONFIG.toml with an [ensemble] section describes 2D runs (snapshots), one with a [kymograph]
+section 1D runs (kymographs, phasewall.oned); every command takes either (io.load_any).
 
 `phasewall <command> --help` lists the options. argparse (standard library) reads the
 command line; each command is one function below, so it can also be called from Python
@@ -23,7 +27,7 @@ import pandas as pd
 from . import report, toy
 from .describe import describe_ensemble
 from .examples import EXAMPLES, example
-from .io import fields_toml, inspect_snapshot, load_ensemble, suggest_fields
+from .io import dims, fields_toml, inspect_snapshot, load_any, suggest_fields
 from .walls import ALPHA, MIN_PHASE, RATIO, Walls, find_walls, phases_against_ratio
 
 QUICK_SEEDS = (0, 1)    # --quick: runs per point
@@ -80,16 +84,22 @@ def learned_table(ens, encoder_dir, workers: int) -> pd.DataFrame:
 
 
 def cmd_describe(args) -> Path:
-    ens = load_ensemble(args.config)
+    ens = load_any(args.config)
     default = "descriptors_cnn.csv" if args.encoder else "descriptors.csv"
     out = Path(args.out) if args.out else Path(args.config).parent / default
     t0 = time.time()
+    if args.encoder and dims(ens) == 1:
+        sys.exit("phasewall describe: --encoder is for 2D ensembles; `phasewall learn` writes the 1D table")
     if args.encoder:
         table, errors = learned_table(ens, args.encoder, args.workers), []
+    elif dims(ens) == 1:
+        from .oned.describe1d import describe_ensemble as describe_1d
+        table, errors = describe_1d(ens, workers=args.workers)
     else:
         table, errors = describe_ensemble(ens, workers=args.workers)
     table.to_csv(out, index=False)
-    print(f"{len(table)} snapshots of {table.run.nunique() if len(table) else 0} runs described "
+    print(f"{len(table)} {'windows' if dims(ens) == 1 else 'snapshots'} of {table.run.nunique() if len(table) else 0} "
+          "runs described "
           f"in {time.time() - t0:.0f} s -> {out}")
     if errors:
         (out.parent / "describe_errors.txt").write_text("\n".join(errors) + "\n")
@@ -100,8 +110,10 @@ def cmd_describe(args) -> Path:
 def cmd_learn(args) -> Path:
     from .nn.data import load_frames
     from .nn.train import Settings, embed, h_table, save, train
-    ens = load_ensemble(args.config)
+    ens = load_any(args.config)
     out = Path(args.out) if args.out else Path(args.config).parent / "encoder"
+    if dims(ens) == 1 or args.objective == "jepa":
+        return _learn_by_encoder(ens, out, args)
     frames = load_frames(ens, workers=args.workers)
     print(f"{len(frames.x)} pairs of {len(set(frames.run))} runs, {frames.in_channels} channels, "
           f"frame {frames.x.shape[2]} x {frames.x.shape[3]}, {'periodic' if frames.periodic else 'not periodic'}")
@@ -128,8 +140,29 @@ def cmd_learn(args) -> Path:
     return out
 
 
+def _learn_by_encoder(ens, out: Path, args) -> Path:
+    """learn for a 1D ensemble, or with the predictive objective: through the registered encoders
+    (builtins.py), which give the table of h and the log (no encoder file is written)."""
+    from .builtins import JepaSettings, LearnedSettings
+    from .nn.architecture import Network
+    from .registry import Context, encoders
+    out.mkdir(parents=True, exist_ok=True)
+    net = Network(blocks=args.blocks, width=args.width, dim_h=args.dim_h, hidden=args.hidden,
+                  projection=args.projection, temperature=args.temperature)
+    name, settings = ("jepa", JepaSettings(args.epochs, (args.seed,))) if args.objective == "jepa" else \
+        ("learned", LearnedSettings(args.epochs, (args.seed,), net))
+    t0 = time.time()
+    res = encoders()[name].run(ens, settings, Context(workers=args.workers, cache=""))
+    table = next(iter(res.tables.values()))
+    table.to_csv(out / "descriptors_cnn.csv", index=False)
+    res.log.to_csv(out / "log.csv", index=False)
+    print(f"{name} description of {len(table)} rows, trained in {time.time() - t0:.0f} s -> "
+          f"{out / 'descriptors_cnn.csv'}")
+    return out
+
+
 def cmd_walls(args) -> Path:
-    ens = load_ensemble(args.config) if args.config else None
+    ens = load_any(args.config) if args.config else None
     parameters = args.parameters or (ens.parameters if ens else None)
     if not parameters:
         sys.exit("phasewall walls: give --parameters, or --config to read them from the ensemble")
@@ -137,7 +170,7 @@ def cmd_walls(args) -> Path:
     out = Path(args.out) if args.out else Path(args.table).parent / "walls"
     w = find_walls(table, parameters, alpha=args.alpha, ratio=args.ratio, min_phase=args.min_phase)
     curve = phases_against_ratio(table, parameters, alpha=args.alpha, min_phase=args.min_phase)
-    report.write_report(w, out, curve, ens=ens)
+    report.write_report(w, out, curve, ens=ens, table=table)
     print(f"{w.n_phases} phases, {int(w.edges.wall.sum())} wall links, {int(w.nodes.mixed.sum())} mixed points "
           f"-> {out / 'summary.md'}")
     return out
@@ -148,7 +181,7 @@ def cmd_demo(args) -> Path:
     runs = cmd_toy(args)
     descriptors = cmd_describe(argparse.Namespace(config=folder / "phasewall.toml", out=None,
                                                   workers=args.workers, encoder=None))
-    ens = load_ensemble(folder / "phasewall.toml")
+    ens = load_any(folder / "phasewall.toml")
     table = pd.read_csv(descriptors)
     w = find_walls(table, ens.parameters)
     curve = phases_against_ratio(table, ens.parameters)
@@ -165,7 +198,7 @@ def cmd_demo(args) -> Path:
         f"{agree} of {len(w.nodes)} points carry the most common label of their region.",
     ])
     out = folder / "walls"
-    report.write_report(w, out, curve, reference=reference, ens=ens, notes=notes)
+    report.write_report(w, out, curve, reference=reference, ens=ens, notes=notes, table=table)
     print(f"{w.n_phases} phases, {agree} of {len(w.nodes)} points agree with the reference labels "
           f"-> {out / 'summary.md'}")
     return out
@@ -224,6 +257,8 @@ def parser() -> argparse.ArgumentParser:
                    help="keep the amplitude of each view (default: each field divided by its own std)")
     s.add_argument("--centre-vectors", action="store_true",
                    help="normalise: centre vectors and nematics too (default: they keep their mean)")
+    s.add_argument("--objective", choices=["contrastive", "jepa"], default="contrastive",
+                   help="contrastive (default) or jepa: predict hidden parts of a sample (being tested)")
     s.set_defaults(func=cmd_learn)
 
     s = sub.add_parser("walls", help="walls and phases from a table of descriptors")

@@ -294,6 +294,80 @@ on Swift-Hohenberg, 0.89 to 0.95 on Gray-Scott and 0.96 to 1.00 on localised Swi
   - at 48 of 99 points the runs end in different states, so the spread of a point is as large as
     the jumps.
 
+## One-dimensional systems
+
+A run of a 1D system is a kymograph per field, $a(x, t)$: the whole dynamics, not a few snapshots.
+PhaseWall cuts the last part of every run (half by default) into time windows (8 by default), and
+each window becomes one row of the same table as in 2D, so the walls, the tree and the blind
+grouping are used unchanged. 1D and 2D share one package, one command line and one interface: the
+1D-specific parts (reading kymographs, the space-time observables, the 1D views, the example) are in
+[src/phasewall/oned](src/phasewall/oned), and everything else (the training loops, the tables, the
+figures, the pipeline) is common. A TOML file with a `[kymograph]` section is a 1D ensemble, one
+with `[ensemble]` a 2D one; every command and the interface read either.
+
+- **Fields.** Scalars, a velocity, a polarity $p_x$ or $(p_x, p_y)$, and a complex amplitude whose
+  global phase is free. The only symmetries of a line are shifts and the mirror $x \to -x$, under
+  which velocities and $p_x$ change sign.
+- **Observables.** The 2D blocks in 1D form (amplitude, $S(k)$, moments, domains, order, flow,
+  defects as zeros of $p$ or phase slips in $(x, t)$), plus four that need the dynamics: the
+  space-time spectrum $S(k, \omega)$ (static, standing or travelling, broad in $\omega$), the
+  correlation at many lags (decorrelation time, drift speed), kinks (zeros, births, deaths, lifetime
+  of space-time domains) and a trend (slope of the variance against $\log t$, for runs still
+  relaxing). Drift and travelling waves are differences of state, so nothing removes them.
+- **Learned description.** The CNN of the 2D package on the $(x, t)$ window: a $3 \times 3$
+  convolution is a learned stencil holding $\partial_x$, $\partial_t$ and their products, so one
+  layer can be an advection or a wave operator. Two objectives: contrastive as in 2D, and predictive
+  (JEPA, below). Contrastive positives are two windows of a run; views are crops
+  and the mirror, without rotation or zoom (they would mix $x$ with $t$); $h$ is averaged over a
+  window and its mirror, so it is exactly mirror-invariant. A complex amplitude enters as $|A|$ and
+  the current $\mathrm{Im}(A^* \partial_x A)$, which do not depend on its global phase.
+
+**Example: the complex Ginzburg-Landau equation** $\partial_t A = A + (1 + ib)\,\partial_x^2 A - (1 + ic)|A|^2 A$
+on a grid of $(b, c)$ (126 points, 4 runs each, 17 s to simulate and 4 s to describe on 8
+processes). Its regimes: plane waves, phase turbulence past the Benjamin-Feir line, defect
+turbulence with phase slips.
+
+![1D Ginzburg-Landau phase map](docs/oned/phase_map_hand.png)
+
+![1D Ginzburg-Landau kymographs](docs/oned/kymographs.png)
+
+| Description | Walls | ARI | Best blind grouping |
+| --- | --- | --- | --- |
+| hand-made | 4 phases, 122/126 points agree | 0.80 | HDBSCAN-10, ARI 0.63 (9% of runs as noise) |
+| learned, contrastive, seeds 0 and 1 | 1 phase | 0 | HDBSCAN-20, ARI 0.96 and 1.00, but 31 and 45% of runs as noise |
+| learned, predictive (JEPA), seeds 0 and 1 | 3 phases | 0.63, 0.74 | tree 3 phases, ARI 0.92 (seed 0); HDBSCAN-20 ARI 1.00 with 23-26% noise |
+| untrained network | 2 phases | 0.68 | HDBSCAN-10, ARI 0.68 |
+| combined (hand-made + contrastive seed 0) | 2 phases | 0.63 | HDBSCAN-20, ARI 0.87 |
+| combined (hand-made + JEPA seed 0) | 4 phases | 0.83 | HDBSCAN-20, ARI 0.79 |
+
+- The fourth phase of the hand-made walls lies on the stable side of the Benjamin-Feir line at
+  large $|c|$: laminar plane waves cut by turbulent bursts, the spatiotemporal intermittency
+  described by Chaté (1994). The reference labels (only for scoring) count it as defect turbulence.
+- Described through $A$ itself instead of $|A|$, each plane wave looked like a new state (its
+  wavenumber is set by the initial noise) and the walls found one phase.
+- The contrastive learned description carries the regimes (probe 0.94) but jumps across a boundary
+  only 1.4 times its inner jumps (hand-made 2.4): the failure of the 2D dynamic examples. Its loss is
+  lowest when a window recognises its own run, which it can do from the wavenumber the noise chose.
+- The predictive description (JEPA: hide rectangles of the window, predict the encoder's description
+  of them from the rest, with a slowly following target encoder; no negatives) rewards nothing of the
+  kind. Its walls find 3 phases with both seeds (jump ratio 1.75 and 1.83); each seed joins two of the
+  four regimes, not the same two. Not tried yet on the 2D examples.
+- The threshold tree finds one phase on the hand-made table (not understood yet).
+
+```
+phasewall toy data/cgle --example ginzburg-landau-1d --workers 8   # the ensemble and phasewall.toml
+phasewall describe data/cgle/phasewall.toml --workers 8
+phasewall walls data/cgle/descriptors.csv --config data/cgle/phasewall.toml   # report, a kymograph per phase
+phasewall learn data/cgle/phasewall.toml --objective jepa       # predictive learned description (extra [nn])
+python scripts/oned_compare.py data/cgle docs/oned              # every description and method
+```
+
+Your own runs: a `[kymograph]` section in the TOML file (table of runs, parameters, file name,
+array order `"xt"` or `"tx"`, `julia_order`, `dx`, `dt`, `t0`, `periodic`, `share`, `windows`) and
+one `[[fields]]` block per field with its kind (`scalar`, `velocity`, `polarity` or `complex`); see
+the docstring of [kymo.py](src/phasewall/oned/kymo.py) and Section 11 of the
+[documentation](docs/documentation.pdf).
+
 ## Usage
 
 ```
@@ -406,6 +480,19 @@ The checks on the learned encoder:
 - `nodes.csv`: one row per parameter point, with its region and phase;
 - `edges.csv`: one row per link, with its jump and whether it is a wall;
 - `cuts.csv` and `robustness.csv`;
+- `wall_observables.csv` (also in `summary.md`): for each pair of neighbouring phases, the three
+  descriptors that change most across their wall, i.e. whose median jump across the wall is largest
+  compared with their median jump inside the two phases, with their value on each side. They
+  describe the walls found and play no part in finding them (`walls.wall_observables`);
+- `order_parameters.csv` (also in `summary.md`): candidate order parameters. For every pair of
+  phases, and every phase against all the others, the descriptors that best tell them apart with
+  one threshold, ranked by the % of parameter points the rule puts on the right side (balanced
+  between the two groups, 50: chance). The threshold is chosen on one half of the runs of each
+  point and the % is counted on the other half, so a descriptor that separates a few points by
+  chance does not rank high. A combination of 2 or 3 descriptors (Fisher discriminant) is listed
+  only when it beats the best single one by 3 points (`orderparams.order_parameters`). On
+  Swift-Hohenberg, stripes and hexagons are told apart by the skewness of $u$ (98 %), the uniform
+  state by the variance of $u$ (100 %);
 - the figures shown above.
 
 It reads any table with one row per snapshot and descriptor columns named `field.block.name`
@@ -423,7 +510,10 @@ which opens as a dashboard or as a notebook:
 
 The first time, the script makes `.venv` (Python 3.11 or newer) and installs PhaseWall with the
 extra `[app]` (marimo, PyTorch, scikit-learn); nothing has to be activated. By hand:
-`pip install -e ".[app]"`, then `marimo run apps/explore.py`. The page has one section per step:
+`pip install -e ".[app]"`, then `marimo run apps/explore.py`. At the top, the **dimension** of the
+system: 2D (snapshots of fields on a plane) or 1D (kymographs of fields on a line); it decides the
+sources, fields, observables and figures offered below (`./explore.sh -- --1d` opens in 1D). The page
+then has one section per step:
 
 1. **System**: an example (grid and numerical settings), your own runs (a CSV table with a column
    `path` and one per parameter, HDF5 or JLD2 snapshots; optional columns `dx` and a label column,
@@ -441,17 +531,34 @@ extra `[app]` (marimo, PyTorch, scikit-learn); nothing has to be activated. By h
    mixture, k-means, HDBSCAN, registered methods. **Checks**: robustness, probe (labels only for
    scoring), learning curve.
 
+<p align="center"><img src="docs/figures/interface_settings.png" width="640"
+alt="The settings of the explorer: sections 1 System, 2 Fields, 3 Encoders and 4 Methods"></p>
+
+*The settings for the Swift-Hohenberg example, with the hand-made, learned and combined
+descriptions and every method switched on.*
+
 The controls of the tree, the network and registered entries are built from their settings
 (`registry.settings_spec`), so a new entry needs no interface code. An estimate of the cost is
 shown before the run, and every step is cached. The result tabs are:
 
-- the phase map (walls or tree);
+- the phase map (walls or tree), with the descriptors that change most across each wall and the
+  candidate order parameters (pairs of phases, and each phase against the others);
 - the comparison of descriptions and methods;
 - snapshots of each phase;
 - the rules of the tree, with the meaning of each descriptor (`describe.explain`);
 - the details of the walls;
 - the training curves;
 - export of the tables and figures.
+
+![The phase map tab of the explorer](docs/figures/interface_phase_map.png)
+
+*After Run (15 s with the simulation and the training read from the cache): the phase map of
+the walls on the hand-made description. A description is chosen in the bar above the tabs.*
+
+![The comparison tab of the explorer](docs/figures/interface_comparison.png)
+
+*The comparison tab: one row per description and method, with the scores against the labels
+of the example, and the groups of each on the parameter grid.*
 
 Style: [apps/explore.css](apps/explore.css). Details: [apps/README.md](apps/README.md).
 
@@ -497,7 +604,7 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
 
 ## Tests
 
-`pytest` runs 221 tests on small synthetic fields with known answers, in about a minute:
+`pytest` runs 277 tests on small synthetic fields with known answers, in about two minutes:
 
 - **Fields and files**: symmetry rules of vector and nematic fields, checked against the gradient
   of a scalar and the tensor of a director field; velocity and polarity turning as vectors; file
@@ -519,7 +626,12 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
   the right links for two and three phases; runs that ended early left out (unstable points); a
   bistable point flagged as mixed; points in a band where the states alternate from point to point
   given to the phase of their state; mixed judged only
-  among points with several runs; a drifting run not flagged as mixed.
+  among points with several runs; a drifting run not flagged as mixed; the column that jumps
+  named for each of two walls.
+- **Order parameters**: the column that jumps ranked first between two neighbouring phases, with
+  100 % of the points on their side, its threshold between them and the jump in its own units;
+  noise columns near chance on the half that did not choose their threshold; a middle phase that
+  no single column separates from the others (75 %) separated by the combination of two (above 95 %).
 - **Swift-Hohenberg runs**: the state, and the stripe amplitude
   $\mathrm{std}(u) = \sqrt{2\varepsilon/3}$ of weakly nonlinear theory.
 - **Learned description**:
@@ -527,10 +639,20 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
     collapse; a short training that separates stripes from spots; saving and loading;
   - views: normalisation (vectors keep their mean); a turn by 90 degrees exact; the wavelength
     kept at any angle; vectors and nematics turned with the grid, checked against gradients of a
-    turned scalar; views saved with the encoder; old encoders read with the old views.
+    turned scalar; views saved with the encoder; old encoders read with the old views;
+  - predictive description (JEPA, `nn/jepa.py`, being tested): the eight symmetries of the square
+    follow the field rules, $h$ exactly invariant under them, a short training without collapse.
 - **Blind grouping and probe**: separated clouds found; groups in two places; real against random
   labels.
 - **Registry**: every registered encoder and method (contracts above).
+- **One-dimensional systems**: kymograph files in both array orders; windows; every observable
+  unchanged by shifts and the mirror (and by a global phase for a complex field); known answers
+  (travelling share and drift speed of a wave, a standing wave, a frozen pattern, the decorrelation
+  time of an AR(1) process, a $1/t$ decay, an annihilating pair of zeros, a phase slip); the complex
+  channels of the network; $h$ exactly mirror-invariant; a short training separating travelling from
+  standing waves; masks, moving average and a short predictive training without collapse; the
+  command line and the interface on the quick 1D example; the three
+  Ginzburg-Landau regimes; the command line end to end.
 - **Command line and interface**: every command. With the extra `[app]`, `tests/test_app.py`
   checks the parsing of typed values and runs the quick demo with every tab drawn.
 
@@ -568,6 +690,7 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
 | 22 | Symmetries of the description: $h$ should have exactly the symmetries of the system. Today: rotations, mirrors, shifts; not symmetries of field values ($u \to -u$ in FitzHugh-Nagumo), Galilean invariance, a phase gauge or a swap of species. To decide: how a user declares them (per field, per system), how observables and views respect them, and a warning when the data suggest an undeclared one | to think about |
 | 23 | Several states near the walls (prototype): runs at points touching a wall join the closest phase core (runs at least two links from another phase), relative to each core's spread. Swift-Hohenberg: all 408 clear runs at those points assigned right (93% if each run takes its point's phase), the 10 bistable points found; runs with hexagons and stripes side by side are far from every core and have a high `parts`. Fails when bistability is spread out (Barkley: the cores are mixtures) | tested, prototype |
 | 24 | Branches, the walls on a graph of runs (prototype): runs linked to the runs of the same and neighbouring points; first halves of the snapshots place the cuts, second halves test them. A point with runs in two branches is bistable; each branch has its existence region. No false branch on 120 synthetic one-state tables. Barkley, 8 runs per point: rest and spirals one branch each, ARI on runs 0.74 (walls on points 0.59), 65 of 66 bistable points found (15 false). Swift-Hohenberg ARI 0.90, but a stripe branch splits off (25 false bistable points). Open: joining branches that are one state (a merge tried joins different states once a branch is a mixture), an effect-size threshold for runs | tested, prototype |
+| 25 | One-dimensional systems (kymographs): windows as rows, space-time observables, the CNN on $(x, t)$, the 1D complex Ginzburg-Landau example (section above); a predictive learned description (JEPA) that finds 3 phases where the contrastive one finds 1. Next: JEPA on the 2D examples; the 1D data of a second manuscript (private) | done (first version) |
 
 Open questions:
 
@@ -615,6 +738,8 @@ DOIs is at the end of [docs/documentation.pdf](docs/documentation.pdf).
 - A. van den Oord, Y. Li and O. Vinyals, Representation learning with contrastive predictive coding (InfoNCE), [arXiv:1807.03748](https://arxiv.org/abs/1807.03748) (2018).
 - I. Loshchilov and F. Hutter, Decoupled weight decay regularization (AdamW), ICLR 2019, [arXiv:1711.05101](https://arxiv.org/abs/1711.05101).
 - A. Bardes, J. Ponce and Y. LeCun, VICReg, ICLR 2022, [arXiv:2105.04906](https://arxiv.org/abs/2105.04906).
+- M. Assran et al., Self-supervised learning from images with a joint-embedding predictive architecture (I-JEPA), *Proc. CVPR*, 15619 (2023). [doi:10.1109/CVPR52729.2023.01499](https://doi.org/10.1109/CVPR52729.2023.01499)
+- A. Bardes et al., Revisiting feature prediction for learning visual representations from video (V-JEPA), [arXiv:2404.08471](https://arxiv.org/abs/2404.08471) (2024).
 - K. He, X. Chen, S. Xie, Y. Li, P. Dollár and R. Girshick, Masked autoencoders are scalable vision learners, *Proc. CVPR*, 16000 (2022), [arXiv:2111.06377](https://arxiv.org/abs/2111.06377).
 
 **Comparisons and scores**
@@ -640,6 +765,8 @@ DOIs is at the end of [docs/documentation.pdf](docs/documentation.pdf).
 - A. Hagberg and E. Meron, From labyrinthine patterns to spiral turbulence, *Phys. Rev. Lett.* **72**, 2494 (1994). [doi:10.1103/PhysRevLett.72.2494](https://doi.org/10.1103/PhysRevLett.72.2494)
 - D. Barkley, A model for fast computer simulation of waves in excitable media, *Physica D* **49**, 61 (1991).
 - J. Burke and E. Knobloch, Localized states in the generalized Swift-Hohenberg equation, *Phys. Rev. E* **73**, 056211 (2006). [doi:10.1103/PhysRevE.73.056211](https://doi.org/10.1103/PhysRevE.73.056211)
+- I. S. Aranson and L. Kramer, The world of the complex Ginzburg-Landau equation, *Rev. Mod. Phys.* **74**, 99 (2002). [doi:10.1103/RevModPhys.74.99](https://doi.org/10.1103/RevModPhys.74.99)
+- H. Chaté, Spatiotemporal intermittency regimes of the one-dimensional complex Ginzburg-Landau equation, *Nonlinearity* **7**, 185 (1994). [doi:10.1088/0951-7715/7/1/007](https://doi.org/10.1088/0951-7715/7/1/007)
 
 ## Acknowledgements
 

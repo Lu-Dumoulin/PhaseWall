@@ -16,8 +16,13 @@ activated environment: `pip install -e ".[app]"`, then `marimo run apps/explore.
 
 ## What it does
 
-The page is a column of sections, one per step of an analysis (1 System, 2 Fields, 3 Encoders,
-4 Methods, 5 Frame and execution, folded), then a run bar with the cost estimate and **Run**, then
+At the top, the dimension of the system: 2D (snapshots on a plane) or 1D (kymographs on a line;
+`marimo run apps/explore.py -- --1d` opens there). It decides the sources (1D: an example, a
+`[kymograph]` TOML file or a table), the fields and their blocks, the frame or windows, and whether the
+results show snapshots or kymographs. Then the page is a column of sections, one per step of an analysis (1 System, 2 Fields, 3 Encoders,
+4 Methods, 5 Frame of each snapshot (2D) or Windows of each kymograph (1D), folded), then the run bar:
+execution on the left, the cost estimate (each step with where it runs, CPU cores or GPU, and what an
+alternative would cost) and **Run** on the right (greyed out while a run goes on), then
 the results:
 
 - **System**: an example (Swift-Hohenberg, Gray-Scott, FitzHugh-Nagumo, Barkley, localised
@@ -40,16 +45,22 @@ the results:
   row per field, one column per block, a box only where the block fits the kind of the field, its
   defaults ticked; the definition of each block on hover and below the grid, from
   `phasewall.fields.BLOCK_HELP`); learned (a CNN per training seed) with epochs,
-  seeds, device and the shape of the network (blocks, width, dimension of h, head, temperature),
-  checked against the frame before any training, with the receptive field and the number of
-  weights shown; combined (both sets of columns as separate blocks); and any encoder registered
+  seeds and the shape of the network (blocks, width, dimension of h, head, temperature),
+  checked against the frame before any training, with the receptive field, the number of
+  weights and a rough memory of one training step shown; combined (both sets of columns as separate blocks); and any encoder registered
   by another package.
 - **Methods**: walls (`ALPHA`, `RATIO`, `MIN_PHASE`, joining of separated parts of one phase), the
   robustness curve, the unsupervised threshold tree (its settings), a Gaussian mixture, k-means,
   HDBSCAN (minimum sizes as checkboxes), and any method registered by another package. **Checks**: the logistic probe (needs
   labels; a ceiling, never a method) and the learning curve.
-- **Execution**: processes and the cache folder (default `data/cache_app`, not tracked;
-  separate from the cache of scripts that may run at the same time).
+- **Frame of each snapshot** (2D, folded): sliders for the part of the box described (a centred square, as a
+  share of the side), the coarsening (grid points merged per side), the largest shift of the moving
+  correlation (share of the side) and the wavelengths kept in S(k) for non-periodic frames; they start at the
+  frame of the TOML file, and a line below says the frame you get (points, dx, periodic or not).
+- **Execution** (in the run bar): CPU cores used in parallel (simulations, hand-made descriptions), the device
+  that trains the learned encoders (the fastest available by default: the Apple GPU or a CUDA GPU), and the
+  cache folder (default `data/cache_app`, not tracked; separate from the cache of scripts that may run at the
+  same time).
 
 The controls of the tree, of the network and of registered entries are not written here: they
 are built from the settings dataclass of each entry (`phasewall.registry.settings_spec`: type,
@@ -65,7 +76,7 @@ Results, for the description chosen above the tabs:
 
 | tab | content |
 | --- | --- |
-| Phase map | jumps across the links, the phases (of the walls or of the tree) with their walls, and the labels if known |
+| Phase map | jumps across the links, the phases (of the walls or of the tree) with their walls, and the labels if known; below, what changes across each wall and the candidate order parameters (the descriptors that tell two phases, or one phase and the others, apart with one threshold, with the % of points on the right side) |
 | Comparison | one row per description and method (groups, pieces on the grid, agreement, ARI, noise), probe scores, and the groups of every method side by side |
 | Snapshots | one snapshot from the middle of each phase (walls or tree), per field, on a common colour scale |
 | Rules (tree) | the rule of each phase, the meaning of each descriptor in the rules (`phasewall.describe.explain`), every split tried (with its meaning and the agreement of the two halves), the separated leaves compared |

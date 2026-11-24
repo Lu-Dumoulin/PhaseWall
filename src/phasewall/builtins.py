@@ -2,7 +2,9 @@
 (registry.py): they are thin wrappers around describe.py, nn/, walls.py, trees.py and
 baselines.py, which keep working on their own.
 
-Encoders: "hand" (hand-made descriptors), "learned" (contrastive CNN, extra [nn]).
+Encoders: "hand" (hand-made descriptors), "learned" (contrastive CNN, extra [nn]), "jepa"
+(predictive CNN, extra [nn]). Each works on 2D ensembles (snapshots, io.Ensemble) and on 1D
+ensembles (kymographs, oned.kymo.Ensemble1D); the 1D modules are called for the latter.
 Methods: "walls", "tree" (on the grid); "mixture", "kmeans", "hdbscan" (blind, extra
 [baselines]). The settings below are the defaults of the pipeline; each field says what it
 does, and its range or choices, for the interface.
@@ -17,6 +19,7 @@ import pandas as pd
 
 from .describe import describe_ensemble
 from .graph import parameter_nodes
+from .io import dims
 from .nn.architecture import Network, check
 from .registry import Context, EncoderResult, MethodResult, cache_key, encoder, method
 from .trees import AGREE, SYMMETRIC
@@ -56,7 +59,11 @@ def hand(ens, settings: HandSettings, context: Context) -> EncoderResult:
         f = Path(context.cache) / f"hand-{cache_key(context.key, context.frame, *([settings.blocks] if settings.blocks else []))}.pkl"
         if f.exists():
             return EncoderResult({"hand": pd.read_pickle(f)})
-    table, errors = describe_ensemble(ens, context.workers, context.progress)
+    if dims(ens) == 1:
+        from .oned.describe1d import describe_ensemble as describe_1d
+        table, errors = describe_1d(ens, context.workers, context.progress)
+    else:
+        table, errors = describe_ensemble(ens, context.workers, context.progress)
     if errors:
         raise RuntimeError(f"{len(errors)} runs could not be described, e.g. {errors[0]}")
     if f is not None:
@@ -86,15 +93,21 @@ def learned(ens, settings: LearnedSettings, context: Context) -> EncoderResult:
     # keep_vector_mean changes nothing for scalar fields: left out of the name then, so that
     # trainings cached before it existed (2026-11-20) are still read
     key = dataclasses.asdict(net)
-    if all(f.symmetry == "scalar" for f in ens.fields):
+    if dims(ens) == 1 or all(f.symmetry == "scalar" for f in ens.fields):
         key.pop("keep_vector_mean")
-    extra = [key]
+    extra = [key] + ([1] if dims(ens) == 1 else [])
     frames, tables, logs = None, {}, []
     for seed in settings.seeds:
         folder = Path(context.cache) / f"learned-{cache_key(context.key, context.frame, settings.epochs, seed, *extra)}" \
             if context.cache else None
         if folder is not None and (folder / "table.pkl").exists():
             table, log = pd.read_pickle(folder / "table.pkl"), pd.read_csv(folder / "log.csv")
+        elif dims(ens) == 1:
+            table, log = _learned_1d(ens, net, settings.epochs, seed, context)
+            if folder is not None:
+                folder.mkdir(parents=True, exist_ok=True)
+                table.to_pickle(folder / "table.pkl")
+                log.to_csv(folder / "log.csv", index=False)
         else:
             frames = frames or load_frames(ens, context.workers, progress=context.progress)
             check(net, frames.x.shape[-1], frames.periodic)
@@ -106,6 +119,54 @@ def learned(ens, settings: LearnedSettings, context: Context) -> EncoderResult:
                 table.to_pickle(folder / "table.pkl")
         tables[f"learned seed {seed}"] = table
         logs.append(log.assign(name=f"learned seed {seed}"))
+    return EncoderResult(tables, pd.concat(logs, ignore_index=True))
+
+
+def _learned_1d(ens, net: Network, epochs: int, seed: int, context: Context):
+    """The contrastive training on the windows of a 1D ensemble (oned/nn1d.py): channels, head
+    and temperature of the network (its 2D views do not apply)."""
+    from .nn.train import TrainingSettings
+    from .oned.nn1d import h_table1d, train1d, windows_of
+    frames = windows_of(ens, context.workers)
+    ts = TrainingSettings(epochs=epochs, seed=seed, channels=net.channels, hidden=net.hidden,
+                          projection=net.projection, temperature=net.temperature)
+    enc, log = train1d(frames, ts, dev=context.device, verbose=False, progress=context.progress)
+    return h_table1d(enc, frames, ens), log
+
+
+@dataclass
+class JepaSettings:
+    epochs: int = field(default=40, metadata={"help": "training epochs", "range": (1, 1000)})
+    seeds: tuple = field(default=(0,), metadata={"help": "one training per seed", "range": (0, 10_000)})
+
+
+@encoder("jepa", JepaSettings, help="predictive convolutional encoder (JEPA): predicts hidden parts of a sample "
+         "(nn/jepa.py); being tested", needs=("torch",), test_settings=JepaSettings(epochs=1))
+def jepa(ens, settings: JepaSettings, context: Context) -> EncoderResult:
+    tables, logs = {}, []
+    frames = None
+    for seed in settings.seeds:
+        f = Path(context.cache) / f"jepa-{cache_key(context.key, context.frame, settings.epochs, seed)}.pkl" \
+            if context.cache else None
+        if f is not None and f.exists():
+            table, log = pd.read_pickle(f)
+        else:
+            if dims(ens) == 1:
+                from .oned.jepa1d import h_table_jepa, settings_1d, train_jepa
+                from .oned.nn1d import windows_of
+                frames = frames or windows_of(ens, context.workers)
+                st = settings_1d(epochs=settings.epochs, seed=seed)
+            else:
+                from .nn.data import load_frames
+                from .nn.jepa import SettingsJEPA, h_table_jepa, train_jepa
+                frames = frames or load_frames(ens, context.workers, progress=context.progress)
+                st = SettingsJEPA(epochs=settings.epochs, seed=seed)
+            enc, log = train_jepa(frames, st, dev=context.device, verbose=False)
+            table = h_table_jepa(enc, frames, ens)
+            if f is not None:
+                pd.to_pickle((table, log), f)
+        tables[f"jepa seed {seed}"] = table
+        logs.append(log.assign(name=f"jepa seed {seed}"))
     return EncoderResult(tables, pd.concat(logs, ignore_index=True))
 
 
