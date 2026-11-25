@@ -17,8 +17,9 @@ activated environment: `pip install -e ".[app]"`, then `marimo run apps/explore.
 ## What it does
 
 At the top, the dimension of the system: 2D (snapshots on a plane) or 1D (kymographs on a line;
-`marimo run apps/explore.py -- --1d` opens there). It decides the sources (1D: an example, a
-`[kymograph]` TOML file or a table), the fields and their blocks, the frame or windows, and whether the
+`marimo run apps/explore.py -- --1d` opens there). It decides the sources (1D: an example, your runs
+as a CSV table with one HDF5 or JLD2 file per run, whose first file is inspected and whose axes you
+choose on a drawn kymograph, a `[kymograph]` TOML file or a table), the fields and their blocks, the frame or windows, and whether the
 results show snapshots or kymographs. Then the page is a column of sections, one per step of an analysis (1 System, 2 Fields, 3 Encoders,
 4 Methods, 5 Frame of each snapshot (2D) or Windows of each kymograph (1D), folded), then the run bar:
 execution on the left, the cost estimate (each step with where it runs, CPU cores or GPU, and what an

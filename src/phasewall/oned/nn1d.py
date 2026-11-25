@@ -27,7 +27,6 @@ cnn.h.d000, ... like the hand-made table.
 """
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -95,7 +94,7 @@ class WindowSet:
 
 def _windows_one(args):
     ens, run, path = args
-    data = read_kymograph(Path(path) / ens.file, ens.fields, ens.julia_order, ens.order)
+    data = read_kymograph(ens.file_of(path), ens.fields, ens.julia_order, ens.order)
     n_t = next(iter(data.values())).shape[1]
     t_all = ens.t0 + ens.dt * np.arange(n_t)
     xs, times = [], []

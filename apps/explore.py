@@ -48,8 +48,10 @@ with app.setup:
     from phasewall.oned.describe1d import ALLOWED as ALLOWED_1D
     from phasewall.oned.describe1d import BLOCK_HELP as BLOCK_HELP_1D
     from phasewall.oned.describe1d import BLOCKS as BLOCKS_1D
+    from phasewall.oned.kymo import KINDS as KINDS_1D
     from phasewall.oned.kymo import SHARE as KYMO_SHARE
     from phasewall.oned.kymo import WINDOWS as KYMO_WINDOWS
+    from phasewall.oned.kymo import Field1D, suggest_fields1d, suggest_order, write_config1d
     from phasewall.trees import rules_text
 
     HAS_TORCH = find_spec("torch") is not None          # learned description (extra [nn])
@@ -230,7 +232,7 @@ def settings_from(cls, values: dict):
 
 
 @app.function
-def parse_field_lines(text: str) -> list:
+def parse_field_lines(text: str, dims: int = 2) -> list:
     """Fields typed one per line as "name kind dataset[,dataset] [relative] [single]": one dataset
     with all components, or two datasets that are the components of a vector or tensor;
     "relative" (scalars) describes (f - <f>) / <f>; "single" confirms that a name such as vx is a
@@ -241,16 +243,40 @@ def parse_field_lines(text: str) -> list:
         if not words or words[0].startswith("#"):
             continue
         if len(words) < 3:
-            raise ValueError(f"{line!r}: write 'name kind dataset' (kinds: {', '.join(KINDS)})")
+            raise ValueError(f"{line!r}: write 'name kind dataset' (kinds: {', '.join(KINDS if dims == 2 else KINDS_1D)})")
         name, kind, data, flags = words[0], words[1], words[2].split(","), set(words[3:])
         unknown = flags - {"relative", "single"}
         if unknown:
             raise ValueError(f"{line!r}: unknown words {sorted(unknown)} (relative, single)")
-        if len(data) == 2:
+        if dims == 1:                                   # 1D: oned.kymo.Field1D (no single_component)
+            fields.append(Field1D(name, () if len(data) == 2 else (data[0],), kind, "relative" in flags,
+                                  tuple(data) if len(data) == 2 else ()))
+        elif len(data) == 2:
             fields.append(Field(name, (name,), kind, components=tuple(data)))
         else:
             fields.append(Field(name, (data[0],), kind, "relative" in flags, single_component="single" in flags))
     return fields
+
+
+@app.function
+def kymo_preview(inspection: dict, order: str, julia_order: bool):
+    """The first 2D dataset of a 1D run file read with the chosen axes, x across and t upward, so
+    that the order can be checked by eye; a note if it cannot be drawn."""
+    import h5py
+    import matplotlib.pyplot as plt
+
+    from phasewall.oned.kymo import _read
+    name = next((r.name for r in inspection["datasets"].itertuples() if len(r.shape) == 2 and min(r.shape) > 1), None)
+    if name is None:
+        return mo.md("No 2D dataset to draw.")
+    with h5py.File(inspection["file"], "r") as _f:
+        a = _read(_f, name, julia_order, order)
+    fig, ax = plt.subplots(figsize=(4.2, 2.6))
+    ax.imshow(a.T, origin="lower", aspect="auto", cmap="RdBu_r")
+    ax.set_xlabel(f"x ({a.shape[0]} points)"); ax.set_ylabel(f"t ({a.shape[1]} rows)")
+    ax.set_title(f"{name}, first run", fontsize=9)
+    buf = io.BytesIO(); fig.savefig(buf, format="png", dpi=110, bbox_inches="tight"); plt.close(fig)
+    return mo.image(buf.getvalue())
 
 
 @app.function
@@ -376,21 +402,21 @@ def _(dimension):
     # Source of the runs. mo.ui.radio is PlutoUI's Radio; its .value is read in other cells.
     # 1D runs come from an example, an ensemble ([kymograph] TOML file) or a table of descriptors.
     _own = mo.cli_args().get("runs")
-    _choices = {"an example": "example", "your runs (CSV of runs and their snapshot files)": "runs",
+    _runs_choice = ("your runs (CSV of runs and their snapshot files)" if dimension.value == 2
+                    else "your runs (CSV of runs, one HDF5 or JLD2 file each)")
+    _choices = {"an example": "example", _runs_choice: "runs",
                 "an ensemble (TOML file)": "config", "a table of descriptors (CSV)": "table"}
-    if dimension.value == 1:
-        _choices.pop("your runs (CSV of runs and their snapshot files)")
-    source_kind = mo.ui.radio(
-        _choices, value="your runs (CSV of runs and their snapshot files)" if _own and dimension.value == 2
-        else "an example", label="Runs from",
-    )
+    source_kind = mo.ui.radio(_choices, value=_runs_choice if _own else "an example", label="Runs from")
     _examples = [n for n in EXAMPLES if dims_of(n) == dimension.value]
     example_choice = mo.ui.dropdown(_examples, value="swift-hohenberg" if dimension.value == 2 else _examples[0],
                                     label="example")
     quick = mo.ui.checkbox(value="quick" in mo.cli_args(),
                            label="quick: small grid and box, seconds (too coarse for all states)")
     runs_path = mo.ui.text(value=str(_own or ""), placeholder="path/to/runs.csv", full_width=True,
-                           label="table of runs: a column `path` (run folder) and one per parameter")
+                           label="table of runs: a column `path` (run folder) and one per parameter" if dimension.value == 2
+                           else "table of runs: a column `path` (the HDF5 or JLD2 file of the run) and one per parameter")
+    dt_input = mo.ui.text(value=str(mo.cli_args().get("dt") or ""), placeholder="e.g. 0.5",
+                          label="time between two rows of the kymograph (dt)")
     snapshots_input = mo.ui.text(value=str(mo.cli_args().get("snapshots") or "Data/*.h5"), label="snapshot files in a run folder")
     time_regex_input = mo.ui.text(value=r"(\d+)\.h5$", label="time in the file name (regular expression)")
     time_unit_input = mo.ui.number(value=1.0, label="time unit (number in the name x unit)")
@@ -410,6 +436,7 @@ def _(dimension):
     return (
         config_label,
         config_path,
+        dt_input,
         dx_input,
         example_choice,
         julia_input,
@@ -452,46 +479,65 @@ def _(example_choice, quick):
 
 
 @app.cell
-def _(julia_input, runs_path, snapshots_input, source_kind, time_regex_input, time_unit_input):
-    # Your runs: the first snapshot of the first run is inspected; its datasets are listed and
-    # fields are suggested (phasewall.io.suggest_fields). Nothing is used until you confirm the
-    # kind of each field below; a component alone (vx) is refused as a scalar.
+def _(dimension, julia_input, runs_path, snapshots_input, source_kind, time_regex_input, time_unit_input):
+    # Your runs: the first snapshot of the first run (2D), or the file of the first run (1D: one HDF5
+    # or JLD2 file per run, its path in the table), is inspected; its datasets are listed and fields
+    # are suggested (phasewall.io.suggest_fields, phasewall.oned.kymo.suggest_fields1d). Nothing is
+    # used until you confirm the kind of each field below; a component alone (vx) is refused as a 2D
+    # scalar. In 1D you also say which axis of the arrays is x and which is t (a guess is preselected).
     inspection, inspection_problem = None, None
+    _one_d = dimension.value == 1
     if source_kind.value == "runs" and runs_path.value.strip():
         try:
             _runs = pd.read_csv(runs_path.value)
             if "path" not in _runs.columns:
                 raise ValueError("the table of runs needs a column `path`")
-            _folder = (Path(runs_path.value).resolve().parent / _runs["path"].iloc[0])
-            _snaps = list_snapshots(_folder, snapshots_input.value, time_regex_input.value, float(time_unit_input.value))
-            if not _snaps:
-                raise ValueError(f"no file {snapshots_input.value!r} with a time matching {time_regex_input.value!r} "
-                                 f"in {_folder}")
-            _datasets = inspect_snapshot(_snaps[-1][1], julia_input.value)
-            inspection = {"runs": _runs, "file": _snaps[-1][1], "datasets": _datasets,
-                          "suggestions": suggest_fields(_datasets)}
+            _first = Path(runs_path.value).resolve().parent / _runs["path"].iloc[0]
+            if _one_d:
+                if not _first.is_file():
+                    raise ValueError(f"{_first} is not a file: in 1D the column `path` gives the HDF5 or JLD2 file "
+                                     "of each run")
+                _file = _first
+            else:
+                _snaps = list_snapshots(_first, snapshots_input.value, time_regex_input.value,
+                                        float(time_unit_input.value))
+                if not _snaps:
+                    raise ValueError(f"no file {snapshots_input.value!r} with a time matching "
+                                     f"{time_regex_input.value!r} in {_first}")
+                _file = _snaps[-1][1]
+            _datasets = inspect_snapshot(_file, julia_input.value)
+            inspection = {"runs": _runs, "file": _file, "datasets": _datasets,
+                          "suggestions": suggest_fields1d(_datasets) if _one_d else suggest_fields(_datasets)}
         except (OSError, ValueError, KeyError) as _e:
             inspection_problem = str(_e)
     _usable = [s for s in (inspection["suggestions"] if inspection else []) if s["kind"] is not None]
+    _kinds = list(KINDS_1D if _one_d else KINDS)
     field_rows = mo.ui.array([
         mo.ui.dictionary({
             "use": mo.ui.checkbox(value=True, label=f"**{s['name']}** from {', '.join(s.get('components') or s['keys'])}"),
-            "kind": mo.ui.dropdown(list(KINDS), value=s["kind"], label="kind"),
+            "kind": mo.ui.dropdown(_kinds, value=s["kind"], label="kind"),
             "relative": mo.ui.checkbox(value=bool(s.get("relative")), label="relative (scalars)"),
         }) for s in _usable
     ])
-    extra_fields = mo.ui.text_area(placeholder="name kind dataset[,dataset] [relative] [single]", rows=2,
-                                   label="other fields, one per line", full_width=True)
+    extra_fields = mo.ui.text_area(placeholder="name kind dataset[,dataset] [relative]" + ("" if _one_d else " [single]"),
+                                   rows=2, label="other fields, one per line", full_width=True)
     _numeric = [c for c in (inspection["runs"].columns if inspection else [])
                 if c not in ("run", "path", "dx") and pd.api.types.is_numeric_dtype(inspection["runs"][c])]
     parameter_choice = mo.ui.multiselect(_numeric, value=[c for c in _numeric if c != "seed"],
                                          label="parameter columns")
+    _shape = next((tuple(r.shape) for r in inspection["datasets"].itertuples() if len(r.shape) == 2
+                   and min(r.shape) > 1), None) if inspection else None
+    _order, _why = suggest_order(_shape) if _shape else ("xt", "")
+    order_input = mo.ui.radio({"[x, t]: the first axis is x": "xt", "[t, x]: the first axis is t": "tx"},
+                              value="[x, t]: the first axis is x" if _order == "xt" else "[t, x]: the first axis is t",
+                              label="axes of the arrays" + (f" (guess: {_why})" if _why else ""))
     usable_suggestions = _usable
-    return extra_fields, field_rows, inspection, inspection_problem, parameter_choice, usable_suggestions
+    return (extra_fields, field_rows, inspection, inspection_problem, order_input, parameter_choice,
+            usable_suggestions)
 
 
 @app.cell
-def _(config_path, example_choice, extra_fields, field_rows, source_kind, usable_suggestions):
+def _(config_path, dimension, example_choice, extra_fields, field_rows, source_kind, usable_suggestions):
     # The fields of the chosen system, known before any run: an example's, those of a TOML file,
     # or those you confirmed for your runs. Their kinds decide which blocks of observables are offered.
     known_fields, field_problems = [], []
@@ -500,6 +546,14 @@ def _(config_path, example_choice, extra_fields, field_rows, source_kind, usable
             known_fields = fields_of(example_choice.value)
         elif source_kind.value == "config" and Path(config_path.value).is_file():
             known_fields = list(load_any(config_path.value).fields)
+        elif source_kind.value == "runs" and dimension.value == 1:
+            for _s, _row in zip(usable_suggestions, field_rows.value):
+                if _row["use"]:
+                    _kind = _row["kind"]
+                    known_fields.append(Field1D(_s["name"], tuple(_s.get("keys", ())), _kind,
+                                                bool(_row["relative"]) and _kind == "scalar",
+                                                tuple(_s.get("components", ()))))
+            known_fields += parse_field_lines(extra_fields.value, dims=1)
         elif source_kind.value == "runs":
             for _s, _row in zip(usable_suggestions, field_rows.value):
                 if not _row["use"]:
@@ -705,6 +759,8 @@ def _(
     curve_input,
     demo_defaults,
     device_input,
+    dimension,
+    dt_input,
     dx_input,
     dx_target_input,
     epochs_input,
@@ -729,6 +785,7 @@ def _(
     mixture_input,
     network_inputs,
     nn_seeds_input,
+    order_input,
     pair_dt_input,
     parameter_choice,
     periodic_input,
@@ -781,6 +838,18 @@ def _(
             _dx = optional_float(dx_input.value, "grid spacing")
             if _dx is None and "dx" not in inspection["runs"].columns:
                 raise ValueError("give the grid spacing dx (or a column dx in the table of runs)")
+            if dimension.value == 1:
+                # 1D: one file per run (file = ""), the axes as chosen, dt between two rows
+                _dt = optional_float(dt_input.value, "time between two rows")
+                if _dt is None:
+                    raise ValueError("give the time between two rows of the kymograph (dt)")
+                _ens1 = {"file": "", "julia_order": julia_input.value, "order": order_input.value, "dx": _dx,
+                         "dt": _dt, "periodic": periodic_own.value}
+                _cfg = Path(cache_input.value) / "configs" / (
+                    pl.key(str(Path(runs_path.value).resolve()), parameter_choice.value,
+                           [dataclasses.asdict(f) for f in known_fields], _ens1) + ".toml")
+                write_config1d(_cfg, runs_path.value, list(parameter_choice.value), known_fields, **_ens1)
+                return pl.Source(example=None, config=str(_cfg), label=runs_label.value or None)
             _ens = {"snapshots": snapshots_input.value, "time_regex": time_regex_input.value,
                     "time_unit": float(time_unit_input.value), "julia_order": julia_input.value, "dx": _dx,
                     "periodic": periodic_own.value, "last": int(last_input.value),
@@ -917,6 +986,8 @@ def _(
     config_label,
     config_path,
     demo,
+    dimension,
+    dt_input,
     dx_input,
     example_choice,
     grid_inputs,
@@ -947,6 +1018,13 @@ def _(
                        *[mo.hstack([mo.md(f"`{p}`"), el], widths=[1, 6]) for p, el in grid_inputs.items()]]),
             mo.vstack([mo.md("**Numerical settings**"), *setting_inputs.values()]),
         )
+    elif _kind == "runs" and dimension.value == 1:
+        _body = columns(
+            mo.vstack([runs_path, mo.md("All the files in one folder is fine: the column `path` gives each run's file "
+                                        "(relative to the table). The axes are chosen in 2 · Fields, after a look at "
+                                        "the first file."), julia_input]),
+            mo.vstack([periodic_own, dx_input, dt_input, runs_label]),
+        )
     elif _kind == "runs":
         _body = columns(
             mo.vstack([runs_path, snapshots_input, time_regex_input, time_unit_input]),
@@ -961,7 +1039,18 @@ def _(
 
 
 @app.cell
-def _(extra_fields, field_rows, inspection, inspection_problem, known_fields, parameter_choice, source_kind):
+def _(
+    dimension,
+    extra_fields,
+    field_rows,
+    inspection,
+    inspection_problem,
+    julia_input,
+    known_fields,
+    order_input,
+    parameter_choice,
+    source_kind,
+):
     # 2. Fields: for your runs, the datasets of the first snapshot and the fields you confirm;
     # otherwise the fields of the example or of the TOML file.
     _kind = source_kind.value
@@ -972,17 +1061,28 @@ def _(extra_fields, field_rows, inspection, inspection_problem, known_fields, pa
             _body = mo.md("Give the table of runs above: the first snapshot of the first run is inspected.")
         else:
             _unused = [s for s in inspection["suggestions"] if s["kind"] is None]
+            _axes = []
+            if dimension.value == 1:
+                _axes = [mo.md("**Axes.** Choose which axis of the arrays is space; the kymograph of the first "
+                               "field is drawn with x across and t upward. If the stripes or waves look "
+                               "transposed, choose the other order."), order_input,
+                         kymo_preview(inspection, order_input.value, julia_input.value)]
             _body = columns(
                 mo.vstack([
-                    mo.md(f"Datasets of `{inspection['file'].name}` (shape as read, [x, y, component]):"),
+                    *_axes,
+                    mo.md(f"Datasets of `{inspection['file'].name}` (shape as read"
+                          + (")" if dimension.value == 1 else ", [x, y, component])") + ":"),
                     mo.ui.table(inspection["datasets"][["name", "shape", "dtype"]].astype(str), selection=None,
                                 pagination=False),
                     *([mo.md("Not used: " + "; ".join(f"`{s['name']}` ({s['reason']})" for s in _unused))]
                       if _unused else []),
                 ]),
                 mo.vstack([
-                    mo.md("Suggested from the names; **check every kind**. Components saved apart are grouped: "
-                          "a component alone is not invariant under rotations."),
+                    mo.md("Suggested from the names; **check every kind**. "
+                          + ("Pairs saved apart are grouped: Re and Im parts as a complex amplitude, p_x and p_y "
+                             "as a polarity (kinds on a line: scalar, velocity, polarity, complex)."
+                             if dimension.value == 1 else
+                             "Components saved apart are grouped: a component alone is not invariant under rotations.")),
                     *[mo.vstack([r["use"], mo.hstack([r["kind"], r["relative"]], justify="start")])
                       for r in field_rows],
                     extra_fields, parameter_choice,

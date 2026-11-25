@@ -6,7 +6,8 @@ a[x, t, component]. The ensemble is described by a TOML file, for example:
     [kymograph]
     runs = "runs.csv"            # one row per run: a column `path`, one column per parameter
     parameters = ["b", "c"]
-    file = "kymograph.h5"        # the kymograph file inside each run folder (HDF5, so JLD2 too)
+    file = "kymograph.h5"        # the kymograph file inside each run folder (HDF5, so JLD2 too);
+                                 # file = "": the column `path` gives the file of each run itself
     julia_order = true           # arrays written by Julia (column-major): transposed on reading
     order = "xt"                 # axes of an array once read: "xt" (x first) or "tx" (t first)
     dx = 0.78                    # grid spacing (or a column `dx` in the table of runs)
@@ -126,6 +127,11 @@ class Ensemble1D:
         if self.dx is None and "dx" not in self.runs.columns:
             raise ValueError("dx is needed, in [kymograph] or as a column of the table of runs")
 
+    def file_of(self, path: str | Path) -> Path:
+        """The kymograph file of a run: `path` itself when `file` is empty (one file per run, the
+        table of runs gives the files), else the file `file` inside the run folder `path`."""
+        return Path(path) / self.file if self.file else Path(path)
+
     def dx_of(self, run: int) -> float:
         if "dx" in self.runs.columns:
             return float(self.runs.loc[self.runs.run == run, "dx"].iloc[0])
@@ -133,7 +139,8 @@ class Ensemble1D:
 
 
 def load_ensemble1d(path: str | Path) -> Ensemble1D:
-    """Read a 1D ensemble from its TOML file (module docstring); paths are relative to it."""
+    """Read a 1D ensemble from its TOML file (module docstring). The table of runs is relative to
+    the TOML file, the paths in the table relative to the table (as for the 2D ensembles)."""
     path = Path(path)
     cfg = tomllib.loads(path.read_text())
     if "kymograph" not in cfg:
@@ -142,10 +149,11 @@ def load_ensemble1d(path: str | Path) -> Ensemble1D:
     unknown = set(k) - RUN_KEYS
     if unknown:
         raise ValueError(f"{path}: unknown keys in [kymograph]: {sorted(unknown)}")
-    runs = pd.read_csv(path.parent / k["runs"])
+    table_path = (path.parent / k["runs"]).resolve()
+    runs = pd.read_csv(table_path)
     if "run" not in runs.columns:
         runs.insert(0, "run", range(len(runs)))
-    runs["path"] = [str((path.parent / p).resolve()) for p in runs["path"]]
+    runs["path"] = [str((table_path.parent / p).resolve()) for p in runs["path"]]   # relative to the table, as in 2D
     fields = []
     for f in cfg.get("fields", []):
         unknown = set(f) - FIELD_KEYS
@@ -211,3 +219,98 @@ def window_slices(n_t: int, share: float = SHARE, windows: int = WINDOWS) -> lis
                          f"fewer than {MIN_WINDOW_ROWS}: use fewer windows or a larger share")
     start = n_t - windows * length
     return [slice(start + i * length, start + (i + 1) * length) for i in range(windows)]
+
+
+# names that suggest a role on a line (a choice; suggestions are only shown, never applied)
+VELOCITY_NAMES_1D = {"v", "vel", "velocity", "vx", "v_x", "flow"}
+POLARITY_NAMES_1D = {"p", "pol", "polarity", "px", "p_x"}
+DENSITY_NAMES_1D = {"rho", "c", "n", "density", "conc", "rho1", "rho2", "c1", "c2"}
+COMPLEX_PARTS = (("re", "im"), ("_re", "_im"), ("real", "imag"), ("_real", "_imag"))
+
+
+def suggest_order(shape: tuple[int, ...]) -> tuple[str, str]:
+    """A first guess of the order of the axes of a kymograph array as read (shape (n1, n2)): "xt" if
+    the second axis is the longer (runs usually save more times than grid points), else "tx", with
+    the reason. Only a suggestion: the interface shows the kymograph so that you can check it."""
+    n1, n2 = shape[:2]
+    if n2 >= n1:
+        return "xt", f"{n2} >= {n1}: the longer axis is taken as time"
+    return "tx", f"{n1} > {n2}: the longer axis is taken as time"
+
+
+def suggest_fields1d(datasets: pd.DataFrame) -> list[dict]:
+    """Suggested 1D fields for the datasets of one kymograph file (io.inspect_snapshot): pairs of
+    datasets grouped into one field (Are + Aim as a complex amplitude, px + py as a two-component
+    polarity), velocity- and polarity-like names, scalars (relative for density-like names). Each has
+    a `reason`; datasets that are not 2D numeric arrays get kind None. The user confirms every kind."""
+    from ..fields import component_of
+    numeric = datasets[datasets.dtype.str.startswith(("float", "int", "uint"))]
+    two_d = {r.name: tuple(r.shape) for r in numeric.itertuples() if len(r.shape) == 2 and min(r.shape) > 1}
+    out, used = [], set()
+    for name, shape in two_d.items():                           # first the pairs, whatever the order of the names
+        if name in used:
+            continue
+        low, pair = name.lower(), None
+        for re_, im_ in COMPLEX_PARTS:                          # Are / Aim, A_re / A_im, ...
+            if low.endswith(re_):
+                stem = name[: len(name) - len(re_)]
+                other = next((d for d in two_d if d.lower() == (stem + im_).lower()), None)
+                if stem and other and two_d[other] == shape:
+                    pair = ("complex", stem, [name, other], "real and imaginary parts grouped as a complex amplitude")
+                    break
+        c = component_of(name)
+        if pair is None and c and c[1] == "x":
+            other = next((d for d, sh in two_d.items() if component_of(d) == (c[0], "y") and sh == shape), None)
+            if other:
+                pair = ("polarity", c[0], [name, other],
+                        "components along (x) and across (y) the line grouped as a polarity")
+        if pair:
+            kind, stem, comps, why = pair
+            out.append({"name": stem.rstrip("_") or name, "kind": kind, "components": comps, "reason": why})
+            used.update(comps)
+    for r in datasets.itertuples():
+        name = r.name
+        if name in used:
+            continue
+        used.add(name)
+        if name not in two_d:
+            why = (f"not numeric ({r.dtype})" if name not in set(numeric.name)
+                   else f"shape {tuple(r.shape)} is not a kymograph (two axes of several points)")
+            out.append({"name": name, "kind": None, "reason": why})
+        elif name.lower() in VELOCITY_NAMES_1D:
+            out.append({"name": name, "kind": "velocity", "keys": [name], "reason": f"name {name!r} suggests a velocity"})
+        elif name.lower() in POLARITY_NAMES_1D:
+            out.append({"name": name, "kind": "polarity", "keys": [name], "reason": f"name {name!r} suggests a polarity"})
+        else:
+            relative = name.lower() in DENSITY_NAMES_1D
+            out.append({"name": name, "kind": "scalar", "keys": [name], "relative": relative,
+                        "reason": "scalar" + ("; density-like name, described relative to its mean" if relative else "")})
+    return out
+
+
+def write_config1d(path: str | Path, runs: str | Path, parameters: list[str], fields: list[Field1D], **kymograph) -> Path:
+    """Write the [kymograph] TOML of a 1D ensemble (the inverse of load_ensemble1d): `runs` is the
+    table of runs (written as an absolute path), `kymograph` the other keys of [kymograph] (None
+    values are left out; file = "" when the table gives the file of each run). Read back with
+    load_ensemble1d, so a mistake is reported here; an unchanged file is not rewritten."""
+    from ..io import _toml_value
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lines = ["[kymograph]", f"runs = {_toml_value(str(Path(runs).resolve()))}",
+             f"parameters = {_toml_value(list(parameters))}"]
+    lines += [f"{k} = {_toml_value(v)}" for k, v in kymograph.items() if v is not None]
+    for f in fields:
+        lines += ["", "[[fields]]", f"name = {_toml_value(f.name)}", f"kind = {_toml_value(f.kind)}"]
+        if f.components:
+            lines.append(f"components = {_toml_value(list(f.components))}")
+        else:
+            lines.append(f"keys = {_toml_value(list(f.keys))}")
+        if f.relative:
+            lines.append("relative = true")
+        if f.blocks:
+            lines.append(f"blocks = {_toml_value(list(f.blocks))}")
+    text = "\n".join(lines) + "\n"
+    if not path.exists() or path.read_text() != text:
+        path.write_text(text)
+    load_ensemble1d(path)
+    return path

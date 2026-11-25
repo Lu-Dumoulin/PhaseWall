@@ -1,5 +1,5 @@
 """A whole analysis in one call, with cached steps: the programming interface of the notebook
-interface (apps/, see docs/plan_interface.md), also usable on its own from Python or a script.
+interface (apps/, see apps/README.md), also usable on its own from Python or a script.
 
     from phasewall import pipeline as pl
     settings = pl.Settings(source=pl.Source(example="gray-scott", quick=True),

@@ -37,7 +37,6 @@ Blocks (DEFAULT_BLOCKS gives those of each kind):
 """
 
 import itertools
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -435,7 +434,7 @@ def describe_window(arrays: dict[str, np.ndarray], fields: list[Field1D], dx: fl
 def describe_run(ens: Ensemble1D, run: int, path: str) -> list[dict]:
     """One row per window of a run (kymo.window_slices): run, time (the end of the window),
     then the columns."""
-    data = read_kymograph(Path(path) / ens.file, ens.fields, ens.julia_order, ens.order)
+    data = read_kymograph(ens.file_of(path), ens.fields, ens.julia_order, ens.order)
     n_t = next(iter(data.values())).shape[1]
     t_all = ens.t0 + ens.dt * np.arange(n_t)
     dx = ens.dx_of(run)

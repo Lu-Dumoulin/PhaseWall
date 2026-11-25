@@ -3,11 +3,17 @@ on: [push, pull_request]
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: pip install -e ".[dev]"
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      # scikit-learn for the blind methods and the probe; the tests with PyTorch or marimo are skipped
+      - run: pip install -e ".[dev,baselines]"
       - run: ruff check .
       - run: pytest -q

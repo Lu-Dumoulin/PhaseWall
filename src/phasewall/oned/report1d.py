@@ -2,7 +2,6 @@
 snapshots), drawn by report.make_phase_images; report.write_report writes them for a 1D ensemble.
 """
 
-from pathlib import Path
 
 import numpy as np
 from matplotlib.figure import Figure
@@ -28,7 +27,7 @@ def make_kymographs(w: Walls, ens: Ensemble1D, field: Field1D | None = None) -> 
     runs = ens.runs.set_index("run")
     images, label = {}, f.name
     for ph, (values, run) in central_runs(w, ens.runs, ens.parameters).items():
-        a = read_kymograph(Path(runs.loc[run, "path"]) / ens.file, [f], ens.julia_order, ens.order)[f.name]
+        a = read_kymograph(ens.file_of(runs.loc[run, "path"]), [f], ens.julia_order, ens.order)[f.name]
         n_t = a.shape[1]
         first = n_t - int(np.floor(ens.share * n_t))
         img, label = picture(a[:, first:], f)

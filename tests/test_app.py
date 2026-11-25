@@ -189,3 +189,35 @@ def test_notebook_runs_the_quick_1d_demo(nb, tmp_path, monkeypatch):
     assert defs["dimension"].value == 1 and defs["example_choice"].value == "ginzburg-landau-1d"
     assert "The run stopped" not in page and "Traceback" not in page and "phase 0" in page
     assert "Kymographs" in page
+
+
+def test_notebook_runs_your_own_1d_runs(nb, tmp_path, monkeypatch):
+    """1D runs given as a table of files, one HDF5 file per run in one folder, saved [t, x]: the
+    inspector groups Are + Aim as a complex amplitude and guesses the axes; the run goes through."""
+    import shutil
+
+    import pandas as pd
+
+    from phasewall.oned import cgle
+    from phasewall.oned.kymo import read_kymograph, write_kymograph
+    sim = tmp_path / "sim"
+    runs = cgle.make_ensemble(sim, b=[0.0, 3.0], c=[-0.2, -1.2], seeds=(0, 1), n=128, length=100.0,
+                              t_relax=300.0, rows=800)
+    files = tmp_path / "files"
+    files.mkdir()
+    for p in runs.path:                                    # one file per run, all in one folder, [t, x]
+        a = read_kymograph(sim / p / "kymograph.h5", cgle.FIELDS)["A"]
+        write_kymograph(files / f"{p}.h5", {"Are": a[..., 0], "Aim": a[..., 1]}, order="tx")
+    pd.DataFrame({"path": [f"{p}.h5" for p in runs.path], "b": runs.b, "c": runs.c,
+                  "seed": runs.seed}).to_csv(files / "runs.csv", index=False)
+    shutil.rmtree(sim)
+    monkeypatch.setattr(sys, "argv", ["explore.py", "--run", "--1d", "--runs", str(files / "runs.csv"),
+                                      "--dx", repr(100.0 / 128), "--dt", "0.5", "--cache", str(tmp_path / "cache")])
+    outputs, defs = nb.app.run()
+    assert defs["order_input"].value == "tx" and defs["settings_problems"] == []
+    (field,) = defs["known_fields"]
+    assert field.kind == "complex" and field.components == ("Are", "Aim")
+    res = defs["res"]
+    assert list(res.parameters) == ["b", "c"] and "hand" in res.walls
+    page = " ".join(str(getattr(o, "text", o)) for o in outputs)
+    assert "The run stopped" not in page and "Traceback" not in page and "Kymographs" in page

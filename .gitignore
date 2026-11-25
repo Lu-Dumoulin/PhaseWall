@@ -47,3 +47,7 @@ docs/tldr/overview.pdf
 # marimo session caches (outputs of local runs, with local paths) and local assistant settings
 __marimo__/
 .claude/
+
+# Leiden test (kept local, 2026-11-25)
+scripts/leiden/
+docs/leiden/
