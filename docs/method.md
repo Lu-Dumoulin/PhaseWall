@@ -62,7 +62,8 @@ A **combined** description puts the hand-made and the learned blocks side by sid
 
 - The runs at one point form a sample. Each point is split into two halves (its runs, or the early
   and late snapshots of a single run).
-- Two points one step apart along one parameter are linked.
+- On a grid, two points one step apart along one parameter are linked. Scattered points share no
+  grid line: see [Scattered points](#scattered-points-k-nn-links) below.
 - The jump of a link is the energy distance between the two samples:
 
 $$D^2(X, Y) = 2\langle \lvert x - y \rvert \rangle - \langle \lvert x - x' \rvert \rangle - \langle \lvert y - y' \rvert \rangle .$$
@@ -87,6 +88,45 @@ $$D^2(X, Y) = 2\langle \lvert x - y \rvert \rangle - \langle \lvert x - x' \rver
   $J_2$, none (0 of 40).
 - PhaseWall cuts each side again until no cut passes. The regions are the phases (at least 3
   points).
+
+## Scattered points: k-NN links
+
+PhaseWall uses grid links when at least 90 % of the points have one and they join all the points.
+Otherwise (random or space-filling samples):
+
+1. Each parameter is divided by the median gap between its values. A positive parameter spread more
+   evenly in $\log_{10}$ than in linear scale is taken in $\log_{10}$ first.
+2. Each point is linked to its $k = \max(6, 2d)$ nearest points ($d$: number of parameters; 6 up to
+   3 parameters, 8 for 4, 10 for 5). A link is kept if either point chose it.
+3. Links longer than 3 times the median link are dropped: they cross a hole in the sampling.
+4. Inside a phase a longer link jumps more. So $\log J$ is corrected by the Theil-Sen slope $\beta$
+   of $\log J$ against $\log(\ell/\tilde\ell)$: $\log J - \beta \log(\ell/\tilde\ell)$.
+5. Cut and test as above, on every link. "Grid steps" below become median link lengths.
+
+| example (same points and runs as the grid) | grid | random points |
+| --- | --- | --- |
+| Swift-Hohenberg (240 x 8) | 3 phases, ARI 0.94 | 3 phases, ARI 0.94 |
+| FitzHugh-Nagumo (99 x 4) | 1 phase | 2 phases, ARI 0.36 |
+| Barkley (165 x 4) | 2 phases, ARI 0.58 | 3 phases, ARI 0.59 |
+| localised Swift-Hohenberg (105 x 4) | 3 phases, ARI 1.00 | 2 phases, ARI 0.80 |
+| Gray-Scott (525 x 4) | 8 phases, ARI 0.95 | 7 phases, ARI 0.79 |
+
+Losses come from thin phases: the localised band holds 11 of 105 random points. On synthetic noise
+tables of scattered points, 2 of 100 get a false wall (grid: 0 of 100): links that share a point are
+not independent, and $k$-NN gives more links per point. Tried and not kept: testing on the 4 nearest
+links only (it hides real walls), several candidate cuts per step.
+
+**Many parameters.** Synthetic tables: 500 or 2000 random points in $[0, 1]^d$, 2 runs per point,
+a wall at $x_0 = 0.5$ (and a second at $x_1 = 0.5$ on one side), 3 noise widths.
+
+| parameters | $k = 6$ | $k = 2d$ |
+| --- | --- | --- |
+| 3, 4, 5 | right, except 1 false wall in 10 noise tables (4 parameters) | all right |
+| 8 | all right | all right |
+| 16 | 1 false wall in 10 noise tables; 2 of 20 wall tables wrong | all right |
+
+Hence $k = \max(6, 2d)$. Limits of this test: strong walls, and the description depends only on the
+parameters that carry the walls. Weak walls and drifts along many parameters are not tested.
 
 ## After the walls
 

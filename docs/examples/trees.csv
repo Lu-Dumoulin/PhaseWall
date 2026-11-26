@@ -7,10 +7,6 @@ swift-hohenberg,all runs,default,runs,3,True,3,0,236,240,0.9418017333559484,0.94
 swift-hohenberg,all runs,halves swapped,runs,3,True,3,0,236,240,0.9418017333559484,0.9418017333559484,3,0.0
 swift-hohenberg,one run per point,default,grid,3,True,3,0,233,240,0.9004767704795684,0.9004767704795684,3,0.0
 swift-hohenberg,one run per point,halves swapped,grid,3,True,3,0,233,240,0.9004767704795684,0.9004767704795684,3,0.0
-fitzhugh-nagumo,all runs,default,runs,1,True,1,0,33,99,0.0,0.0,1,0.0
-fitzhugh-nagumo,all runs,halves swapped,runs,1,True,1,0,33,99,0.0,0.0,1,0.0
-fitzhugh-nagumo,one run per point,default,grid,4,True,2,2,54,99,0.375214211767918,0.36384584609635623,2,0.020202020202020204
-fitzhugh-nagumo,one run per point,halves swapped,grid,4,True,2,2,54,99,0.375214211767918,0.36384584609635623,2,0.020202020202020204
 gray-scott,all runs,default,runs,21,True,10,10,499,525,0.9439764821660378,0.9253416303276516,12,0.01904761904761905
 gray-scott,all runs,halves swapped,runs,21,True,10,10,499,525,0.9439764821660378,0.9253416303276516,12,0.01904761904761905
 gray-scott,one run per point,default,grid,16,True,7,7,502,525,0.9552672719765616,0.9476669693315128,9,0.013333333333333334
@@ -19,3 +15,7 @@ sh-localized,all runs,default,runs,3,True,3,0,105,105,1.0,1.0,3,0.0
 sh-localized,all runs,halves swapped,runs,3,True,3,0,105,105,1.0,1.0,3,0.0
 sh-localized,one run per point,default,grid,3,True,3,0,105,105,1.0,1.0,3,0.0
 sh-localized,one run per point,halves swapped,grid,3,True,3,0,105,105,1.0,1.0,3,0.0
+fitzhugh-nagumo,all runs,default,runs,1,True,1,0,33,99,0.0,0.0,1,0.0
+fitzhugh-nagumo,all runs,halves swapped,runs,1,True,1,0,33,99,0.0,0.0,1,0.0
+fitzhugh-nagumo,one run per point,default,grid,4,True,2,2,54,99,0.38175941158991444,0.3704832119446734,2,0.020202020202020204
+fitzhugh-nagumo,one run per point,halves swapped,grid,4,True,2,2,54,99,0.38175941158991444,0.3704832119446734,2,0.020202020202020204

@@ -51,3 +51,6 @@ __marimo__/
 # Leiden test (kept local, 2026-11-25)
 scripts/leiden/
 docs/leiden/
+# nearest-neighbour graph prototype (kept local while it is tested, 2026-11-25)
+scripts/knn/
+docs/knn/

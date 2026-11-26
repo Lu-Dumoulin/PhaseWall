@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from scipy.special import comb
 
-from .graph import grid_edges, parameter_nodes, regions
+from .graph import links, parameter_nodes, regions
 
 
 def n_groups(labels: np.ndarray) -> int:
@@ -52,7 +52,7 @@ def point_scores(groups: pd.DataFrame, column: str, parameters: list[str], label
 
     pg = majority(g.loc[runs].to_numpy())
     kept = pg != -1
-    edges = grid_edges(points)
+    edges = links(points).edges           # grid links, or k-NN links for scattered points
     same = pg[edges["a"].to_numpy()] == pg[edges["b"].to_numpy()]
     pieces = len(np.unique(regions(len(points), edges, same)[kept]))
     if labels is None:

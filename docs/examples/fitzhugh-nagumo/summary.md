@@ -2,7 +2,7 @@
 
 396 runs on 99 parameter points (eps, delta); analysis 0 min.
 
-Reference labels (runs): uniform 134, dynamic 121, stripes 83, fronts 51, holes 7
+Reference labels (runs): uniform 134, dynamic 121, patterns 90, fronts 51
 
 ## Steady state
 
@@ -42,32 +42,32 @@ Each row: a description and a method; agree = points carrying the most common re
 | describer | method | groups | noise_points | agree | points | ari | ari_all | pieces | noise_runs |
 |---|---|---|---|---|---|---|---|---|---|
 | hand | walls | 1 | 0 | 33 | 99 | 0 | 0 | 1 | 0 |
-| hand | mixture | 8 | 0 | 90 | 99 | 0.554 | 0.554 | 23 | 0 |
-| hand | kmeans | 8 | 0 | 88 | 99 | 0.537 | 0.537 | 22 | 0 |
-| hand | hdbscan_10 | 6 | 18 | 75 | 99 | 0.699 | 0.515 | 17 | 0.205 |
+| hand | mixture | 8 | 0 | 91 | 99 | 0.563 | 0.563 | 23 | 0 |
+| hand | kmeans | 8 | 0 | 89 | 99 | 0.545 | 0.545 | 22 | 0 |
+| hand | hdbscan_10 | 6 | 18 | 75 | 99 | 0.699 | 0.512 | 17 | 0.205 |
 | hand | hdbscan_20 | 5 | 22 | 71 | 99 | 0.71 | 0.496 | 16 | 0.23 |
-| learned seed 0 | walls | 2 | 0 | 44 | 99 | 0.208 | 0.208 | 3 | 0 |
-| learned seed 0 | mixture | 10 | 0 | 89 | 99 | 0.426 | 0.426 | 25 | 0 |
-| learned seed 0 | kmeans | 10 | 0 | 89 | 99 | 0.426 | 0.426 | 25 | 0 |
-| learned seed 0 | hdbscan_10 | 8 | 14 | 78 | 99 | 0.614 | 0.483 | 21 | 0.116 |
-| learned seed 0 | hdbscan_20 | 6 | 38 | 54 | 99 | 0.578 | 0.672 | 15 | 0.366 |
+| learned seed 0 | walls | 2 | 0 | 44 | 99 | 0.215 | 0.215 | 3 | 0 |
+| learned seed 0 | mixture | 10 | 0 | 90 | 99 | 0.435 | 0.435 | 25 | 0 |
+| learned seed 0 | kmeans | 10 | 0 | 90 | 99 | 0.435 | 0.435 | 25 | 0 |
+| learned seed 0 | hdbscan_10 | 8 | 14 | 79 | 99 | 0.632 | 0.498 | 21 | 0.116 |
+| learned seed 0 | hdbscan_20 | 6 | 38 | 55 | 99 | 0.606 | 0.683 | 15 | 0.366 |
 | combined seed 0 | walls | 1 | 0 | 33 | 99 | 0 | 0 | 1 | 0 |
-| combined seed 0 | mixture | 9 | 0 | 89 | 99 | 0.485 | 0.485 | 24 | 0 |
-| combined seed 0 | kmeans | 8 | 0 | 88 | 99 | 0.552 | 0.552 | 21 | 0 |
-| combined seed 0 | hdbscan_10 | 7 | 20 | 73 | 99 | 0.75 | 0.519 | 12 | 0.215 |
-| combined seed 0 | hdbscan_20 | 5 | 18 | 75 | 99 | 0.72 | 0.55 | 16 | 0.177 |
-| learned seed 1 | walls | 2 | 0 | 42 | 99 | 0.182 | 0.182 | 3 | 0 |
-| learned seed 1 | mixture | 10 | 0 | 88 | 99 | 0.411 | 0.411 | 27 | 0 |
-| learned seed 1 | kmeans | 10 | 0 | 87 | 99 | 0.423 | 0.423 | 27 | 0 |
-| learned seed 1 | hdbscan_10 | 8 | 17 | 73 | 99 | 0.568 | 0.481 | 22 | 0.179 |
-| learned seed 1 | hdbscan_20 | 7 | 32 | 61 | 99 | 0.626 | 0.581 | 17 | 0.311 |
+| combined seed 0 | mixture | 9 | 0 | 90 | 99 | 0.493 | 0.493 | 24 | 0 |
+| combined seed 0 | kmeans | 8 | 0 | 89 | 99 | 0.559 | 0.559 | 21 | 0 |
+| combined seed 0 | hdbscan_10 | 7 | 20 | 73 | 99 | 0.75 | 0.514 | 12 | 0.215 |
+| combined seed 0 | hdbscan_20 | 5 | 18 | 75 | 99 | 0.72 | 0.544 | 16 | 0.177 |
+| learned seed 1 | walls | 2 | 0 | 42 | 99 | 0.19 | 0.19 | 3 | 0 |
+| learned seed 1 | mixture | 10 | 0 | 89 | 99 | 0.42 | 0.42 | 27 | 0 |
+| learned seed 1 | kmeans | 10 | 0 | 88 | 99 | 0.432 | 0.432 | 27 | 0 |
+| learned seed 1 | hdbscan_10 | 8 | 17 | 74 | 99 | 0.589 | 0.496 | 22 | 0.179 |
+| learned seed 1 | hdbscan_20 | 7 | 32 | 62 | 99 | 0.652 | 0.593 | 17 | 0.311 |
 | combined seed 1 | walls | 1 | 0 | 33 | 99 | 0 | 0 | 1 | 0 |
-| combined seed 1 | mixture | 10 | 0 | 89 | 99 | 0.449 | 0.449 | 25 | 0 |
-| combined seed 1 | kmeans | 8 | 0 | 88 | 99 | 0.542 | 0.542 | 22 | 0 |
-| combined seed 1 | hdbscan_10 | 6 | 19 | 74 | 99 | 0.75 | 0.527 | 15 | 0.187 |
-| combined seed 1 | hdbscan_20 | 5 | 18 | 75 | 99 | 0.72 | 0.55 | 16 | 0.182 |
+| combined seed 1 | mixture | 10 | 0 | 90 | 99 | 0.457 | 0.457 | 25 | 0 |
+| combined seed 1 | kmeans | 8 | 0 | 89 | 99 | 0.549 | 0.549 | 22 | 0 |
+| combined seed 1 | hdbscan_10 | 6 | 19 | 74 | 99 | 0.75 | 0.522 | 15 | 0.187 |
+| combined seed 1 | hdbscan_20 | 5 | 18 | 75 | 99 | 0.72 | 0.544 | 16 | 0.182 |
 
-Probe (logistic regression of the reference labels, held-out points, balanced accuracy): hand 0.765, learned seed 0 0.751, combined seed 0 0.788, learned seed 1 0.746, combined seed 1 0.790
+Probe (logistic regression of the reference labels, held-out points, balanced accuracy): hand 0.930, learned seed 0 0.943, combined seed 0 0.957, learned seed 1 0.937, combined seed 1 0.959
 
 ## Trainings (last epoch)
 

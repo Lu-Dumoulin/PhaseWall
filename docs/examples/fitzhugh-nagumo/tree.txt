@@ -10,7 +10,7 @@ Splits tried:
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 99 | v.dyn.still | -1.25 | 30 | 69 | 0.944 | 0.304 | 0.8 | 0.879 | 0 | 9.75e+03 | nan | False |
 
-## one run per point: 2 phases (grid halves), ARI 0.375
+## one run per point: 2 phases (grid halves), ARI 0.382
 
 phase 0 (67 points): v.dyn.still <= -1.571
 phase 1 (30 points): v.dyn.still > -1.571

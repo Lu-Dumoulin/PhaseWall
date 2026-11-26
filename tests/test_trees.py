@@ -5,7 +5,7 @@ halves; one run per point (checkerboard halves); one phase in two places joined.
 
 import numpy as np
 import pytest
-from test_walls import DIM, bands, table
+from test_walls import DIM, bands, scattered, table
 
 from phasewall import trees
 
@@ -108,3 +108,15 @@ def test_one_phase_in_two_places_is_one_phase_of_the_tree():
     t = trees.fit_tree(table(bands((0.0, 8.0, 0.0)), noise=0.5, seed=3), ["a", "b"])
     assert t.nodes.leaf.nunique() == 3 and t.n_phases == 2
     assert t.nodes[t.nodes.a == 0].phase.iloc[0] == t.nodes[t.nodes.a == 9].phase.iloc[0]
+
+
+def test_tree_on_scattered_points():
+    """Scattered points get k-NN links; the tree finds the step with the halves of the runs, and
+    the checkerboard, which needs a grid, is refused."""
+    t = scattered(lambda a, b: np.r_[3.0 * (a > 5), np.zeros(DIM - 1)])
+    tree = trees.fit_tree(t, ["a", "b"])
+    assert tree.halves_by == "runs" and tree.n_phases == 2
+    left = tree.nodes.a <= 5
+    assert tree.nodes.loc[left, "phase"].nunique() == 1 and tree.nodes.loc[~left, "phase"].nunique() == 1
+    with pytest.raises(ValueError, match="needs a grid"):
+        trees.fit_tree(t, ["a", "b"], halves_by="grid")

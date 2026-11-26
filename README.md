@@ -3,7 +3,7 @@
 [![tests](https://github.com/Lu-Dumoulin/PhaseWall/actions/workflows/tests.yml/badge.svg)](https://github.com/Lu-Dumoulin/PhaseWall/actions/workflows/tests.yml)
 
 PhaseWall finds the phases of a simulated system. It uses runs that you already computed on a grid
-of parameters. It needs no labels and no number of phases.
+of parameters, or at scattered parameter points. It needs no labels and no number of phases.
 
 ![PhaseWall in one picture: runs on a parameter grid, the phases and walls found, and the four steps](docs/figures/overview.png)
 
@@ -11,7 +11,7 @@ of parameters. It needs no labels and no number of phases.
 
 - **The idea.** PhaseWall puts a wall between two neighbouring parameter points when their
   snapshots differ more than the runs of one point differ from each other.
-- **Input.** Runs on a grid of parameters: 2D snapshots of fields, or 1D kymographs $a(x, t)$, in
+- **Input.** Runs on a grid of parameters or at scattered points: 2D snapshots of fields, or 1D kymographs $a(x, t)$, in
   HDF5 or JLD2 files. A field is a scalar, a velocity, a polarity, a nematic tensor or (in 1D) a
   complex amplitude.
 - **Output.** The phases and their walls, the points where runs end in different states, the
@@ -41,7 +41,7 @@ One snapshot from the middle of each phase found:
 Left: the jump across each link of the grid. Middle: the phases and their walls. Right: the
 state of each point measured directly, which PhaseWall never sees.
 
-![Phase map of the demo](docs/figures/phase_map.png)
+![Phase map of the demo](docs/examples/swift-hohenberg/phase_map_hand.png)
 
 - **Phases.** PhaseWall finds 3 phases. 236 of 240 points carry the most common label of their
   phase. The 4 other points are on the hexagon-stripe boundary, where the 8 runs end in different
@@ -105,6 +105,14 @@ See [Usage](docs/usage.md) for the TOML file, 1D runs, the outputs and the inter
 The test on the other half removes the selection bias: tested on the same runs, the cuts gave
 false walls in 24 of 40 tables of pure noise; tested on the other half, in 0 of 40.
 
+**Scans that are not grids.** Points at random or scattered parameters share no grid line. PhaseWall
+then links each point to its $k = \max(6, 2d)$ nearest neighbours ($d$: number of parameters), with
+each parameter divided by its step (in log for a log scan). It drops links across holes in the
+sampling and corrects the jumps for the length of the link. The cut and the test do not change.
+Swift-Hohenberg at 240 random points gives the same result as the grid (3 phases, ARI 0.94). On
+synthetic tables with 3 to 16 parameters (500 or 2000 random points), the walls are found with the
+right sides and noise gives no false wall. A thin phase needs enough points inside it.
+
 After the cuts, PhaseWall joins two parts of one phase that another phase separates, flags the
 points whose runs end in different states, and moves single points near a wall to the phase they
 resemble. A threshold tree gives the phases as rules on single descriptors, such as "variance
@@ -143,7 +151,7 @@ Details, figures and the learned description: [Examples](docs/examples.md).
 ## Tests
 
 1. Run `pip install -e ".[dev]"` once.
-2. Run `pytest -q` (283 tests, about two minutes).
+2. Run `pytest -q` (308 tests, about two minutes).
 
 Every test uses small synthetic data with a known answer. The tests with PyTorch, scikit-learn or
 marimo are skipped when the extra is not installed. See [Development](docs/development.md).
@@ -165,7 +173,8 @@ marimo are skipped when the extra is not installed. See [Development](docs/devel
 - **Power of the test.** Cross-fitting (place with one half, test with the other, then swap)
   could use all runs.
 - **Odd fields.** A field rule for systems symmetric under $u \to -u$.
-- **Scans that are not grids.** Links between nearest neighbours.
+- **Adaptive sampling.** Add runs near the walls found, where a scattered scan has too few points
+  in a thin phase.
 
 ## Acknowledgements
 

@@ -16,7 +16,7 @@ Scripts: `scripts/run_examples.py`, `scripts/tree_examples.py`, `scripts/compare
 | Swift-Hohenberg | 240 x 8 | 3 phases, ARI 0.94 | 3 phases, 0.94 | 3 phases, 0.96 | 3 phases, 0.97 | HDBSCAN 20: 0.78 (20 % noise) |
 | Gray-Scott | 525 x 4 | 8 phases, 0.95 | 10 phases, 0.94 | 1 phase | 4 phases, 0.87 | k-means, $k$ = 7: 0.99 |
 | localised Swift-Hohenberg | 105 x 4 | 3 phases, 1.00 | 3 phases, 1.00 | 3 phases, 1.00 | 3 phases, 1.00 | HDBSCAN 10: 1.00 (13 % noise) |
-| FitzHugh-Nagumo | 99 x 4 | 1 phase | 1 phase | 2 phases, 0.21 | 1 phase | HDBSCAN 20: 0.71 (23 % noise) |
+| FitzHugh-Nagumo | 99 x 4 | 1 phase | 1 phase | 2 phases, 0.22 | 1 phase | HDBSCAN 20: 0.71 (23 % noise) |
 | Barkley | 165 x 4 | 2 phases, 0.58 | 2 phases, 0.58 | 1 phase | 2 phases, 0.58 | HDBSCAN 20: 0.84 (14 % noise) |
 
 - **One state per point.** When each point ends in one state, the walls and the tree agree with the
@@ -36,7 +36,7 @@ Scripts: `scripts/run_examples.py`, `scripts/tree_examples.py`, `scripts/compare
 $\partial_t u = \varepsilon u - (1 + \nabla^2)^2 u + g u^2 - u^3$, $16 \times 15$ points, 8 runs each,
 $t = 5000$.
 
-![Phase map of the demo](figures/phase_map.png)
+![Phase map of the demo](examples/swift-hohenberg/phase_map_hand.png)
 
 - The 4 points that disagree are on the hexagon-stripe boundary. Their 8 runs end in different
   states, often with spots and stripes side by side in one box.
@@ -120,7 +120,10 @@ Walls: rest against activity (ARI 0.58). Plane waves and spirals are not separat
 ## FitzHugh-Nagumo
 
 Hagberg-Meron form, symmetric bistable medium ($\varepsilon$, $\delta$): fronts, moving domains,
-front turbulence, uniform states, labyrinths. Walls: 1 phase (see above for why).
+front turbulence, uniform states, labyrinths. Walls: 1 phase (see above for why). Reference labels: uniform,
+dynamic, fronts, patterns. Spots and holes are one label: $u \to -u$ maps one onto the other, and
+one run often holds round domains and worms side by side. The probe recognises these states
+(0.93 to 0.96).
 
 ## 1D: the complex Ginzburg-Landau equation
 

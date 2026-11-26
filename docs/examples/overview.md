@@ -52,31 +52,6 @@
 | swift-hohenberg | combined seed 1 | kmeans | 5 | 235 | 240 | 0.572 | 0.572 | 5 | 0 | 0.999 |
 | swift-hohenberg | combined seed 1 | hdbscan_10 | 8 | 198 | 240 | 0.719 | 0.575 | 15 | 0.205 | 0.999 |
 | swift-hohenberg | combined seed 1 | hdbscan_20 | 7 | 179 | 240 | 0.721 | 0.41 | 12 | 0.301 | 0.999 |
-| fitzhugh-nagumo | hand | walls | 1 | 33 | 99 | 0 | 0 | 1 | 0 | 0.765 |
-| fitzhugh-nagumo | hand | mixture | 8 | 90 | 99 | 0.554 | 0.554 | 23 | 0 | 0.765 |
-| fitzhugh-nagumo | hand | kmeans | 8 | 88 | 99 | 0.537 | 0.537 | 22 | 0 | 0.765 |
-| fitzhugh-nagumo | hand | hdbscan_10 | 6 | 75 | 99 | 0.699 | 0.515 | 17 | 0.205 | 0.765 |
-| fitzhugh-nagumo | hand | hdbscan_20 | 5 | 71 | 99 | 0.71 | 0.496 | 16 | 0.23 | 0.765 |
-| fitzhugh-nagumo | learned seed 0 | walls | 2 | 44 | 99 | 0.208 | 0.208 | 3 | 0 | 0.751 |
-| fitzhugh-nagumo | learned seed 0 | mixture | 10 | 89 | 99 | 0.426 | 0.426 | 25 | 0 | 0.751 |
-| fitzhugh-nagumo | learned seed 0 | kmeans | 10 | 89 | 99 | 0.426 | 0.426 | 25 | 0 | 0.751 |
-| fitzhugh-nagumo | learned seed 0 | hdbscan_10 | 8 | 78 | 99 | 0.614 | 0.483 | 21 | 0.116 | 0.751 |
-| fitzhugh-nagumo | learned seed 0 | hdbscan_20 | 6 | 54 | 99 | 0.578 | 0.672 | 15 | 0.366 | 0.751 |
-| fitzhugh-nagumo | combined seed 0 | walls | 1 | 33 | 99 | 0 | 0 | 1 | 0 | 0.788 |
-| fitzhugh-nagumo | combined seed 0 | mixture | 9 | 89 | 99 | 0.485 | 0.485 | 24 | 0 | 0.788 |
-| fitzhugh-nagumo | combined seed 0 | kmeans | 8 | 88 | 99 | 0.552 | 0.552 | 21 | 0 | 0.788 |
-| fitzhugh-nagumo | combined seed 0 | hdbscan_10 | 7 | 73 | 99 | 0.75 | 0.519 | 12 | 0.215 | 0.788 |
-| fitzhugh-nagumo | combined seed 0 | hdbscan_20 | 5 | 75 | 99 | 0.72 | 0.55 | 16 | 0.177 | 0.788 |
-| fitzhugh-nagumo | learned seed 1 | walls | 2 | 42 | 99 | 0.182 | 0.182 | 3 | 0 | 0.746 |
-| fitzhugh-nagumo | learned seed 1 | mixture | 10 | 88 | 99 | 0.411 | 0.411 | 27 | 0 | 0.746 |
-| fitzhugh-nagumo | learned seed 1 | kmeans | 10 | 87 | 99 | 0.423 | 0.423 | 27 | 0 | 0.746 |
-| fitzhugh-nagumo | learned seed 1 | hdbscan_10 | 8 | 73 | 99 | 0.568 | 0.481 | 22 | 0.179 | 0.746 |
-| fitzhugh-nagumo | learned seed 1 | hdbscan_20 | 7 | 61 | 99 | 0.626 | 0.581 | 17 | 0.311 | 0.746 |
-| fitzhugh-nagumo | combined seed 1 | walls | 1 | 33 | 99 | 0 | 0 | 1 | 0 | 0.79 |
-| fitzhugh-nagumo | combined seed 1 | mixture | 10 | 89 | 99 | 0.449 | 0.449 | 25 | 0 | 0.79 |
-| fitzhugh-nagumo | combined seed 1 | kmeans | 8 | 88 | 99 | 0.542 | 0.542 | 22 | 0 | 0.79 |
-| fitzhugh-nagumo | combined seed 1 | hdbscan_10 | 6 | 74 | 99 | 0.75 | 0.527 | 15 | 0.187 | 0.79 |
-| fitzhugh-nagumo | combined seed 1 | hdbscan_20 | 5 | 75 | 99 | 0.72 | 0.55 | 16 | 0.182 | 0.79 |
 | gray-scott | hand | walls | 8 | 498 | 525 | 0.947 | 0.947 | 17 | 0 | 0.962 |
 | gray-scott | hand | mixture | 10 | 515 | 525 | 0.953 | 0.953 | 35 | 0 | 0.962 |
 | gray-scott | hand | kmeans | 7 | 516 | 525 | 0.987 | 0.987 | 23 | 0 | 0.962 |
@@ -127,3 +102,28 @@
 | sh-localized | combined seed 1 | kmeans | 5 | 105 | 105 | 0.977 | 0.977 | 7 | 0 | 1 |
 | sh-localized | combined seed 1 | hdbscan_10 | 3 | 88 | 105 | 1 | 0.826 | 5 | 0.181 | 1 |
 | sh-localized | combined seed 1 | hdbscan_20 | 3 | 99 | 105 | 1 | 0.966 | 3 | 0.1 | 1 |
+| fitzhugh-nagumo | hand | walls | 1 | 33 | 99 | 0 | 0 | 1 | 0 | 0.93 |
+| fitzhugh-nagumo | hand | mixture | 8 | 91 | 99 | 0.563 | 0.563 | 23 | 0 | 0.93 |
+| fitzhugh-nagumo | hand | kmeans | 8 | 89 | 99 | 0.545 | 0.545 | 22 | 0 | 0.93 |
+| fitzhugh-nagumo | hand | hdbscan_10 | 6 | 75 | 99 | 0.699 | 0.512 | 17 | 0.205 | 0.93 |
+| fitzhugh-nagumo | hand | hdbscan_20 | 5 | 71 | 99 | 0.71 | 0.496 | 16 | 0.23 | 0.93 |
+| fitzhugh-nagumo | learned seed 0 | walls | 2 | 44 | 99 | 0.215 | 0.215 | 3 | 0 | 0.943 |
+| fitzhugh-nagumo | learned seed 0 | mixture | 10 | 90 | 99 | 0.435 | 0.435 | 25 | 0 | 0.943 |
+| fitzhugh-nagumo | learned seed 0 | kmeans | 10 | 90 | 99 | 0.435 | 0.435 | 25 | 0 | 0.943 |
+| fitzhugh-nagumo | learned seed 0 | hdbscan_10 | 8 | 79 | 99 | 0.632 | 0.498 | 21 | 0.116 | 0.943 |
+| fitzhugh-nagumo | learned seed 0 | hdbscan_20 | 6 | 55 | 99 | 0.606 | 0.683 | 15 | 0.366 | 0.943 |
+| fitzhugh-nagumo | combined seed 0 | walls | 1 | 33 | 99 | 0 | 0 | 1 | 0 | 0.957 |
+| fitzhugh-nagumo | combined seed 0 | mixture | 9 | 90 | 99 | 0.493 | 0.493 | 24 | 0 | 0.957 |
+| fitzhugh-nagumo | combined seed 0 | kmeans | 8 | 89 | 99 | 0.559 | 0.559 | 21 | 0 | 0.957 |
+| fitzhugh-nagumo | combined seed 0 | hdbscan_10 | 7 | 73 | 99 | 0.75 | 0.514 | 12 | 0.215 | 0.957 |
+| fitzhugh-nagumo | combined seed 0 | hdbscan_20 | 5 | 75 | 99 | 0.72 | 0.544 | 16 | 0.177 | 0.957 |
+| fitzhugh-nagumo | learned seed 1 | walls | 2 | 42 | 99 | 0.19 | 0.19 | 3 | 0 | 0.937 |
+| fitzhugh-nagumo | learned seed 1 | mixture | 10 | 89 | 99 | 0.42 | 0.42 | 27 | 0 | 0.937 |
+| fitzhugh-nagumo | learned seed 1 | kmeans | 10 | 88 | 99 | 0.432 | 0.432 | 27 | 0 | 0.937 |
+| fitzhugh-nagumo | learned seed 1 | hdbscan_10 | 8 | 74 | 99 | 0.589 | 0.496 | 22 | 0.179 | 0.937 |
+| fitzhugh-nagumo | learned seed 1 | hdbscan_20 | 7 | 62 | 99 | 0.652 | 0.593 | 17 | 0.311 | 0.937 |
+| fitzhugh-nagumo | combined seed 1 | walls | 1 | 33 | 99 | 0 | 0 | 1 | 0 | 0.959 |
+| fitzhugh-nagumo | combined seed 1 | mixture | 10 | 90 | 99 | 0.457 | 0.457 | 25 | 0 | 0.959 |
+| fitzhugh-nagumo | combined seed 1 | kmeans | 8 | 89 | 99 | 0.549 | 0.549 | 22 | 0 | 0.959 |
+| fitzhugh-nagumo | combined seed 1 | hdbscan_10 | 6 | 74 | 99 | 0.75 | 0.522 | 15 | 0.187 | 0.959 |
+| fitzhugh-nagumo | combined seed 1 | hdbscan_20 | 5 | 75 | 99 | 0.72 | 0.544 | 16 | 0.182 | 0.959 |

@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 from phasewall import walls as w
+from phasewall.graph import grid_edges
 
 NA, NB = 10, 8          # grid of NA x NB parameter points
 RUNS, SNAPS = 2, 5      # runs per point, snapshots per run
@@ -236,7 +237,7 @@ def small_piece(level_of_piece: float):
     level = np.array([0.0, 8.0, level_of_piece, 16.0])[phase]
     X = np.repeat(level, 10)[:, None] + 0.5 * rng.standard_normal((len(pts) * 10, DIM))
     rows_of = [np.arange(10 * n, 10 * n + 10) for n in range(len(pts))]
-    e = w.grid_edges(pts)
+    e = grid_edges(pts)
     return w.merge_phases(phase, pts, e.a.to_numpy(), e.b.to_numpy(), X, rows_of, floor=0.1, noise=0.5)
 
 
@@ -314,3 +315,105 @@ def test_wall_observables_name_the_column_that_jumps():
     assert tops == {"f.blk.x0", "f.blk.x1"} and (obs.ratio > 5).all()
     row = obs[obs.column == "f.blk.x0"].iloc[0]
     assert abs(row.value_a - row.value_b) == pytest.approx(6.0, abs=1.0)    # in the units of the column
+
+
+# ---------------------------------------------------------------- scattered points (k-NN links)
+
+N_SCATTERED = 80        # as many points as the NA x NB grid, drawn at random in the same box
+
+
+def scattered(mean_of, noise: float = 1.0, seed: int = 0) -> pd.DataFrame:
+    """As `table`, at N_SCATTERED points drawn uniformly in [0, NA] x [0, NB]."""
+    rng = np.random.default_rng(seed)
+    pts = rng.uniform([0, 0], [NA, NB], size=(N_SCATTERED, 2))
+    rows, run = [], 0
+    for a, b in pts:
+        for _ in range(RUNS):
+            m = mean_of(a, b)
+            for t in range(SNAPS):
+                x = m + noise * rng.standard_normal(DIM)
+                rows.append({"run": run, "time": float(t), "a": a, "b": b} | {f"f.blk.x{j}": x[j] for j in range(DIM)})
+            run += 1
+    return pd.DataFrame(rows)
+
+
+def right_sides(res: w.Walls, truth) -> bool:
+    """Every phase holds the points of one true side, and every side lies in one phase."""
+    n = res.nodes
+    t = pd.crosstab(np.array([truth(a, b) for a, b in zip(n.a, n.b)]), n.phase.to_numpy())
+    return bool(((t > 0).sum(axis=0) == 1).all() and ((t > 0).sum(axis=1) == 1).all())
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_scattered_points_no_wall_in_noise(seed):
+    res = w.find_walls(scattered(lambda a, b: np.zeros(DIM), seed=seed), ["a", "b"])
+    assert res.settings["graph"] == "knn" and res.n_phases == 1
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_scattered_points_no_wall_under_a_drift(seed):
+    res = w.find_walls(scattered(lambda a, b: np.r_[0.4 * a, 0.3 * b, np.zeros(DIM - 2)], seed=seed), ["a", "b"])
+    assert res.n_phases == 1
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_scattered_points_two_phases(seed):
+    res = w.find_walls(scattered(lambda a, b: np.full(DIM, 3.0 * (a > 5)), seed=seed), ["a", "b"])
+    assert res.n_phases == 2 and right_sides(res, lambda a, b: a > 5)
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_scattered_points_three_phases_on_a_drift(seed):
+    def mean(a, b):
+        m = np.full(DIM, 0.2 * a + 0.1 * b)
+        m[:3] += 3.0 * (a > 5)
+        m[3:] += 3.0 * ((a > 5) & (b > 4))
+        return m
+
+    res = w.find_walls(scattered(mean, seed=seed), ["a", "b"])
+    assert res.n_phases == 3 and right_sides(res, lambda a, b: int(a > 5) + int((a > 5) & (b > 4)))
+
+
+def test_a_grid_keeps_its_grid_links():
+    """graph="auto" on a grid gives exactly the grid result; forcing k-NN on it still finds the wall."""
+    t = table(lambda a, b: np.full(DIM, 3.0 * (a > 5)))
+    auto, grid = w.find_walls(t, ["a", "b"]), w.find_walls(t, ["a", "b"], graph="grid")
+    assert auto.settings["graph"] == "grid" and auto.settings["length_slope"] == 0.0
+    assert (auto.nodes.phase.to_numpy() == grid.nodes.phase.to_numpy()).all()
+    assert auto.edges.equals(grid.edges)
+    knn = w.find_walls(t, ["a", "b"], graph="knn")
+    assert knn.n_phases == 2 and right_sides(knn, lambda a, b: a > 5)
+
+
+def test_longer_links_are_corrected_for_their_length():
+    """A smooth drift seen through links of different lengths: the fitted slope is positive and
+    the corrected jumps no longer grow with the length."""
+    res = w.find_walls(scattered(lambda a, b: np.r_[a, b, a, b, a, b]), ["a", "b"])
+    e = res.edges
+    assert res.n_phases == 1 and res.settings["length_slope"] > 0.5
+    rel = np.log(e.length / e.length.median())
+    raw = np.log(e.jump_test) + res.settings["length_slope"] * rel
+    assert np.corrcoef(rel, raw)[0, 1] > 0.5 and abs(np.corrcoef(rel, np.log(e.jump_test))[0, 1]) < 0.3
+
+
+def test_many_parameters():
+    """Eight parameters, 400 random points, 2 runs each: no wall in noise; one wall at x0 = 0.5
+    (3 noise widths in every column), with the right sides, although every link also spans the
+    seven other parameters."""
+    rng = np.random.default_rng(5)
+    pts = rng.uniform(0, 1, (400, 8))
+    names = [f"x{i}" for i in range(8)]
+
+    def tab(step):
+        rows = np.repeat(np.arange(len(pts)), RUNS * SNAPS)
+        X = 3.0 * step * (pts[rows, 0] > 0.5)[:, None] + rng.standard_normal((len(rows), DIM))
+        t = pd.DataFrame(X, columns=[f"f.blk.x{j}" for j in range(DIM)])
+        t.insert(0, "time", np.tile(np.arange(SNAPS, dtype=float), len(pts) * RUNS))
+        t.insert(0, "run", np.repeat(np.arange(len(pts) * RUNS), SNAPS))
+        return t.assign(**{n: pts[rows, i] for i, n in enumerate(names)})
+
+    assert w.find_walls(tab(0), names).n_phases == 1
+    res = w.find_walls(tab(1), names)
+    assert res.settings["graph"] == "knn" and res.n_phases == 2
+    sides = pd.crosstab(res.nodes.x0 > 0.5, res.nodes.phase)
+    assert ((sides > 0).sum(axis=1) == 1).all() and ((sides > 0).sum(axis=0) == 1).all()

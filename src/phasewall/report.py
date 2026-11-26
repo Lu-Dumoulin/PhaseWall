@@ -155,10 +155,21 @@ def _steps(w: Walls) -> np.ndarray:
 
 def wall_segments(w: Walls) -> list[tuple[tuple[float, float], tuple[float, float]]]:
     """For a scan of two parameters: one segment per wall link, through the middle of the
-    link and across it, one step of the other parameter long."""
+    link and across it, one step of the other parameter long (k-NN links of scattered points:
+    perpendicular to the link in step units, one median link long)."""
     pts = w.nodes[w.parameters].to_numpy()
     steps = _steps(w)
     segs = []
+    if (w.edges["axis"] < 0).any():         # k-NN links: across the link, one median link long
+        gap = np.array([np.median(np.diff(np.unique(pts[:, k]))) if len(np.unique(pts[:, k])) > 1 else 1.0
+                        for k in range(2)])
+        unit = float(np.median(np.linalg.norm((pts[w.edges.b] - pts[w.edges.a]) / gap, axis=1)))
+        for e in w.edges[w.edges.wall].itertuples():
+            mid = (pts[e.a] + pts[e.b]) / 2
+            d = (pts[e.b] - pts[e.a]) / gap
+            n = np.array([-d[1], d[0]]) / max(np.linalg.norm(d), 1e-12) * unit / 2 * gap
+            segs.append((tuple(mid - n), tuple(mid + n)))
+        return segs
     for e in w.edges[w.edges.wall].itertuples():
         mid = (pts[e.a] + pts[e.b]) / 2
         other = 1 - e.axis
@@ -180,9 +191,18 @@ def _points_by_class(ax, x, y, classes, names) -> None:
         ax.scatter(x[m], y[m], s=26, c=colour, marker=marker, linewidths=0, label=names(c), zorder=3)
 
 
+LEGEND_ROW_CHARACTERS = 48   # a choice: longer legend rows overflow a panel of 4.4 inches at font size 8
+
+
 def _legend(ax) -> None:
-    n = len(ax.get_legend_handles_labels()[0])
-    leg = ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=n if n <= 5 else 3, fontsize=8,
+    labels = ax.get_legend_handles_labels()[1]
+    n = len(labels)
+    ncol = n if n <= 5 else 3
+    # fewer columns until the longest row fits under the panel
+    while ncol > 1 and max(sum(len(t) + 4 for t in labels[i:i + ncol]) for i in range(0, n, ncol)) \
+            > LEGEND_ROW_CHARACTERS:
+        ncol -= 1
+    leg = ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.16), ncol=max(ncol, 1), fontsize=8,
                     frameon=False, handletextpad=0.2, columnspacing=0.9)
     for t in leg.get_texts():
         t.set_color(INK)

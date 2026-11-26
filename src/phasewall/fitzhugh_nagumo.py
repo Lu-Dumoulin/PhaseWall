@@ -18,8 +18,11 @@ the field. Snapshots of u and v are written every `every` time units after t_rel
 Julia writes arrays.
 
 reference_label (approximate, from the last two snapshots of u; only to check phasewall):
-'uniform' (up or down, equivalent by symmetry), 'dynamic', 'spots', 'holes', 'stripes'
-(labyrinths), 'fronts' (at most two domains).
+'uniform' (up or down, equivalent by symmetry), 'dynamic', 'fronts' (at most two domains),
+'patterns' (stationary, three domains or more). Spots, holes and labyrinths are one label: with
+a0 = 0, spots of u > 0 and holes of u < 0 are images of each other under the symmetry, and in this
+box one run often holds round domains and worms side by side (until 2026-11-25 they were three
+labels, set by a threshold on the share of compact domains, which split one state).
 """
 
 import itertools
@@ -29,7 +32,6 @@ import numpy as np
 import pandas as pd
 
 from .describe import count_domains
-from .gray_scott import compact_share
 from .io import write_snapshot
 from .parallel import run_jobs
 
@@ -53,7 +55,6 @@ QUICK = {"eps": EPS[::4], "delta": DELTA[::3], "n": 64, "t_relax": 500.0}
 # reference_label thresholds (choices)
 FLAT_STD = 1e-3
 MOVING = 0.1            # 1 - correlation of u between the last two snapshots above this: dynamic
-COMPACT_SHARE = 0.7
 
 
 def wavenumbers(n: int, dx: float) -> np.ndarray:
@@ -104,18 +105,10 @@ def reference_label(snaps: list[dict[str, np.ndarray]]) -> str:
     den = np.sqrt(np.sum(a * a) * np.sum(b * b))
     if den > 0 and 1 - np.sum(a * b) / den > MOVING:
         return "dynamic"
-    i, j = np.unravel_index(np.argmax(u), u.shape)
-    u = np.roll(u, (u.shape[0] // 2 - i, u.shape[1] // 2 - j), axis=(0, 1))
     up = u > 0
-    n_up, share_up = compact_share(up)
-    n_dn, share_dn = compact_share(~up)
     if count_domains(up) + count_domains(~up) <= 2:      # periodic: a band and its complement
         return "fronts"
-    if share_up > COMPACT_SHARE and n_up >= n_dn:
-        return "spots"
-    if share_dn > COMPACT_SHARE and n_dn > n_up:
-        return "holes"
-    return "stripes"
+    return "patterns"
 
 
 def _one(args):

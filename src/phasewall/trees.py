@@ -72,7 +72,7 @@ import pandas as pd
 from scipy.stats import mannwhitneyu
 
 from .describe import descriptor_columns
-from .graph import grid_edges, parameter_nodes
+from .graph import links, parameter_nodes
 from .walls import ALPHA, MERGE, MIN_PHASE, RATIO, Walls, halves, merge_table_phases, pieces
 
 N_THRESHOLDS = 32       # candidate thresholds per descriptor and region, at quantiles (a choice)
@@ -316,13 +316,16 @@ def fit_tree(table: pd.DataFrame, parameters: list[str], columns: list[str] | No
     cols = columns or descriptor_columns(table)
     _, points, names, v1, v2, mean, std = point_values(table, parameters, cols, use_components)
     v_all, runs_per_point = point_medians(table, parameters, cols, use_components)
-    if halves_by == "auto":
-        halves_by = "grid" if np.median(runs_per_point) < 2 else "runs"
+    lk = links(points)                  # grid links, or k-NN links for scattered points
+    if halves_by == "auto":             # the checkerboard needs a grid; scattered points use the runs
+        halves_by = "grid" if np.median(runs_per_point) < 2 and lk.kind == "grid" else "runs"
     if halves_by not in ("runs", "grid"):
         raise ValueError(f"halves_by must be 'auto', 'runs' or 'grid', not {halves_by!r}")
+    if halves_by == "grid" and lk.kind != "grid":
+        raise ValueError("halves_by='grid' (checkerboard) needs a grid scan; these points are scattered")
     if swap:
         v1, v2 = v2, v1
-    edges = grid_edges(points)
+    edges = lk.edges.drop(columns="length")
     if halves_by == "grid":
         colour, same = checkerboard(points)
         same_a, same_b, same_axis = same["a"].to_numpy(), same["b"].to_numpy(), same["axis"].to_numpy()
@@ -398,7 +401,7 @@ def fit_tree(table: pd.DataFrame, parameters: list[str], columns: list[str] | No
     if merge:
         nodes["phase_unmerged"] = nodes["phase"]
         nodes["phase"], merges = merge_table_phases(table, parameters, nodes["phase"].to_numpy(), cols, ratio)
-    edges["param"] = [parameters[x] for x in edges["axis"]]
+    edges["param"] = [parameters[x] if x >= 0 else "k-NN" for x in edges["axis"]]
     edges["wall"] = leaf[a] != leaf[b]
     return Tree(nodes, edges, pd.DataFrame(tried), rules, list(parameters), names, merges, halves_by)
 

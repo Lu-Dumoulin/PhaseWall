@@ -23,7 +23,8 @@
   \foreach \r/\b in {0.13/1, 0.34/2, 0.77/3} \draw[cP0, thick] ({1.5-\r},{0.6-\r}) rectangle ({1.5+\r},{0.6+\r});
   \node[small, anchor=west] at (3.0,1.4) {1 block: 7 points};
   \node[small, anchor=west] at (3.0,0.9) {2 blocks: 19};
-  \node[small, anchor=west] at (3.0,0.4) {3 blocks: 43; 4 blocks: 91};
+  \node[small, anchor=west] at (3.0,0.4) {3 blocks: 43};
+  \node[small, anchor=west] at (3.0,-0.1) {4 blocks: 91};
   \node[note, text width=6.6cm, align=left, anchor=west] at (6.2,0.6)
     {\textbf{Checked before training:} last map of at least 2 points per side (blocks $\le\log_2(n/2)$);
      channels never decrease (width $\le\dim h$); projection $\le\dim h$ and $\le$ hidden; values in

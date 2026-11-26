@@ -37,6 +37,17 @@ of the snapshots jumps more than it does on either side.
 The links are not independent (neighbouring jumps are correlated), so p is used as a score
 with a strict threshold, not as an exact probability.
 
+The graph (graph.links): grid links when the scan is a grid, else k-nearest-neighbour links of
+scattered points (graph.knn_edges). Their lengths differ, and inside a phase a longer link jumps
+more (the description drifts), while across a wall it does not. So for k-NN links log J1, log J2
+and log J are corrected for the length before steps 2 and 3: minus beta log(length / median
+length), with beta the Theil-Sen slope of log J against log length over all links (robust to the
+few wall links). On a grid every link has length 1 and nothing changes. The test uses every
+link: tested only on each point's 4 nearest, the hexagon-stripe wall of Swift-Hohenberg at
+scattered points looked weak (ratio 1.38 against 2.43), since next to the boundary the shortest
+links join points of the same bistable band (2026-11-25). Grid steps in steps 4 and 5 are then
+distances in units of the median link length.
+
 A flag per point (it does not change the walls):
 - `mixed`: next to a first-order transition the runs of one point can fall in different states
   (bistability, hysteresis); the spread between the halves of runs of such a point is an
@@ -106,10 +117,10 @@ import pandas as pd
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import connected_components
 from scipy.spatial.distance import cdist
-from scipy.stats import mannwhitneyu
+from scipy.stats import mannwhitneyu, theilslopes
 
 from .describe import descriptor_columns
-from .graph import grid_edges, parameter_nodes
+from .graph import links, parameter_nodes
 
 ALPHA = 1e-3           # a cut is a wall if the Mann-Whitney p is below this ... (a choice)
 RATIO = 1.5            # ... and its crossing links jump RATIO times more than the inner ones (a choice)
@@ -369,13 +380,14 @@ def split_in_space(members: np.ndarray, pos: np.ndarray) -> tuple[np.ndarray, np
 
 def merge_phases(phase: np.ndarray, points: np.ndarray, a: np.ndarray, b: np.ndarray, X: np.ndarray,
                  rows_of: list[np.ndarray], floor: float, ratio: float = RATIO, rng=None,
-                 noise: float | None = None) -> tuple[np.ndarray, pd.DataFrame]:
+                 noise: float | None = None, steps: np.ndarray | None = None) -> tuple[np.ndarray, pd.DataFrame]:
     """Step 4 of the module docstring. phase: phase of every node (-1: boundary region); a, b:
     the links; X, rows_of: the feature rows of every node; noise: median spread of a point, the
-    scale when neither phase of a pair can be split (default: floor). Returns the new phase of
-    every node (numbered from the largest) and one row per pair of phases tested."""
+    scale when neither phase of a pair can be split (default: floor); steps: point coordinates in
+    steps (graph.Links.steps; default: grid ranks). Returns the new phase of every node (numbered
+    from the largest) and one row per pair of phases tested."""
     rng = rng or np.random.default_rng(SEED)
-    pos = grid_coordinates(points)
+    pos = grid_coordinates(points) if steps is None else np.asarray(steps, dtype=float)
     labels = sorted(set(phase.tolist()) - {-1})
     touching = {(min(p, q), max(p, q)) for p, q in zip(phase[a], phase[b]) if p != q}
 
@@ -420,11 +432,13 @@ def merge_phases(phase: np.ndarray, points: np.ndarray, a: np.ndarray, b: np.nda
 
 
 def reassign_near_walls(phase: np.ndarray, points: np.ndarray, X: np.ndarray, rows_of: list[np.ndarray],
-                        ratio: float = REASSIGN_RATIO, near: int = NEAR, rng=None) -> tuple[np.ndarray, pd.DataFrame]:
+                        ratio: float = REASSIGN_RATIO, near: int = NEAR, rng=None,
+                        steps: np.ndarray | None = None) -> tuple[np.ndarray, pd.DataFrame]:
     """Step 5 of the module docstring: the new phase of every node and one row per point moved
-    (node, from, to, distance to its own core, distance to the new core, their ratio)."""
+    (node, from, to, distance to its own core, distance to the new core, their ratio). steps:
+    point coordinates in steps (graph.Links.steps; default: grid ranks)."""
     rng = rng or np.random.default_rng(SEED)
-    pos = grid_coordinates(points)
+    pos = grid_coordinates(points) if steps is None else np.asarray(steps, dtype=float)
     labels = sorted(set(phase.tolist()) - {-1})
     if len(labels) < 2:
         return phase.copy(), pd.DataFrame()
@@ -456,8 +470,8 @@ def reassign_near_walls(phase: np.ndarray, points: np.ndarray, X: np.ndarray, ro
 
 
 def merge_table_phases(table: pd.DataFrame, parameters: list[str], phase: np.ndarray,
-                       columns: list[str] | None = None, ratio: float = RATIO, seed: int = SEED
-                       ) -> tuple[np.ndarray, pd.DataFrame]:
+                       columns: list[str] | None = None, ratio: float = RATIO, seed: int = SEED,
+                       graph: str = "auto") -> tuple[np.ndarray, pd.DataFrame]:
     """Step 4 for phases found by another method (the threshold tree): `phase` of every
     parameter point, numbered as graph.parameter_nodes numbers them."""
     X, _ = feature_matrix(table, columns)
@@ -476,9 +490,9 @@ def merge_table_phases(table: pd.DataFrame, parameters: list[str], phase: np.nda
     positive = np.array([x for x in spreads if x > 0])
     floor = float(np.quantile(positive, FLOOR_QUANTILE)) if len(positive) else 1.0
     noise = max(float(np.median(positive)), floor) if len(positive) else floor
-    edges = grid_edges(points)
-    return merge_phases(np.asarray(phase), points, edges["a"].to_numpy(), edges["b"].to_numpy(), X, rows_of,
-                        floor, ratio, rng, noise=noise)
+    lk = links(points, graph)
+    return merge_phases(np.asarray(phase), points, lk.edges["a"].to_numpy(), lk.edges["b"].to_numpy(), X, rows_of,
+                        floor, ratio, rng, noise=noise, steps=lk.steps)
 
 
 def ended_early(table: pd.DataFrame, parameters: list[str], fraction: float | None = END_FRACTION
@@ -500,12 +514,13 @@ def _point_keys(frame: pd.DataFrame, parameters: list[str]) -> list[tuple]:
 def find_walls(table: pd.DataFrame, parameters: list[str], columns: list[str] | None = None,
                alpha: float = ALPHA, ratio: float = RATIO, min_phase: int = MIN_PHASE,
                seed: int = SEED, merge: bool = MERGE, end_fraction: float | None = END_FRACTION,
-               reassign: bool = REASSIGN) -> Walls:
+               reassign: bool = REASSIGN, graph: str = "auto") -> Walls:
     """Walls and candidate phases of a table of descriptors (one row per snapshot, columns
     run, time, the parameters and the descriptors). merge: join phases in separate places
     that are one phase (step 4 of the module docstring); end_fraction: runs that ended early
     are left out (step 0; None keeps every run); reassign: points near the walls join the
-    phase whose core they are much closer to (step 5)."""
+    phase whose core they are much closer to (step 5); graph: "grid", "knn" or "auto" (grid links
+    for a grid, k-nearest-neighbour links for scattered points; see the module docstring)."""
     ended = ended_early(table, parameters, end_fraction)
     if len(ended):
         table = table[~table["run"].isin(ended["run"])]
@@ -528,8 +543,9 @@ def find_walls(table: pd.DataFrame, parameters: list[str], columns: list[str] | 
     spread = np.sqrt(np.maximum(within, 0.0))
     by_runs = np.array([len(np.unique(run[i])) > 1 for i in rows_of])
 
-    edges = grid_edges(points)
-    edges["param"] = [parameters[a] for a in edges["axis"]]
+    lk = links(points, graph)
+    edges = lk.edges.drop(columns="length")
+    edges["param"] = [parameters[a] if a >= 0 else "k-NN" for a in edges["axis"]]
     edges["jump"] = [jump(X, split[a], split[b], rows_of[a], rows_of[b]) for a, b in zip(edges.a, edges.b)]
     positive = spread[spread > 0]
     # no point with any spread: floor and noise come from the jumps themselves (a choice)
@@ -537,11 +553,21 @@ def find_walls(table: pd.DataFrame, parameters: list[str], columns: list[str] | 
     floor = float(np.quantile(pool, FLOOR_QUANTILE)) if len(pool) else 1.0
     noise = max(float(np.median(pool)), floor) if len(pool) else 1.0
     log_jump = np.log(np.maximum(edges["jump"].to_numpy(), floor))
-    edges["contrast"] = np.exp(log_jump) / noise
     j12 = np.array([half_jumps(X, split[a], split[b], rows_of[a], rows_of[b])
                     for a, b in zip(edges.a, edges.b)]).reshape(-1, 2)
-    edges["jump_select"], edges["jump_test"] = j12[:, 0], j12[:, 1]
     log_select, log_test = np.log(np.maximum(j12, floor)).T
+    slope = 0.0
+    if lk.kind == "knn" and len(edges) > 2:          # length correction (module docstring)
+        rel = np.log(lk.edges["length"].to_numpy() / lk.edges["length"].median())
+        if np.ptp(rel) > 0:
+            slope = float(theilslopes(0.5 * (log_select + log_test), rel)[0])
+            log_select, log_test, log_jump = log_select - slope * rel, log_test - slope * rel, log_jump - slope * rel
+        edges["length"] = lk.edges["length"].to_numpy()
+    edges["contrast"] = np.exp(log_jump) / noise
+    if slope:                                         # the corrected jumps (above the floor)
+        edges["jump_select"], edges["jump_test"] = np.exp(log_select), np.exp(log_test)
+    else:
+        edges["jump_select"], edges["jump_test"] = j12[:, 0], j12[:, 1]
 
     region, tried, wall = split_regions(len(points), edges["a"].to_numpy(), edges["b"].to_numpy(),
                                         log_select, alpha, ratio, min_phase, log_test=log_test)
@@ -569,12 +595,13 @@ def find_walls(table: pd.DataFrame, parameters: list[str], columns: list[str] | 
         nodes["phase_unmerged"] = nodes["phase"]
         nodes["phase"], merges = merge_phases(
             nodes["phase"].to_numpy(), points, edges["a"].to_numpy(), edges["b"].to_numpy(), X, rows_of,
-            floor, ratio, rng, noise=noise)
+            floor, ratio, rng, noise=noise, steps=lk.steps)
     moved = pd.DataFrame()
     nodes["reassigned"] = False
     if reassign:
         nodes["phase_walls"] = nodes["phase"]
-        new, moved = reassign_near_walls(nodes["phase"].to_numpy(), points, X, rows_of, REASSIGN_RATIO, NEAR, rng)
+        new, moved = reassign_near_walls(nodes["phase"].to_numpy(), points, X, rows_of, REASSIGN_RATIO, NEAR, rng,
+                                         steps=lk.steps)
         nodes["phase"] = new
         nodes["reassigned"] = nodes["phase"] != nodes["phase_walls"]
     kept = set(_point_keys(nodes, parameters))
@@ -584,7 +611,7 @@ def find_walls(table: pd.DataFrame, parameters: list[str], columns: list[str] | 
     unstable = unstable[~unstable["_key"].isin(kept)].groupby(parameters, as_index=False).agg(
         runs=("run", "size"), end=("end", "max"))
     settings = {"alpha": alpha, "ratio": ratio, "min_phase": min_phase, "merge": merge, "end_fraction": end_fraction,
-                "reassign": reassign}
+                "reassign": reassign, "graph": lk.kind, "length_slope": slope}
     return Walls(nodes, edges, pd.DataFrame(tried), floor, noise, list(parameters), names, settings, merges,
                  moved, ended, unstable)
 

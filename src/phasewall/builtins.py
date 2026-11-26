@@ -179,13 +179,16 @@ class WallsSettings:
     merge: bool = field(default=MERGE, metadata={"help": "join separated parts of one phase"})
     reassign: bool = field(default=REASSIGN, metadata={
         "help": "points near the walls join the phase whose core they are much closer to"})
+    graph: str = field(default="auto", metadata={
+        "help": "links between points: grid steps, k nearest neighbours (scattered points), or auto",
+        "choices": ("auto", "grid", "knn")})
 
 
 @method("walls", WallsSettings, help="walls between neighbouring points: spectral cuts, tested (walls.py)",
         uses_grid=True)
 def walls(table, parameters, settings: WallsSettings, context: Context) -> MethodResult:
     w = find_walls(table, parameters, alpha=settings.alpha, ratio=settings.ratio, min_phase=settings.min_phase,
-                   merge=settings.merge, reassign=settings.reassign)
+                   merge=settings.merge, reassign=settings.reassign, graph=settings.graph)
     kept = table[~table["run"].isin(w.ended["run"])] if len(w.ended) else table
     groups = _groups_of_points(kept, parameters, w.nodes["phase"].to_numpy())
     # runs that ended early belong to no phase (-1, as boundary points)

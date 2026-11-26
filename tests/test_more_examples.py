@@ -31,7 +31,9 @@ def test_fitzhugh_nagumo_labels():
     assert fhn.reference_label([two, two]) == "fronts"
     d = np.hypot((X % 16) - 8, (Y % 16) - 8)
     spots = {"u": np.where(d < 3, 0.7, -0.7)}
-    assert fhn.reference_label([spots, spots]) == "spots"
+    assert fhn.reference_label([spots, spots]) == "patterns"
+    holes = {"u": -spots["u"]}                     # the image of the spots under u -> -u
+    assert fhn.reference_label([holes, holes]) == "patterns"
     rng = np.random.default_rng(0)
     assert fhn.reference_label([{"u": rng.standard_normal((N, N))}, {"u": rng.standard_normal((N, N))}]) == "dynamic"
 

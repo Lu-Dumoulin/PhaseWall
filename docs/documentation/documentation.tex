@@ -26,6 +26,8 @@
 \setlength{\parindent}{0pt}
 \setlength{\parskip}{0.5em}
 \setcounter{tocdepth}{2}
+% a page never breaks inside a paragraph (a choice: short paragraphs, readability over even pages)
+\interlinepenalty=10000 \clubpenalty=10000 \widowpenalty=10000 \displaywidowpenalty=10000 \postdisplaypenalty=10000 \predisplaypenalty=10000
 
 % Three kinds of boxes, printable (white background): mathematics and physics parallel (blue,
 % thick left bar), algorithm (green, thin, rounded), code (orange, dashed).
@@ -34,14 +36,15 @@
   attach boxed title to top left={xshift=5mm, yshift*=-\tcboxedtitleheight/2},
   boxed title style={colback=white, colframe=white, boxrule=0pt, sharp corners,
     left=2pt, right=2pt, top=0pt, bottom=0pt},
-  before upper={\setlength{\parskip}{0.5em}}}}
+  before upper={\setlength{\parskip}{0.5em}\interlinepenalty=10000\predisplaypenalty=10000\postdisplaypenalty=10000}}}
 \newtcolorbox{tech}{pwbox, title={Mathematics and physics parallel}, sharp corners,
   colframe=blue!50!black, coltitle=blue!50!black, boxrule=0.5pt, borderline west={2.5pt}{0pt}{blue!50!black}}
-\newtcolorbox{algobox}[1]{pwbox, title={Algorithm: #1}, rounded corners, arc=2mm,
+\newtcolorbox{algobox}[1]{pwbox, unbreakable, title={Algorithm: #1}, rounded corners, arc=2mm,
   colframe=green!40!black, coltitle=green!40!black, boxrule=0.6pt,
   before upper={\setlength{\parskip}{0.2em}\small}}
 \newtcolorbox{codebox}{pwbox, title={Code}, sharp corners, frame hidden, coltitle=orange!55!black,
-  borderline={0.7pt}{0pt}{orange!55!black, dashed}, before upper={\setlength{\parskip}{0.4em}\raggedright}}
+  borderline={0.7pt}{0pt}{orange!55!black, dashed},
+  before upper={\setlength{\parskip}{0.4em}\raggedright\interlinepenalty=10000}}
 \algrenewcommand\algorithmicrequire{\textbf{Input:}}
 \algrenewcommand\algorithmicensure{\textbf{Output:}}
 
@@ -815,6 +818,112 @@ seeds) or under a smooth drift. Exactly the 8 links between $a=5$ and $a=6$ for 
 three phases on a smooth background. The count against \code{RATIO} is 2, 2, 1 for 1.5, 2, $10^6$.
 \end{codebox}
 
+\subsection{Scattered points: k-nearest-neighbour links}\label{sec:knn}
+
+\begin{tech}
+\textbf{Why.} Grid links join points that share the values of all the other parameters. Points at
+random or space-filling parameters share none: no link, no wall. \pw{} uses grid links when at least
+90\% of the points have one and they join all the points (\code{GRID_SHARE}); otherwise it links each
+point to its $k$ nearest neighbours.
+
+\textbf{Distances.} Each parameter is divided by the median gap between its sorted values. On a grid
+the gap is the step, so the 4 nearest are the grid neighbours; for random points it is about
+range/points, the same factor for every parameter. A positive parameter whose values are spread more
+evenly in $\log_{10}$ than in linear scale (smaller Kolmogorov-Smirnov distance to a uniform spread),
+over at least a factor 4, is taken in $\log_{10}$ first (FitzHugh-Nagumo sampled in log: 1 phase in
+linear distances, 2 in log).
+
+\textbf{Links.} Each point chooses its $k=\max(6,2d)$ nearest ($d$: number of parameters; 6 up to 3
+parameters, 8 for 4, 10 for 5); a link is kept if either point chose it (about 7 links per point for
+$k=6$). Links longer than $3\tilde\ell$ are dropped: they cross a hole in the sampling, where
+the state can change without a wall.
+
+\textbf{Length.} Inside a phase the description drifts, so a longer link jumps more; across a wall it
+does not. For $k$-NN links,
+\[
+\log J\;\to\;\log J-\beta\log(\ell/\tilde\ell),
+\]
+for $J$, $J_1$ and $J_2$, with $\beta$ the Theil-Sen slope of $\log J$ against $\log(\ell/\tilde\ell)$
+over all links (robust to the few wall links). Then cut and test as in Sec.~\ref{sec:walls}, on every
+link. Grid steps in Sec.~\ref{sec:merge} become median link lengths.
+
+\textbf{Test on every link.} Tested only on each point's 4 nearest links, the hexagon-stripe wall of
+Swift-Hohenberg at random points looked weak (ratio 1.38 against 2.43): next to the boundary the
+shortest links join points of the same bistable band.
+
+\emph{Physics parallel.} The $k$-NN graph is the neighbour list of an off-lattice simulation (a cutoff
+in the number of neighbours instead of a distance). The length correction is the gradient term: a
+smooth field changes in proportion to the distance, a domain wall does not.
+\end{tech}
+
+\begin{algobox}{links of a scan (graph.links)}
+\begin{algorithmic}[1]
+\Require parameter values of the points
+\If{at least 90\% of the points have a grid link and these links join all points}
+  \State links $\gets$ grid links (length 1); steps $\gets$ grid ranks
+\Else
+  \State scale each parameter by its median gap ($\log_{10}$ first if sampled in log)
+  \State link each point to its $k=\max(6,2d)$ nearest; keep a link if either point chose it
+  \State drop links longer than $3\tilde\ell$; steps $\gets$ scaled position$/\tilde\ell$
+\EndIf
+\Ensure links (a, b, length), steps (for the depths of the merge and the reassignment)
+\end{algorithmic}
+\end{algobox}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{../figures/scattered_swift_hohenberg.png}
+\caption{Swift-Hohenberg at 240 random points $\times$ 8 runs (independent starts), $k$-NN links: 3
+phases, ARI 0.94, as on the grid. Each point's Voronoi cell is coloured; walls are drawn along the
+cell edges of the cut links.}\label{fig:knn}
+\end{figure}
+
+\begin{table}[H]
+\centering\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+example (points $\times$ runs, as the grid) & grid & random points, $k$-NN \\
+\midrule
+Swift-Hohenberg ($240\times8$) & 3 phases, 0.94 & 3 phases, 0.94 \\
+FitzHugh-Nagumo ($99\times4$, log) & 1 phase & 2 phases, 0.36 \\
+Barkley ($165\times4$) & 2 phases, 0.58 & 3 phases, 0.59 \\
+localised SH ($105\times4$) & 3 phases, 1.00 & 2 phases, 0.80 \\
+Gray-Scott ($525\times4$) & 8 phases, 0.95 & 7 phases, 0.79 \\
+\bottomrule
+\end{tabular}
+\caption{Walls (hand-made description, ARI) on the grid and at random points in the same box. Losses
+come from thin phases: the localised band holds 11 of 105 random points.}\label{tab:knn}
+\end{table}
+
+\begin{tech}
+\textbf{Cost.} On synthetic noise tables of 80 scattered points, 2 of 100 get a false wall (grid: 0);
+$k=4,6,8,10$ give 0, 2, 1, 5: links that share a point share its samples, and the test takes them as
+independent. $k=4$ finds fewer real walls. \textbf{Tried, not kept:} testing on the 4 nearest links;
+several candidate cuts per step (Gray-Scott 0.79 $\to$ 0.88, but FitzHugh-Nagumo loses its wall and
+fewer weak steps are found); density weights (the failed cuts were not sparse pockets). With 2 runs
+per point the hexagon-stripe wall is too weak at random points, as on the grid.
+
+\textbf{Many parameters.} Synthetic tables: 500 or 2000 random points in $[0,1]^d$, 2 runs per point,
+a wall at $x_0=0.5$ (and a second at $x_1=0.5$ on one side) of 3 noise widths; 10 noise tables and 5
+tables per wall case. With $k=6$: right for 3 to 8 parameters except 1 false wall in 10 noise tables
+(4 parameters); with 16 parameters 1 false wall in 10 and 2 of 20 wall tables wrong. With $k=2d$: every
+table right, for 4, 5, 8 and 16 parameters. Hence $k=\max(6,2d)$. A table of 2000 points in 16
+parameters takes about 12~s. Limits: strong walls, and the description depends only on the parameters
+that carry the walls; weak walls and drifts along many parameters are not tested.
+\end{tech}
+
+\begin{codebox}
+\textbf{Files.} \srcref{src/phasewall/graph.py} (\code{is_grid}, \code{sampled_in_log},
+\code{scaled}, \code{knn_edges}, \code{links}), \srcref{src/phasewall/walls.py}
+(\code{find_walls(graph="auto")}, length correction, \code{steps} for the merge and the
+reassignment). The setting \code{graph} (\code{auto}, \code{grid}, \code{knn}) appears in the
+interface. \textbf{Tests} (\srcref{tests/test_graph.py}, \srcref{tests/test_walls.py}): grid or not;
+step scaling makes the 4 nearest the grid neighbours; log sampling detected; no link across a hole;
+no wall in noise (5 tables) or drift (3), the right sides for two and three phases at scattered
+points; $k=\max(6,2d)$; eight parameters: no wall in noise, one wall with the right sides; the length correction removes the drift with length; a grid keeps exactly its grid result;
+the tree and the wall drawing on scattered points.
+\end{codebox}
+
 \subsection{After the walls}\label{sec:ended}\label{sec:mixed}\label{sec:merge}\label{sec:reassign}
 
 \begin{figure}[H]
@@ -1334,7 +1443,7 @@ $\std u<10^{-3}$, hexagons if $|\text{skewness}|>0.4$, else stripes.
 
 \begin{figure}[H]
 \centering
-\includegraphics[width=\textwidth]{../figures/phase_map.png}
+\includegraphics[width=\textwidth]{../examples/swift-hohenberg/phase_map_hand.png}
 \caption{Left: the jump on each link. Middle: the phases and walls; a square marks a point reassigned to the next
 phase. Right: reference labels, never seen by \pw{}.}\label{fig:phasemap}
 \end{figure}
@@ -1648,8 +1757,9 @@ $\Delta t=0.05$, periodic. Start: a smooth random $u$ (modes up to $6\cdot2\pi/L
 $v=0$. Six snapshots every 50 from $t=3000$. \textbf{Grid:} $\varepsilon\in[0.005,0.5]$ (11) and
 $\delta\in[0.05,8]$ (9), log-spaced, 4 runs per point: 396 runs.
 
-\textbf{Reference labels} (from $u$): uniform, dynamic, spots, holes, stripes, fronts (at most two
-domains). \textbf{Steady state:} no label of 24 continued runs changed.
+\textbf{Reference labels} (from $u$): uniform, dynamic, fronts (at most two domains), patterns
+(stationary, three domains or more). Spots and holes are one label: they are images of each other
+under $u\to-u$, and one run often holds round domains and worms side by side. \textbf{Steady state:} no label of 24 continued runs changed.
 \end{tech}
 
 \begin{figure}[H]
@@ -1669,7 +1779,8 @@ label is not that of the single phase.}\label{fig:fhnstates}\label{fig:fhnmistak
 
 \begin{tech}
 \textbf{Results: two assumptions fail.} Walls and tree give one phase on every description. HDBSCAN
-reaches ARI 0.71 to 0.75 with 12 to 35\% noise. The probe is below 0.8. Two measured causes:
+reaches ARI 0.71 to 0.75 with 12 to 35\% noise. The probe recognises the states (0.93 to 0.96). Two
+measured causes:
 \begin{itemize}[leftmargin=1.2em, itemsep=1pt]
 \item \emph{An odd field.} The model is symmetric under $u\to-u$, the description is not. Uniform
   runs end at $u\approx-0.71$ (79 runs) or $+0.71$ (55) at random, and 22 points have both. A rule
@@ -1816,11 +1927,11 @@ example & description & phases & agree & ARI & closest blind method (ARI, pieces
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 10 & 499 & 0.94 &  &  \\
 \midrule
-\multirow{4}{=}{\textbf{FitzHugh-Nagumo}\\ 99 points $\times$ 4 runs} & hand-made & 1 & 33 & 0 & HDBSCAN 20 (0.71, 16; 23\%) & 0.77 \\
+\multirow{4}{=}{\textbf{FitzHugh-Nagumo}\\ 99 points $\times$ 4 runs} & hand-made & 1 & 33 & 0 & HDBSCAN 20 (0.71, 16; 23\%) & 0.93 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & learned & 2 & 44 & 0.21 & HDBSCAN 10 (0.61, 21; 12\%) & 0.75 \\
+ & learned & 2 & 44 & 0.22 & HDBSCAN 10 (0.63, 21; 12\%) & 0.94 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
- & combined & 1 & 33 & 0 & HDBSCAN 10 (0.75, 12; 21\%) & 0.79 \\
+ & combined & 1 & 33 & 0 & HDBSCAN 10 (0.75, 12; 21\%) & 0.96 \\
 \arrayrulecolor{black!30}\cmidrule[0.3pt](l){2-7}\arrayrulecolor{black}
  & tree & 1 & 33 & 0 &  &  \\
 \midrule
@@ -1861,7 +1972,7 @@ clearly ahead.
 
 \textbf{Learned description.} With the default views it finds the static patterns (Swift-Hohenberg,
 localised SH). It gives one phase on Gray-Scott (the normalisation removes the mean values) and on
-Barkley, two weak ones on FitzHugh-Nagumo, while the probe sees the states (0.75 to 1.00).
+Barkley, two weak ones on FitzHugh-Nagumo, while the probe sees the states (0.93 to 1.00).
 
 \textbf{Combined tables are dominated by small blocks.} Each block has the same weight
 (Sec.~\ref{sec:compare}), so a few hand-made blocks weigh as much as the 256 columns of $h$.
@@ -2109,6 +2220,8 @@ Constant (file) & Value & Role and reason \\
 \code{COMPONENT_NAME} (fields) & stem of 1--3 letters & names taken for components (\code{vx}, \code{Qxy}); \code{rho}, \code{phi} are not \\
 role names (io) & \code{v}, \code{p}, \code{Q}, \ldots & names that suggest a role in the inspector (suggestions only) \\
 \code{DECIMALS} (graph) & 9 & parameter values rounded to identify a point \\
+\code{K_MIN}, \code{K_PER_DIMENSION}, \code{MAX_LENGTH} (graph) & 6, 2, 3 & $k=\max(6,2d)$ neighbours of scattered points; longer links (in median links) dropped \\
+\code{GRID_SHARE}, \code{LOG_SPAN} (graph) & 0.9, 4 & share of points with a grid link for grid links; smallest span for a log scan \\
 \code{ALPHA} (walls) & $10^{-3}$ & Mann-Whitney threshold; strict because links are correlated \\
 \code{RATIO} (walls) & 1.5 & minimum ratio of median crossing to inner $J_2$ \\
 \code{MIN_PHASE} (walls) & 3 & smallest phase and smallest side of a cut, in points \\
@@ -2137,7 +2250,7 @@ imputation and alternate-run halves are choices too (see their docstrings).}
 \section{Tests}\label{sec:tests}
 %======================================================================
 
-\code{pytest} runs 283 tests in about two minutes. All use small synthetic data with a known answer.
+\code{pytest} runs 308 tests in about two minutes. All use small synthetic data with a known answer.
 No laboratory data is in the repository. On each push, \srcref{.github/workflows/tests.yml} runs
 \code{ruff} and \code{pytest}. Tests that need PyTorch, scikit-learn or marimo are skipped without
 them.
@@ -2152,7 +2265,7 @@ Files & What is checked, against which known answer \\
 \code{test_frames} & $S(k)$ of crops against the exact one; finite against spectral derivatives; rotation and mirror invariance; $\Delta x$ against $\Delta x/2$ \\
 \code{test_describe}, \code{test_blocks}, \code{test_explain} & $S(k)$ of one wave; exact moments; spots $m^2$ against stripes $m$; vortex cores of known flows; $\pm1$ and $\pm\frac12$ defects; $F=k^2$ for a turning orientation; parts; invariance of each column under $D_4$ and shifts; every column explained \\
 \code{test_nn}, \code{test_views}, \code{test_architecture}, \code{test_jepa} & views against the field rules; exact turn by $90^\circ$; wavelength kept at any angle; loss at collapse and for perfect pairs; a short training separates stripes from spots; receptive field and weights against PyTorch; save and load; JEPA invariant and without collapse \\
-\code{test_graph}, \code{test_walls} & links of full and refined grids; energy distance; no wall in noise (5 seeds) or drift; exact walls for two and three phases; mixed points; joined parts; ended runs; reassignment \\
+\code{test_graph}, \code{test_walls} & links of full and refined grids; $k$-NN links of scattered points (Sec.~\ref{sec:knn}); energy distance; no wall in noise (5 seeds) or drift; exact walls for two and three phases; mixed points; joined parts; ended runs; reassignment \\
 \code{test_orderparams}, \code{test_trees} & the jumping column first, with its threshold; noise near chance; a combination for a middle phase; tree: no split in noise or drift, the right rules, the checkerboard \\
 \code{test_baselines}, \code{test_contracts} & separated clouds found by every blind method; probe on real and random labels; each registered entry: format, one phase in noise, two on a step, invariance; entries added from outside \\
 \code{test_toy}, \code{test_gray_scott}, \code{test_more_examples} & states at six points; stripe amplitude $\sqrt{2\varepsilon/3}$; labels of known fields; spiral tips; initial patch \\
@@ -2180,8 +2293,9 @@ Files & What is checked, against which known answer \\
 \item \textbf{Correlated links.} $p$ is a score. Its threshold was set on tests and the demo, not
   derived.
 \item \textbf{Non-periodic frames.} Motion is seen up to \code{max_shift}; $S(k)$ up to $L_c/3$.
-\item \textbf{Grids.} Links join neighbours along one parameter. Next step: a nearest-neighbour graph
-  for scattered samples.
+\item \textbf{Scattered points.} $k$-NN links (Sec.~\ref{sec:knn}) give a few more false walls than a
+  grid (2 of 100 noise tables), and a thin phase needs enough points inside it. Next step: adaptive
+  sampling, runs added near the walls found.
 \item \textbf{Predictive description (JEPA), being tested.} The contrastive loss rewards the
   recognition of each run. On dynamic systems the encoder can do this from details set by the
   initial noise (a wavenumber, a position), not from the state. JEPA predicts hidden parts from the
@@ -2212,7 +2326,7 @@ File & Content & Section \\
 \srcref{src/phasewall/frames.py} & crops, coarsening, non-periodic frames & \ref{sec:frames} \\
 \srcref{src/phasewall/describe.py} & hand-made encoder, combined tables & \ref{sec:describe}, \ref{sec:combined} \\
 \srcref{src/phasewall/nn/} & learned encoder: data, views, model, shape, loss, training, JEPA, curve & \ref{sec:learned} \\
-\srcref{src/phasewall/graph.py} & nodes and links of the scan, regions & \ref{sec:compare} \\
+\srcref{src/phasewall/graph.py} & nodes and links of the scan (grid or $k$-NN), regions & \ref{sec:compare}, \ref{sec:knn} \\
 \srcref{src/phasewall/walls.py} & distances, cuts, tests, mixed points, joined parts & \ref{sec:walls}, \ref{sec:merge} \\
 \srcref{src/phasewall/orderparams.py} & candidate order parameters & \ref{sec:orderparams} \\
 \srcref{src/phasewall/trees.py} & threshold tree & \ref{sec:tree} \\
@@ -2225,7 +2339,7 @@ File & Content & Section \\
 \srcref{src/phasewall/report.py}, \srcref{src/phasewall/cli.py} & figures and tables; command line & \ref{sec:overview} \\
 \srcref{apps/explore.py} & marimo interface: fills settings, shows results & \ref{sec:overview} \\
 \srcref{scripts/} & batch runs behind the figures of \code{docs/} & all \\
-\srcref{tests/} & 283 tests & \ref{sec:tests} \\
+\srcref{tests/} & 308 tests & \ref{sec:tests} \\
 \bottomrule
 \end{tabular}
 \end{table}

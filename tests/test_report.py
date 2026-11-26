@@ -4,7 +4,7 @@ right place, the summary, and the files written."""
 import numpy as np
 import pandas as pd
 import pytest
-from test_walls import DIM, NB, table
+from test_walls import DIM, NB, scattered, table
 
 from phasewall import report
 from phasewall.walls import find_walls, phases_against_ratio
@@ -109,3 +109,14 @@ def test_report_lists_candidate_order_parameters(two_phases, tmp_path):
     assert not ops.comparison.str.startswith("others").any()        # two phases: the pair is enough
     text = (tmp_path / "summary.md").read_text()
     assert "Candidate order parameters" in text and "| 1 (100 %) |" in text and "shared neighbour" in text
+
+
+def test_wall_segments_of_scattered_points_cross_their_links():
+    """k-NN links: each wall segment goes through the middle of its link, across it."""
+    w = find_walls(scattered(lambda a, b: np.full(DIM, 3.0 * (a > 5))), ["a", "b"])
+    segs = report.wall_segments(w)
+    pts = w.nodes[["a", "b"]].to_numpy()
+    assert len(segs) == int(w.edges.wall.sum()) > 0
+    for (p, q), e in zip(segs, w.edges[w.edges.wall].itertuples()):
+        mid = (pts[e.a] + pts[e.b]) / 2
+        assert np.allclose((np.array(p) + np.array(q)) / 2, mid)

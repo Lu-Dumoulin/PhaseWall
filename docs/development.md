@@ -7,8 +7,10 @@
   - `describe.py`: the hand-made description. `oned/`: the 1D parts (kymographs, 1D observables,
     1D views, the Ginzburg-Landau example).
   - `nn/`: the learned description (contrastive and JEPA).
-  - `walls.py`, `graph.py`: the walls. `trees.py`: the threshold tree. `orderparams.py`: candidate
-    order parameters. `baselines.py`: blind methods and probe. `scores.py`: scores against labels.
+  - `walls.py`, `graph.py`: the walls, and the links between points (grid steps, or the k
+    nearest neighbours of scattered points). `trees.py`: the threshold tree. `orderparams.py`:
+    candidate order parameters. `baselines.py`: blind methods and probe. `scores.py`: scores
+    against labels.
   - `registry.py`, `builtins.py`: the registry of encoders and methods.
   - `pipeline.py`: settings in, results out, with a disk cache. The scripts, the command line and
     the interface call it.
@@ -52,7 +54,7 @@ res = pl.run(pl.Settings(methods=pl.Methods(others={"half": HalfSettings()})))
 
 ```bash
 pip install -e ".[dev]"
-pytest -q            # 283 tests, about two minutes
+pytest -q            # 308 tests, about two minutes
 ruff check .
 ```
 
@@ -69,6 +71,10 @@ The continuous integration runs `ruff` and `pytest` on each push and pull reques
   rotation and mirror invariance; the same result after coarsening.
 - **Walls**: no wall in noise or under a smooth drift; walls on the correct links for two and three
   phases; ended runs, mixed points, joined parts, reassigned points; the observable that jumps.
+- **Scattered points**: grid or not; scaling by the step and in log; $k = \max(6, 2d)$; no link across a hole; no wall
+  in noise or drift, the right sides for two and three phases; the length correction; a grid keeps
+  its grid links; eight parameters (no wall in noise, one wall with the right sides); the tree and the
+  wall drawing on scattered points.
 - **Order parameters**: the column that jumps ranked first with its threshold; noise near chance;
   a combination of two columns for a middle phase.
 - **Tree**: no split in noise or drift; the correct rules for two and three phases; the
